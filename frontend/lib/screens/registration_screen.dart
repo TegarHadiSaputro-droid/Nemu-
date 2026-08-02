@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../widgets/background_decoration.dart';
+import '../services/auth_service.dart';
 import 'login_screen.dart';
 import 'terms_page.dart';
 
@@ -63,25 +64,51 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
     setState(() => _isLoading = true);
 
-    // TODO: Ganti dengan pemanggilan API registrasi kamu
-    await Future.delayed(const Duration(seconds: 2));
-
-    setState(() => _isLoading = false);
-
-    // Memberi tahu sistem (Google Password Manager) bahwa proses
-    // autofill selesai dan data boleh disimpan.
-    TextInput.finishAutofillContext(shouldSave: true);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Registrasi berhasil!',
-            style: GoogleFonts.manrope(color: AppColors.beige),
-          ),
-          backgroundColor: AppColors.gradientBottom,
-        ),
+    try {
+      // Panggil API registrasi ke backend Laragon
+      final result = await AuthService.register(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+        phone: _phoneController.text.trim(),
+        password: _passwordController.text,
       );
+
+      // Memberi tahu sistem (Google Password Manager) bahwa proses
+      // autofill selesai dan data boleh disimpan.
+      TextInput.finishAutofillContext(shouldSave: true);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result['message'] ?? 'Registrasi berhasil!',
+              style: GoogleFonts.manrope(color: AppColors.beige),
+            ),
+            backgroundColor: AppColors.gradientBottom,
+          ),
+        );
+
+        // Setelah daftar berhasil, arahkan ke halaman login
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
+    } catch (e) {
+      // Menampilkan pesan error dari backend (misal: "Email sudah terdaftar")
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.toString().replaceFirst('Exception: ', ''),
+              style: GoogleFonts.manrope(color: AppColors.beige),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

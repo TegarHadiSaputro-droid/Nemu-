@@ -31,6 +31,8 @@ dependencies:
   flutter:
      sdk: flutter
   google_fonts: ^8.2.1   # untuk font Manrope
+  http: ^1.2.0               # request ke backend
+  flutter_secure_storage: ^9.2.2 # simpan token JWT dengan aman
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
