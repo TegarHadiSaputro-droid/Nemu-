@@ -4,7 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../widgets/background_decoration.dart';
 import '../services/auth_service.dart';
-import '../home_screen.dart';
+import 'home_screen.dart';
 
 /// ============================================================
 /// LOGIN SCREEN (halaman "Masuk" terpisah dari registrasi)
