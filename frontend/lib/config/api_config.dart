@@ -14,14 +14,14 @@ import 'dart:io' show Platform;
 class ApiConfig {
   static String get baseUrl {
     if (kIsWeb) {
-      return 'http://localhost/nemu_backend';
+      return 'http://localhost:8000/api/v1';
     } else if (Platform.isAndroid) {
-      return 'http://10.0.2.2/nemu_backend';
+      return 'http://10.0.2.2:8000/api/v1';
     } else {
-      return 'http://localhost/nemu_backend';
+      return 'http://localhost:8000/api/v1';
     }
   }
 
-  static String get loginUrl => '$baseUrl/login.php';
-  static String get registerUrl => '$baseUrl/register.php';
+  static String get loginUrl => '$baseUrl/login';
+  static String get registerUrl => '$baseUrl/register';
 }
