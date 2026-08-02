@@ -78,21 +78,38 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       TextInput.finishAutofillContext(shouldSave: true);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              result['message'] ?? 'Registrasi berhasil!',
-              style: GoogleFonts.manrope(color: AppColors.beige),
+        // Dialog lebih jelas daripada snackbar untuk info penting begini,
+        // supaya user tidak lewat begitu saja.
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            backgroundColor: AppColors.surface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              'Cek Email Kamu',
+              style: GoogleFonts.manrope(fontWeight: FontWeight.bold, color: AppColors.nightmare),
             ),
-            backgroundColor: AppColors.gradientBottom,
+            content: Text(
+              result['message'] ?? 'Registrasi berhasil! Silakan cek email kamu untuk verifikasi akun.',
+              style: GoogleFonts.manrope(color: AppColors.nightmare),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('OK', style: GoogleFonts.manrope(color: AppColors.gradientBottom, fontWeight: FontWeight.bold)),
+              ),
+            ],
           ),
         );
 
-        // Setelah daftar berhasil, arahkan ke halaman login
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
+        // Setelah user tutup dialog, arahkan ke halaman login
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
+        }
       }
     } catch (e) {
       // Menampilkan pesan error dari backend (misal: "Email sudah terdaftar")
