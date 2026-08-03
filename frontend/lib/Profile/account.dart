@@ -14,12 +14,15 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import '../Theme/app_theme.dart';
 import '../Theme/decor_background.dart';
 import 'Edit Profile/edit_profile_page.dart';
 import 'Nemu+/nemu_plus_page.dart';
 import 'Kelola Toko/kelola_toko_page.dart';
 import 'Pusat Bantuan/pusat_bantuan_page.dart';
+import '../settings/setting_page.dart'; // TODO: sesuaikan path jika lokasi setting_page.dart berbeda
 
 // ---------------------------------------------------------------------------
 // Halaman Akun
@@ -81,6 +84,14 @@ class AccountPage extends StatelessWidget {
                   _MenuItemData(
                     icon: Icons.settings_outlined,
                     label: 'Pengaturan',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SettingPage(),
+                        ),
+                      );
+                    },
                   ),
                   _MenuItemData(
                     icon: Icons.shield_outlined,
@@ -169,22 +180,71 @@ class AccountPage extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Header profil (avatar, nama, badge peran, rating)
 // ---------------------------------------------------------------------------
-class _ProfileHeader extends StatelessWidget {
+class _ProfileHeader extends StatefulWidget {
+  @override
+  State<_ProfileHeader> createState() => _ProfileHeaderState();
+}
+
+class _ProfileHeaderState extends State<_ProfileHeader> {
+  File? _profileImage;
+
+  Future<void> _pickImageFromGallery() async {
+    final picker = ImagePicker();
+    final XFile? picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked != null) {
+      setState(() {
+        _profileImage = File(picked.path);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        CircleAvatar(
-          radius: 26,
-          backgroundColor: kCream,
-          child: Text(
-            'RA',
-            style: GoogleFonts.manrope(
-              color: kInk,
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
+        Stack(
+          children: [
+            CircleAvatar(
+              radius: 26,
+              backgroundColor: kCream,
+              backgroundImage:
+                  _profileImage != null ? FileImage(_profileImage!) : null,
+              child: _profileImage == null
+                  ? Text(
+                      'NP',
+                      style: GoogleFonts.manrope(
+                        color: kInk,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    )
+                  : null,
             ),
-          ),
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: InkWell(
+                onTap: _pickImageFromGallery,
+                customBorder: const CircleBorder(),
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: kInk,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: kCream, width: 2),
+                  ),
+                  child: const Icon(
+                    Icons.camera_alt_outlined,
+                    size: 12,
+                    color: kCream,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -192,7 +252,7 @@ class _ProfileHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Rangga Adi',
+                'Nama Pengguna',
                 style: GoogleFonts.manrope(
                   color: kInk,
                   fontWeight: FontWeight.w700,
