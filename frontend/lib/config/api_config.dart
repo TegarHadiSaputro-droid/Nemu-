@@ -20,8 +20,8 @@ class ApiConfig {
     if (kIsWeb) {
       return 'http://localhost:8000/api/v1';
     } else if (Platform.isAndroid) {
-      // 10.0.2.2 = emulator saja. HP fisik pakai IP laptop langsung.
-      return 'http://$_physicalDeviceIp:8000/api/v1';
+      // HP terhubung ke hotspot laptop — pakai IP laptop di jaringan hotspot
+      return 'http://10.250.46.23:8000/api/v1';
     } else if (Platform.isIOS) {
       return 'http://localhost:8000/api/v1';
     } else {

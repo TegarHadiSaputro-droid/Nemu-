@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../widgets/background_decoration.dart';
 import '../services/auth_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart';
 import 'terms_page.dart';
 
@@ -65,8 +66,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Panggil API registrasi ke backend Laragon
-      final result = await AuthService.register(
+      await AuthService.register(
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),
@@ -91,7 +91,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               style: GoogleFonts.manrope(fontWeight: FontWeight.bold, color: AppColors.nightmare),
             ),
             content: Text(
-              result['message'] ?? 'Registrasi berhasil! Silakan cek email kamu untuk verifikasi akun.',
+              'Registrasi berhasil! Kami sudah kirim email verifikasi ke ${_emailController.text.trim()} — silakan cek inbox/spam, klik link-nya, lalu kembali ke sini untuk login.',
               style: GoogleFonts.manrope(color: AppColors.nightmare),
             ),
             actions: [
@@ -111,13 +111,24 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           );
         }
       }
-    } catch (e) {
-      // Menampilkan pesan error dari backend (misal: "Email sudah terdaftar")
+    } on FirebaseAuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              e.toString().replaceFirst('Exception: ', ''),
+              AuthService.mapFirebaseError(e),
+              style: GoogleFonts.manrope(color: AppColors.beige),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.toString(),
               style: GoogleFonts.manrope(color: AppColors.beige),
             ),
             backgroundColor: Colors.red,

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_colors.dart';
 import '../widgets/background_decoration.dart';
 import '../services/auth_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'home_screen.dart';
 
 /// ============================================================
@@ -39,35 +40,45 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Panggil API login ke backend Laragon
-      final result = await AuthService.login(
+      final user = await AuthService.login(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
 
-      // Memberi tahu Google Password Manager bahwa proses autofill selesai.
       TextInput.finishAutofillContext(shouldSave: true);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              result['message'] ?? 'Berhasil masuk!',
+              'Berhasil masuk!',
               style: GoogleFonts.manrope(color: AppColors.beige),
             ),
             backgroundColor: AppColors.gradientBottom,
           ),
         );
 
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+        // user.uid tersedia untuk load data profil dari Firestore kalau perlu
+        // TODO: Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
       }
-    } catch (e) {
-      // Menampilkan pesan error dari backend (misal: "Email tidak ditemukan")
+    } on FirebaseAuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              e.toString().replaceFirst('Exception: ', ''),
+              AuthService.mapFirebaseError(e),
+              style: GoogleFonts.manrope(color: AppColors.beige),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.toString(),
               style: GoogleFonts.manrope(color: AppColors.beige),
             ),
             backgroundColor: Colors.red,
@@ -196,21 +207,34 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async {
                         if (!dialogFormKey.currentState!.validate()) return;
 
-                        // TODO: panggil API kirim link reset password di sini
-                        Navigator.pop(dialogContext);
-
-                        ScaffoldMessenger.of(parentContext).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Tautan reset kata sandi telah dikirim ke email kamu',
-                              style: GoogleFonts.manrope(color: AppColors.beige),
+                        try {
+                          await AuthService.sendPasswordReset(
+                            resetEmailController.text.trim(),
+                          );
+                          Navigator.pop(dialogContext);
+                          ScaffoldMessenger.of(parentContext).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Tautan reset kata sandi telah dikirim ke email kamu',
+                                style: GoogleFonts.manrope(color: AppColors.beige),
+                              ),
+                              backgroundColor: AppColors.gradientBottom,
                             ),
-                            backgroundColor: AppColors.gradientBottom,
-                          ),
-                        );
+                          );
+                        } on FirebaseAuthException catch (e) {
+                          ScaffoldMessenger.of(parentContext).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                AuthService.mapFirebaseError(e),
+                                style: GoogleFonts.manrope(color: AppColors.beige),
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.nightmare,
