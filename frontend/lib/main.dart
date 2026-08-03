@@ -8,8 +8,18 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'Theme/app_theme.dart'; // berisi kInk, kCream, kGradientTop, kGradientBottom
 import 'Profile/account.dart'; // berisi AccountPage
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'screens/registration_screen.dart';
+import 'screens/login_screen.dart';
+import 'theme/app_colors.dart';
+import 'widgets/background_decoration.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const MyApp());
 }
 
@@ -19,75 +29,154 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      title: 'Nemu',
       debugShowCheckedModeBanner: false,
-      title: 'Pasar & Perbaikan App',
       theme: ThemeData(
-        textTheme: GoogleFonts.manropeTextTheme().apply(
-          bodyColor: kInk,
-          displayColor: kInk,
-        ),
-        scaffoldBackgroundColor: kGradientBottom,
+        useMaterial3: true,
+        textTheme: GoogleFonts.manropeTextTheme(),
       ),
-      home: const HomePage(),
+      home: const LandingPage(),
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Halaman kosong (Beranda) — hanya berisi lingkaran avatar di pojok kanan atas
-// ---------------------------------------------------------------------------
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+/// ============================================================
+/// LANDING PAGE
+/// Logo ditaruh di dalam lingkaran beige supaya kontras dan tidak
+/// blend ke background gradient. Di bagian bawah ada dua tombol:
+/// "Masuk" (outline) dan "Daftar" (solid). BackgroundDecoration
+/// menambah elemen dekoratif tipis supaya area kosong tidak
+/// terasa kopong.
+/// ============================================================
+class LandingPage extends StatelessWidget {
+  const LandingPage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [kGradientTop, kGradientBottom],
-          ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Align(
-              alignment: Alignment.topRight,
-              child: InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AccountPage(),
+        decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
+        child: Stack(
+          children: [
+            const Positioned.fill(child: BackgroundDecoration()),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                child: Column(
+                  children: [
+                    const Spacer(flex: 3),
+
+                    // ---------- LOGO DENGAN BACKDROP LINGKARAN ----------
+                    Container(
+                      width: 160,
+                      height: 160,
+                      padding: const EdgeInsets.all(28),
+                      decoration: BoxDecoration(
+                        color: AppColors.beige,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.18),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Image.asset('assets/images/logo.png'),
                     ),
-                  );
-                },
-                customBorder: const CircleBorder(),
-                child: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: kCream,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: kInk.withOpacity(0.15), width: 1),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'RA',
-                    style: GoogleFonts.manrope(
-                      color: kInk,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                    const SizedBox(height: 28),
+                    Text(
+                      'Nemu',
+                      style: GoogleFonts.manrope(
+                        color: AppColors.beige,
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Belanja kebutuhan segar jadi lebih mudah',
+                      style: GoogleFonts.manrope(
+                        color: AppColors.beige.withOpacity(0.85),
+                        fontSize: 14,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+
+                    const Spacer(flex: 4),
+
+                    // ---------- TOMBOL DAFTAR (solid) ----------
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const RegistrationScreen(),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.nightmare,
+                          foregroundColor: AppColors.beige,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 4,
+                        ),
+                        child: Text(
+                          'Daftar',
+                          style: GoogleFonts.manrope(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.beige,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ---------- TOMBOL MASUK (outline) ----------
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const LoginScreen(),
+                            ),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.beige,
+                          side: BorderSide(
+                            color: AppColors.beige.withOpacity(0.8),
+                            width: 1.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          'Masuk',
+                          style: GoogleFonts.manrope(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.beige,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
