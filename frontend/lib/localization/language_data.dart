@@ -106,5 +106,5 @@ class LanguageData {
 "contact_details":
     "Apabila memiliki pertanyaan mengenai Syarat & Ketentuan, silakan hubungi Customer Support.",                                         
     },
-  };
+};
 }
