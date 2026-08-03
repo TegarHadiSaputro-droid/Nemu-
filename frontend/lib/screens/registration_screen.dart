@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart';
 import 'terms_page.dart';
+import '../utils/page_transitions.dart';
 
 /// ============================================================
 /// REGISTRATION SCREEN
@@ -107,7 +108,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         if (mounted) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
+            slideRoute(const LoginScreen()),
           );
         }
       }
@@ -323,9 +324,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                   onTap: () {
                                     Navigator.push(
                                       context,
-                                      MaterialPageRoute(
-                                        builder: (context) => const TermsPage(),
-                                      ),
+                                      slideRoute(const TermsPage()),
                                     );
                                   },
                                   child: RichText(
@@ -401,9 +400,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                            builder: (context) => const LoginScreen(),
-                          ),
+                          slideRoute(const LoginScreen()),
                         );
                       },
                       child: RichText(

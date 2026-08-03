@@ -6,6 +6,7 @@ import 'screens/registration_screen.dart';
 import 'screens/login_screen.dart';
 import 'theme/app_colors.dart';
 import 'widgets/background_decoration.dart';
+import 'utils/page_transitions.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -105,9 +106,7 @@ class LandingPage extends StatelessWidget {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
-                              builder: (context) => const RegistrationScreen(),
-                            ),
+                            slideRoute(const RegistrationScreen()),
                           );
                         },
                         style: ElevatedButton.styleFrom(
@@ -138,9 +137,7 @@ class LandingPage extends StatelessWidget {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
-                              builder: (context) => const LoginScreen(),
-                            ),
+                            slideRoute(const LoginScreen()),
                           );
                         },
                         style: OutlinedButton.styleFrom(

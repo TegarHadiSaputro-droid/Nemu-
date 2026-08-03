@@ -93,6 +93,32 @@ class AuthService {
     await _auth.sendPasswordResetEmail(email: email);
   }
 
+  /// Kirim ulang email verifikasi. Perlu login sementara dulu untuk tahu
+  /// siapa user-nya, karena Firebase butuh objek User yang aktif untuk
+  /// mengirim ulang — bukan cuma alamat emailnya saja.
+  static Future<void> resendVerificationEmail({
+    required String email,
+    required String password,
+  }) async {
+    final credential = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    final user = credential.user!;
+    await user.reload();
+
+    if (_auth.currentUser!.emailVerified) {
+      await _auth.signOut();
+      throw FirebaseAuthException(
+        code: 'already-verified',
+        message: 'Email kamu sudah terverifikasi. Silakan login seperti biasa.',
+      );
+    }
+
+    await user.sendEmailVerification();
+    await _auth.signOut(); // sign out lagi karena belum boleh login sebelum verified
+  }
+
   static void logout() => _auth.signOut();
 
   /// Terjemahkan kode error Firebase ke pesan Bahasa Indonesia yang mudah dibaca.
@@ -113,6 +139,8 @@ class AuthService {
         return 'Email atau kata sandi salah';
       case 'email-not-verified':
         return e.message ?? 'Email belum diverifikasi';
+      case 'already-verified':
+        return e.message ?? 'Email sudah terverifikasi';
       case 'too-many-requests':
         return 'Terlalu banyak percobaan. Coba lagi nanti';
       default:

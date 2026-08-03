@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/services/api_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 // ─────────────────────────────────────────────
 //  Warna Palette
@@ -50,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AnimationController _chartAnimCtrl;
   late Animation<double> _chartAnimation;
 
-  static const String _userName = 'Egii';
+  String _userName = 'Sobat Nemu'; // placeholder sebelum nickname dimuat/diisi
   int _cartItemCount = 1;
   bool _isDelivering = true; // State status pengantaran
   
@@ -114,6 +116,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.initState();
     _welcomeGreeting = _welcomeGreetings[math.Random().nextInt(_welcomeGreetings.length)];
     _loadApiData();
+    _loadNicknameOrAsk();
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted) return;
       final next = (_bannerIndex + 1) % _banners.length;
@@ -134,6 +137,103 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       curve: Curves.easeOutCubic,
     );
     _chartAnimCtrl.forward();
+  }
+
+  /// Cek apakah user sudah punya nickname tersimpan di Firestore.
+  /// Kalau belum (pertama kali masuk HomeScreen), tampilkan popup
+  /// tanya "Nama panggilan Anda?" dan simpan jawabannya.
+  Future<void> _loadNicknameOrAsk() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final existingNickname = doc.data()?['nickname'] as String?;
+
+      if (existingNickname != null && existingNickname.trim().isNotEmpty) {
+        if (mounted) setState(() => _userName = existingNickname);
+      } else if (mounted) {
+        // Tunggu frame pertama selesai render dulu supaya dialog muncul
+        // rapi di atas HomeScreen, bukan nabrak proses build awal.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showNicknameDialog(user.uid);
+        });
+      }
+    } catch (_) {
+      // Kalau gagal ambil data (misal offline), biarkan pakai placeholder
+      // default saja, tidak perlu ganggu user dengan error di sini.
+    }
+  }
+
+  void _showNicknameDialog(String uid) {
+    final controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          'Nama panggilan Anda?',
+          style: _m(size: 18, weight: FontWeight.bold),
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: InputDecoration(
+            hintText: 'Contoh: Budi',
+            hintStyle: _m(size: 14, color: Colors.grey),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: _greenBottom, width: 1.5),
+            ),
+          ),
+          style: _m(size: 14),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _greenBottom,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onPressed: () async {
+                final nickname = controller.text.trim();
+                if (nickname.isEmpty) return;
+
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(uid)
+                    .update({'nickname': nickname});
+
+                if (mounted) {
+                  setState(() => _userName = nickname);
+                  Navigator.pop(dialogContext);
+                }
+              },
+              child: Text(
+                'Simpan',
+                style: _m(size: 14, weight: FontWeight.bold, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadApiData() async {

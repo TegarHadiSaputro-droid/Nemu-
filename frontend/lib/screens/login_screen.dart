@@ -6,6 +6,7 @@ import '../widgets/background_decoration.dart';
 import '../services/auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'home_screen.dart';
+import '../utils/page_transitions.dart';
 
 /// ============================================================
 /// LOGIN SCREEN (halaman "Masuk" terpisah dari registrasi)
@@ -59,19 +60,71 @@ class _LoginScreenState extends State<LoginScreen> {
         );
 
         // user.uid tersedia untuk load data profil dari Firestore kalau perlu
-        // TODO: Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+        Navigator.pushReplacement(
+          context,
+          slideRoute(const HomeScreen()),
+        );
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AuthService.mapFirebaseError(e),
-              style: GoogleFonts.manrope(color: AppColors.beige),
+        if (e.code == 'email-not-verified') {
+          // Kasus khusus: kasih tombol "Kirim ulang" langsung di snackbar-nya
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                AuthService.mapFirebaseError(e),
+                style: GoogleFonts.manrope(color: AppColors.beige),
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 6),
+              action: SnackBarAction(
+                label: 'Kirim Ulang',
+                textColor: AppColors.beige,
+                onPressed: () async {
+                  try {
+                    await AuthService.resendVerificationEmail(
+                      email: _emailController.text.trim(),
+                      password: _passwordController.text,
+                    );
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Email verifikasi baru sudah dikirim, cek inbox/spam',
+                            style: GoogleFonts.manrope(color: AppColors.beige),
+                          ),
+                          backgroundColor: AppColors.gradientBottom,
+                        ),
+                      );
+                    }
+                  } on FirebaseAuthException catch (err) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            AuthService.mapFirebaseError(err),
+                            style: GoogleFonts.manrope(color: AppColors.beige),
+                          ),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
             ),
-            backgroundColor: Colors.red,
-          ),
-        );
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                AuthService.mapFirebaseError(e),
+                style: GoogleFonts.manrope(color: AppColors.beige),
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
