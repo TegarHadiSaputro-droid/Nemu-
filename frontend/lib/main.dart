@@ -1,3 +1,9 @@
+// main.dart
+//
+// Entry point aplikasi. Halaman kosong (Beranda) dengan satu lingkaran
+// avatar di pojok kanan atas. Ketuk lingkaran itu untuk pindah ke
+// Halaman Akun (profil/account_page.dart) lewat Navigator.push.
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -7,6 +13,8 @@ import 'screens/login_screen.dart';
 import 'theme/app_colors.dart';
 import 'widgets/background_decoration.dart';
 import 'utils/page_transitions.dart';
+import 'Theme/app_theme.dart'; // berisi kInk, kCream, kGradientTop, kGradientBottom
+import 'Profile/account.dart'; // berisi AccountPage
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
