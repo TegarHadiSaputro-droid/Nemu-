@@ -14,8 +14,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import '../Theme/app_theme.dart';
 import '../Theme/decor_background.dart';
 import 'Edit Profile/edit_profile_page.dart';
@@ -74,9 +77,7 @@ class AccountPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   _ProfileHeader(),
-                  const SizedBox(height: 20),
-              _StatsRow(),
-              const SizedBox(height: 24),
+                  const SizedBox(height: 24),
               _SectionLabel(text: 'Preferensi Aplikasi'),
               const SizedBox(height: 8),
               _MenuGroup(
@@ -186,19 +187,111 @@ class _ProfileHeader extends StatefulWidget {
 }
 
 class _ProfileHeaderState extends State<_ProfileHeader> {
-  File? _profileImage;
+  final _auth = FirebaseAuth.instance;
+  final _firestore = FirebaseFirestore.instance;
 
-  Future<void> _pickImageFromGallery() async {
+  Uint8List? _localPreviewBytes; // preview lokal segera setelah dipilih (aman untuk web & mobile)
+  String? _photoUrl; // URL foto dari Firestore
+  String _userName = 'Nama Pengguna';
+  bool _uploading = false;
+
+  // Role: setiap user otomatis 'Pembeli' sejak registrasi.
+  // 'Penjual' hanya aktif kalau gerai di Nemu+ sudah berstatus aktif
+  // (di-set oleh Cloud Function, bukan diubah langsung dari client).
+  bool _isBuyer = true;
+  bool _isSeller = false;
+  double? _rating;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+      if (doc.exists && mounted) {
+        final data = doc.data();
+        final roles = data?['roles'] as Map<String, dynamic>?;
+        setState(() {
+          _userName = (data?['name'] as String?) ?? 'Nama Pengguna';
+          _photoUrl = data?['photoUrl'] as String?;
+          _isBuyer = (roles?['buyer'] as bool?) ?? true;
+          _isSeller = (roles?['seller'] as bool?) ?? false;
+          _rating = (data?['sellerRating'] as num?)?.toDouble();
+        });
+      }
+    } catch (e) {
+      // Biarkan placeholder default kalau gagal fetch
+      debugPrint('Gagal memuat data profil: $e');
+    }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kamu belum login.')),
+      );
+      return;
+    }
+
     final picker = ImagePicker();
     final XFile? picked = await picker.pickImage(
       source: ImageSource.gallery,
       imageQuality: 85,
     );
-    if (picked != null) {
-      setState(() {
-        _profileImage = File(picked.path);
-      });
+    if (picked == null) return;
+
+    // readAsBytes() aman dipakai di web maupun mobile, beda dengan dart:io File
+    // yang cuma bisa dipakai di mobile/desktop.
+    final bytes = await picked.readAsBytes();
+    setState(() {
+      _localPreviewBytes = bytes; // tampil langsung tanpa nunggu upload
+      _uploading = true;
+    });
+
+    try {
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('profile_pictures')
+          .child('$uid.jpg');
+
+      await ref.putData(
+        bytes,
+        SettableMetadata(contentType: picked.mimeType ?? 'image/jpeg'),
+      );
+      final downloadUrl = await ref.getDownloadURL();
+
+      await _firestore.collection('users').doc(uid).set(
+        {'photoUrl': downloadUrl},
+        SetOptions(merge: true),
+      );
+
+      if (mounted) {
+        setState(() {
+          _photoUrl = downloadUrl;
+          _uploading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _uploading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mengunggah foto: $e')),
+        );
+      }
     }
+  }
+
+  ImageProvider? get _avatarImage {
+    if (_localPreviewBytes != null) return MemoryImage(_localPreviewBytes!);
+    if (_photoUrl != null) return NetworkImage(_photoUrl!);
+    return null;
   }
 
   @override
@@ -210,9 +303,8 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
             CircleAvatar(
               radius: 26,
               backgroundColor: kCream,
-              backgroundImage:
-                  _profileImage != null ? FileImage(_profileImage!) : null,
-              child: _profileImage == null
+              backgroundImage: _avatarImage,
+              child: _avatarImage == null
                   ? Text(
                       'NP',
                       style: GoogleFonts.manrope(
@@ -227,7 +319,7 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
               right: -2,
               bottom: -2,
               child: InkWell(
-                onTap: _pickImageFromGallery,
+                onTap: _uploading ? null : _pickAndUploadImage,
                 customBorder: const CircleBorder(),
                 child: Container(
                   padding: const EdgeInsets.all(5),
@@ -236,11 +328,20 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                     shape: BoxShape.circle,
                     border: Border.all(color: kCream, width: 2),
                   ),
-                  child: const Icon(
-                    Icons.camera_alt_outlined,
-                    size: 12,
-                    color: kCream,
-                  ),
+                  child: _uploading
+                      ? const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: kCream,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.camera_alt_outlined,
+                          size: 12,
+                          color: kCream,
+                        ),
                 ),
               ),
             ),
@@ -252,7 +353,7 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Nama Pengguna',
+                _userName,
                 style: GoogleFonts.manrope(
                   color: kInk,
                   fontWeight: FontWeight.w700,
@@ -262,35 +363,22 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: kCream,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'Penjual',
+                  if (_isBuyer) _RoleBadge(label: 'Pembeli'),
+                  if (_isBuyer && _isSeller) const SizedBox(width: 6),
+                  if (_isSeller) _RoleBadge(label: 'Penjual'),
+                  if (_isSeller) ...[
+                    const SizedBox(width: 8),
+                    Icon(Icons.star, size: 14, color: kInk),
+                    const SizedBox(width: 2),
+                    Text(
+                      (_rating ?? 0).toStringAsFixed(1),
                       style: GoogleFonts.manrope(
                         color: kInk,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(Icons.star, size: 14, color: kInk),
-                  const SizedBox(width: 2),
-                  Text(
-                    '4.8',
-                    style: GoogleFonts.manrope(
-                      color: kInk,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  ],
                 ],
               ),
             ],
@@ -317,64 +405,27 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
 }
 
 // ---------------------------------------------------------------------------
-// Baris statistik (Aktif / Selesai / Poin)
+// Badge kecil untuk role (Pembeli / Penjual)
 // ---------------------------------------------------------------------------
-class _StatsRow extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: _StatCard(value: '12', label: 'Aktif')),
-        const SizedBox(width: 8),
-        Expanded(child: _StatCard(value: '87', label: 'Selesai')),
-        const SizedBox(width: 8),
-        Expanded(child: _StatCard(value: '320', label: 'Poin')),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String value;
+class _RoleBadge extends StatelessWidget {
   final String label;
-
-  const _StatCard({required this.value, required this.label});
+  const _RoleBadge({required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: kCream,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(6),
       ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: GoogleFonts.manrope(
-              color: kInk,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: GoogleFonts.manrope(
-              color: kInk.withOpacity(0.7),
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: GoogleFonts.manrope(
+          color: kInk,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

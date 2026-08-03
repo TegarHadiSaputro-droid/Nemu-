@@ -16,8 +16,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Theme/app_theme.dart';
 import '../../Theme/decor_background.dart';
+import '../../services/auth_service.dart';
 
 class DaftarGeraiFormPage extends StatefulWidget {
   const DaftarGeraiFormPage({super.key});
@@ -33,6 +36,59 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
   // Menyimpan foto yang sudah dipilih per label, misalnya:
   // {'Foto KTP': XFile(...), 'Foto gerai': XFile(...)}
   final Map<String, XFile> _uploadedFiles = {};
+
+  bool _isSubmitting = false;
+
+  Future<void> _submitForm() async {
+    if (_isSubmitting) return;
+    setState(() => _isSubmitting = true);
+
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        throw Exception('Kamu harus login terlebih dahulu untuk mendaftar.');
+      }
+
+      // TODO: upload isi _uploadedFiles ke Firebase Storage lalu simpan
+      // URL-nya di sini, plus field teks lain dari _FormCard (nama, NIK,
+      // nama pasar, nomor kios, SPSTB, dst) — sambungkan lewat
+      // TextEditingController lalu masukkan ke geraiData di bawah.
+      final geraiData = <String, dynamic>{
+        'punyaSpstb': _punyaSpstb,
+        'status': 'menunggu_verifikasi', // lihat alur di nemu_plus_page.dart
+      };
+
+      // Simpan record pendaftaran gerai (untuk histori/verifikasi admin)...
+      await FirebaseFirestore.instance.collection('gerai').add({
+        'ownerId': uid,
+        ...geraiData,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // ...lalu aktifkan label "Penjual" DAN buat dokumen di koleksi
+      // "seller" (setara "users") dalam satu langkah atomik.
+      // Catatan: kalau nanti verifikasi admin sudah jalan (lihat alur di
+      // nemu_plus_page.dart), pertimbangkan pindahkan pemanggilan ini ke
+      // Cloud Function yang trigger saat status gerai berubah jadi "aktif",
+      // supaya tidak bisa dimanipulasi langsung dari client.
+      await AuthService.registerAsSeller(geraiData: geraiData);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pendaftaran gerai berhasil dikirim'),
+        ),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengirim pendaftaran: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
 
   Future<void> _pickImage(String label) async {
     // Tampilkan pilihan sumber: Kamera atau Galeri
@@ -307,9 +363,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () {
-                        // TODO: kirim data + _uploadedFiles ke backend
-                      },
+                      onPressed: _isSubmitting ? null : _submitForm,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: kInk,
                         foregroundColor: kCream,
@@ -319,13 +373,22 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                         ),
                         elevation: 0,
                       ),
-                      child: Text(
-                        'Kirim Pendaftaran',
-                        style: GoogleFonts.manrope(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: kCream,
+                              ),
+                            )
+                          : Text(
+                              'Kirim Pendaftaran',
+                              style: GoogleFonts.manrope(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                              ),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 8),
