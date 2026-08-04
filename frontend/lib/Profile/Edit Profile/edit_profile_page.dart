@@ -322,7 +322,8 @@ class _TopBar extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Avatar + tombol ganti foto
+// Avatar (inisial nama) — Nemu jalan full di paket Spark, jadi tidak ada
+// upload foto profil (butuh Firebase Storage yang mewajibkan paket Blaze).
 // ---------------------------------------------------------------------------
 class _AvatarEditor extends StatelessWidget {
   final String name;
@@ -340,42 +341,17 @@ class _AvatarEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Stack(
-        children: [
-          CircleAvatar(
-            radius: 42,
-            backgroundColor: kCream,
-            child: Text(
-              _initials,
-              style: GoogleFonts.manrope(
-                color: kInk,
-                fontWeight: FontWeight.w700,
-                fontSize: 24,
-              ),
-            ),
+      child: CircleAvatar(
+        radius: 42,
+        backgroundColor: kCream,
+        child: Text(
+          _initials,
+          style: GoogleFonts.manrope(
+            color: kInk,
+            fontWeight: FontWeight.w700,
+            fontSize: 24,
           ),
-          Positioned(
-            right: 0,
-            bottom: 0,
-            child: InkWell(
-              onTap: () {},
-              customBorder: const CircleBorder(),
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: kInk,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: kCream, width: 2),
-                ),
-                child: const Icon(
-                  Icons.camera_alt_outlined,
-                  size: 14,
-                  color: kCream,
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

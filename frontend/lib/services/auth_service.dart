@@ -207,7 +207,7 @@ class AuthService {
     await _firestore.collection('seller').doc(user.uid).delete();
   }
 
-  static void logout() => _auth.signOut();
+  static Future<void> logout() => _auth.signOut();
 
   /// Terjemahkan kode error Firebase ke pesan Bahasa Indonesia yang mudah dibaca.
   static String mapFirebaseError(FirebaseAuthException e) {

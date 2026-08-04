@@ -56,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late Animation<double> _chartAnimation;
 
   String _userName = 'Sobat Nemu'; // placeholder sebelum nickname dimuat/diisi
+  String? _photoUrl; // foto profil dari Firestore (users/{uid}.photoUrl)
   int _cartItemCount = 1;
   bool _isDelivering = true; // State status pengantaran
   
@@ -156,6 +157,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           .get();
 
       final existingNickname = doc.data()?['nickname'] as String?;
+      final photoUrl = doc.data()?['photoUrl'] as String?;
+
+      if (mounted) setState(() => _photoUrl = photoUrl);
 
       if (existingNickname != null && existingNickname.trim().isNotEmpty) {
         if (mounted) setState(() => _userName = existingNickname);
@@ -525,8 +529,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 color: Colors.white,
                 shape: BoxShape.circle,
                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6)],
+                image: _photoUrl != null
+                    ? DecorationImage(
+                        image: NetworkImage(_photoUrl!),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
               ),
-              child: const Icon(Icons.person, color: _greenBottom, size: 24),
+              child: _photoUrl == null
+                  ? const Icon(Icons.person, color: _greenBottom, size: 24)
+                  : null,
             ),
           ),
         ],

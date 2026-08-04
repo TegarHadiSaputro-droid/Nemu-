@@ -14,13 +14,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:typed_data';
-import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import '../Theme/app_theme.dart';
 import '../Theme/decor_background.dart';
+import 'logout_page.dart';
 import 'Edit Profile/edit_profile_page.dart';
 import 'Nemu+/nemu_plus_page.dart';
 import 'Kelola Toko/kelola_toko_page.dart';
@@ -164,7 +162,14 @@ class AccountPage extends StatelessWidget {
                     icon: Icons.logout,
                     label: 'Keluar',
                     isDanger: true,
-                    onTap: () => _showLogoutConfirmation(context),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const LogoutPage(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -190,10 +195,8 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
 
-  Uint8List? _localPreviewBytes; // preview lokal segera setelah dipilih (aman untuk web & mobile)
-  String? _photoUrl; // URL foto dari Firestore
+  String? _photoUrl; // URL foto dari Firestore (diatur lewat EditProfilePage)
   String _userName = 'Nama Pengguna';
-  bool _uploading = false;
 
   // Role: setiap user otomatis 'Pembeli' sejak registrasi.
   // 'Penjual' cuma aktif kalau ada dokumen di collection 'seller'
@@ -202,6 +205,15 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
   bool _isBuyer = true;
   bool _isSeller = false;
   double? _rating;
+
+  String get _initials {
+    final trimmed = _userName.trim();
+    if (trimmed.isEmpty) return '?';
+    final parts = trimmed.split(RegExp(r'\s+'));
+    final first = parts[0].isNotEmpty ? parts[0][0] : '';
+    final second = parts.length > 1 && parts[1].isNotEmpty ? parts[1][0] : '';
+    return (first + second).toUpperCase();
+  }
 
   @override
   void initState() {
@@ -240,65 +252,7 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
     }
   }
 
-  Future<void> _pickAndUploadImage() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kamu belum login.')),
-      );
-      return;
-    }
-
-    final picker = ImagePicker();
-    final XFile? picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-    );
-    if (picked == null) return;
-
-    // readAsBytes() aman dipakai di web maupun mobile, beda dengan dart:io File
-    // yang cuma bisa dipakai di mobile/desktop.
-    final bytes = await picked.readAsBytes();
-    setState(() {
-      _localPreviewBytes = bytes; // tampil langsung tanpa nunggu upload
-      _uploading = true;
-    });
-
-    try {
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('profile_pictures')
-          .child('$uid.jpg');
-
-      await ref.putData(
-        bytes,
-        SettableMetadata(contentType: picked.mimeType ?? 'image/jpeg'),
-      );
-      final downloadUrl = await ref.getDownloadURL();
-
-      await _firestore.collection('users').doc(uid).set(
-        {'photoUrl': downloadUrl},
-        SetOptions(merge: true),
-      );
-
-      if (mounted) {
-        setState(() {
-          _photoUrl = downloadUrl;
-          _uploading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _uploading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengunggah foto: $e')),
-        );
-      }
-    }
-  }
-
   ImageProvider? get _avatarImage {
-    if (_localPreviewBytes != null) return MemoryImage(_localPreviewBytes!);
     if (_photoUrl != null) return NetworkImage(_photoUrl!);
     return null;
   }
@@ -307,54 +261,20 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Stack(
-          children: [
-            CircleAvatar(
-              radius: 26,
-              backgroundColor: kCream,
-              backgroundImage: _avatarImage,
-              child: _avatarImage == null
-                  ? Text(
-                      'NP',
-                      style: GoogleFonts.manrope(
-                        color: kInk,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    )
-                  : null,
-            ),
-            Positioned(
-              right: -2,
-              bottom: -2,
-              child: InkWell(
-                onTap: _uploading ? null : _pickAndUploadImage,
-                customBorder: const CircleBorder(),
-                child: Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
+        CircleAvatar(
+          radius: 26,
+          backgroundColor: kCream,
+          backgroundImage: _avatarImage,
+          child: _avatarImage == null
+              ? Text(
+                  _initials,
+                  style: GoogleFonts.manrope(
                     color: kInk,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: kCream, width: 2),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
                   ),
-                  child: _uploading
-                      ? const SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 1.5,
-                            color: kCream,
-                          ),
-                        )
-                      : const Icon(
-                          Icons.camera_alt_outlined,
-                          size: 12,
-                          color: kCream,
-                        ),
-                ),
-              ),
-            ),
-          ],
+                )
+              : null,
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -548,117 +468,4 @@ class _MenuGroup extends StatelessWidget {
       ),
     );
   }
-}
-
-// ---------------------------------------------------------------------------
-// Dialog konfirmasi Keluar (card di tengah layar, bukan halaman terpisah)
-// ---------------------------------------------------------------------------
-void _showLogoutConfirmation(BuildContext context) {
-  showDialog(
-    context: context,
-    barrierColor: Colors.black.withOpacity(0.4),
-    builder: (context) {
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-          decoration: BoxDecoration(
-            color: kCream,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.logout,
-                  size: 26,
-                  color: Colors.red.shade700,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Yakin ingin keluar?',
-                style: GoogleFonts.manrope(
-                  color: kInk,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Kamu perlu login kembali untuk mengakses akunmu.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.manrope(
-                  color: kInk.withOpacity(0.65),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: kInk,
-                        side: BorderSide(color: kInk.withOpacity(0.25)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        'Batal',
-                        style: GoogleFonts.manrope(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // TODO: proses logout & arahkan ke halaman login
-                        Navigator.pop(context);
-                        Navigator.of(context)
-                            .popUntil((route) => route.isFirst);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.shade700,
-                        foregroundColor: kCream,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        'Ya, Keluar',
-                        style: GoogleFonts.manrope(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
 }
