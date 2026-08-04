@@ -7,9 +7,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 import 'screens/registration_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/home_screen.dart'; // berisi HomeScreen
 import 'theme/app_colors.dart';
 import 'widgets/background_decoration.dart';
 import 'utils/page_transitions.dart';
@@ -43,7 +45,59 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         textTheme: GoogleFonts.manropeTextTheme(),
       ),
-      home: const LandingPage(),
+      home: const AuthGate(),
+    );
+  }
+}
+
+/// ============================================================
+/// AUTH GATE
+/// Menentukan halaman pertama yang tampil berdasarkan status login.
+/// Firebase Auth sendiri sudah otomatis menyimpan sesi login di device,
+/// jadi authStateChanges() akan langsung mengembalikan user yang sudah
+/// login sebelumnya tanpa perlu login ulang setiap buka aplikasi.
+/// ============================================================
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // Masih ngecek status login ke Firebase, tampilkan splash sebentar.
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _SplashScreen();
+        }
+
+        final user = snapshot.data;
+
+        // Sudah pernah login sebelumnya (sesi tersimpan otomatis oleh
+        // Firebase) -> langsung ke Beranda, tidak perlu login ulang.
+        if (user != null) {
+          return const HomeScreen();
+        }
+
+        // Belum login -> tampilkan halaman awal seperti biasa.
+        return const LandingPage();
+      },
+    );
+  }
+}
+
+/// Splash sederhana selagi menunggu Firebase mengecek status login.
+class _SplashScreen extends StatelessWidget {
+  const _SplashScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
+        child: const Center(
+          child: CircularProgressIndicator(color: AppColors.beige),
+        ),
+      ),
     );
   }
 }
