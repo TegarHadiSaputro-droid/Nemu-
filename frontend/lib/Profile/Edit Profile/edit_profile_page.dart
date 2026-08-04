@@ -13,6 +13,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Theme/app_theme.dart';
 import '../../Theme/decor_background.dart';
 
@@ -27,11 +29,132 @@ class EditProfilePage extends StatefulWidget {
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
-  final _namaController = TextEditingController(text: 'Rangga Adi');
-  final _usernameController = TextEditingController(text: 'rangga.adi');
-  final _emailController = TextEditingController(text: 'rangga.adi@email.com');
-  final _teleponController = TextEditingController(text: '0812 3456 7890');
+  final _auth = FirebaseAuth.instance;
+  final _firestore = FirebaseFirestore.instance;
+
+  final _namaController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _teleponController = TextEditingController();
   final _bioController = TextEditingController();
+
+  bool _isLoading = true; // lagi ambil data dari Firestore
+  bool _isSaving = false; // lagi nyimpen perubahan
+  String _originalEmail = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    try {
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      final data = doc.data();
+
+      _namaController.text = (data?['name'] as String?) ?? '';
+      _usernameController.text = (data?['username'] as String?) ?? '';
+      _emailController.text =
+          (data?['email'] as String?) ?? user.email ?? '';
+      _teleponController.text = (data?['phone'] as String?) ?? '';
+      _bioController.text = (data?['bio'] as String?) ?? '';
+      _originalEmail = _emailController.text;
+    } catch (e) {
+      debugPrint('Gagal memuat data profil: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    if (_namaController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nama lengkap tidak boleh kosong')),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    final newEmail = _emailController.text.trim();
+    final emailChanged = newEmail != _originalEmail;
+
+    try {
+      // 1) Simpan field profil ke Firestore (name, username, phone, bio).
+      await _firestore.collection('users').doc(user.uid).set(
+        {
+          'name': _namaController.text.trim(),
+          'username': _usernameController.text.trim(),
+          'phone': _teleponController.text.trim(),
+          'bio': _bioController.text.trim(),
+        },
+        SetOptions(merge: true),
+      );
+
+      // 2) Kalau email diganti, kirim email verifikasi ke alamat baru.
+      // Email login BARU berubah setelah user klik link verifikasi itu,
+      // jadi field 'email' di Firestore sengaja belum ditimpa di sini
+      // supaya nggak beda sama email login yang sebenarnya masih aktif.
+      if (emailChanged) {
+        await user.verifyBeforeUpdateEmail(newEmail);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Profil disimpan. Link verifikasi juga sudah dikirim ke $newEmail — email login baru aktif setelah link itu di-klik.',
+                style: GoogleFonts.manrope(fontWeight: FontWeight.w600),
+              ),
+              backgroundColor: kGradientBottom,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Profil berhasil disimpan',
+                style: GoogleFonts.manrope(fontWeight: FontWeight.w600),
+              ),
+              backgroundColor: kGradientBottom,
+            ),
+          );
+        }
+      }
+
+      if (mounted) Navigator.maybePop(context);
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        final message = e.code == 'requires-recent-login'
+            ? 'Untuk ganti email, kamu perlu login ulang dulu demi keamanan akun.'
+            : 'Gagal memperbarui email: ${e.message}';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan profil: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -45,6 +168,25 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [kGradientTop, kGradientBottom],
+            ),
+          ),
+          child: const Center(
+            child: CircularProgressIndicator(color: kCream),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -65,7 +207,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 children: [
                   _TopBar(),
                   const SizedBox(height: 20),
-                  _AvatarEditor(),
+                  _AvatarEditor(name: _namaController.text),
                   const SizedBox(height: 24),
                   _FormCard(
                     children: [
@@ -111,20 +253,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Profil berhasil disimpan',
-                              style: GoogleFonts.manrope(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            backgroundColor: kGradientBottom,
-                          ),
-                        );
-                        Navigator.maybePop(context);
-                      },
+                      onPressed: _isSaving ? null : _saveProfile,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: kInk,
                         foregroundColor: kCream,
@@ -134,13 +263,22 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         ),
                         elevation: 0,
                       ),
-                      child: Text(
-                        'Simpan Perubahan',
-                        style: GoogleFonts.manrope(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: kCream,
+                              ),
+                            )
+                          : Text(
+                              'Simpan Perubahan',
+                              style: GoogleFonts.manrope(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                              ),
+                            ),
                     ),
                   ),
                 ],
@@ -187,6 +325,18 @@ class _TopBar extends StatelessWidget {
 // Avatar + tombol ganti foto
 // ---------------------------------------------------------------------------
 class _AvatarEditor extends StatelessWidget {
+  final String name;
+  const _AvatarEditor({required this.name});
+
+  String get _initials {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '?';
+    final parts = trimmed.split(RegExp(r'\s+'));
+    final first = parts[0].isNotEmpty ? parts[0][0] : '';
+    final second = parts.length > 1 && parts[1].isNotEmpty ? parts[1][0] : '';
+    return (first + second).toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -196,7 +346,7 @@ class _AvatarEditor extends StatelessWidget {
             radius: 42,
             backgroundColor: kCream,
             child: Text(
-              'RA',
+              _initials,
               style: GoogleFonts.manrope(
                 color: kInk,
                 fontWeight: FontWeight.w700,
