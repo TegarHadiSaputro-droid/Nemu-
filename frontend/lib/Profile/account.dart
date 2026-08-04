@@ -13,13 +13,17 @@
 // Cara pakai: import file ini lalu panggil AccountPage() sebagai halaman/route.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Theme/app_theme.dart';
 import '../Theme/decor_background.dart';
 import 'Edit Profile/edit_profile_page.dart';
 import 'Nemu+/nemu_plus_page.dart';
 import 'Kelola Toko/kelola_toko_page.dart';
 import 'Pusat Bantuan/pusat_bantuan_page.dart';
+import '../settings/setting_page.dart'; // TODO: sesuaikan path jika lokasi setting_page.dart berbeda
 
 // ---------------------------------------------------------------------------
 // Halaman Akun
@@ -71,92 +75,118 @@ class AccountPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   _ProfileHeader(),
-                  const SizedBox(height: 20),
-              _StatsRow(),
-              const SizedBox(height: 24),
-              _SectionLabel(text: 'Preferensi Aplikasi'),
-              const SizedBox(height: 8),
-              _MenuGroup(
-                items: [
-                  _MenuItemData(
-                    icon: Icons.settings_outlined,
-                    label: 'Pengaturan',
+                  const SizedBox(height: 24),
+                  _SectionLabel(text: 'Preferensi Aplikasi'),
+                  const SizedBox(height: 8),
+                  _MenuGroup(
+                    items: [
+                      _MenuItemData(
+                        icon: Icons.settings_outlined,
+                        label: 'Pengaturan',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SettingPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      _MenuItemData(
+                        icon: Icons.shield_outlined,
+                        label: 'Keamanan Akun',
+                      ),
+                      _MenuItemData(
+                        icon: Icons.workspace_premium_outlined,
+                        label: 'Nemu+',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const NemuPlusPage(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
-                  _MenuItemData(
-                    icon: Icons.shield_outlined,
-                    label: 'Keamanan Akun',
+                  const SizedBox(height: 24),
+                  _SectionLabel(text: 'Aktivitas'),
+                  const SizedBox(height: 8),
+                  _MenuGroup(
+                    items: [
+                      _MenuItemData(
+                        icon: Icons.favorite_border,
+                        label: 'Favorit saya',
+                      ),
+                      _MenuItemData(
+                        icon: Icons.storefront_outlined,
+                        label: 'Kelola toko / bengkel',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const KelolaTokoPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      _MenuItemData(
+                        icon: Icons.star_border,
+                        label: 'Ulasan saya',
+                      ),
+                    ],
                   ),
-                  _MenuItemData(
-                    icon: Icons.workspace_premium_outlined,
-                    label: 'Nemu+',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const NemuPlusPage(),
+                  const SizedBox(height: 24),
+                  _SectionLabel(text: 'Lainnya'),
+                  const SizedBox(height: 8),
+                  _MenuGroup(
+                    items: [
+                      _MenuItemData(
+                        icon: Icons.help_outline,
+                        label: 'Pusat bantuan',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const PusatBantuanPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      _MenuItemData(
+                        icon: Icons.description_outlined,
+                        label: 'Syarat dan kebijakan privasi',
+                      ),
+                      _MenuItemData(
+                        icon: Icons.logout,
+                        label: 'Keluar',
+                        isDanger: true,
+                        onTap: () => _showLogoutConfirmation(context),
+                      ),
+                    ],
+                  ),
+                  // -------------------------------------------------------
+                  // DEBUG ONLY — otomatis hilang di build production
+                  // (kDebugMode == false saat `flutter run --release` /
+                  // `flutter build`). Dipakai buat reset status "Penjual"
+                  // ke "Pembeli" tanpa perlu buka Firebase Console manual.
+                  // -------------------------------------------------------
+                  if (kDebugMode) ...[
+                    const SizedBox(height: 24),
+                    _SectionLabel(text: 'Debug (dev only)'),
+                    const SizedBox(height: 8),
+                    _MenuGroup(
+                      items: [
+                        _MenuItemData(
+                          icon: Icons.restart_alt,
+                          label: 'Reset jadi Pembeli',
+                          onTap: () => _resetToBuyer(context),
                         ),
-                      );
-                    },
-                  ),
+                      ],
+                    ),
+                  ],
                 ],
-              ),
-              const SizedBox(height: 24),
-              _SectionLabel(text: 'Aktivitas'),
-              const SizedBox(height: 8),
-              _MenuGroup(
-                items: [
-                  _MenuItemData(
-                    icon: Icons.favorite_border,
-                    label: 'Favorit saya',
-                  ),
-                  _MenuItemData(
-                    icon: Icons.storefront_outlined,
-                    label: 'Kelola toko / bengkel',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const KelolaTokoPage(),
-                        ),
-                      );
-                    },
-                  ),
-                  _MenuItemData(
-                    icon: Icons.star_border,
-                    label: 'Ulasan saya',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              _SectionLabel(text: 'Lainnya'),
-              const SizedBox(height: 8),
-              _MenuGroup(
-                items: [
-                  _MenuItemData(
-                    icon: Icons.help_outline,
-                    label: 'Pusat bantuan',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const PusatBantuanPage(),
-                        ),
-                      );
-                    },
-                  ),
-                  _MenuItemData(
-                    icon: Icons.description_outlined,
-                    label: 'Syarat dan kebijakan privasi',
-                  ),
-                  _MenuItemData(
-                    icon: Icons.logout,
-                    label: 'Keluar',
-                    isDanger: true,
-                    onTap: () => _showLogoutConfirmation(context),
-                  ),
-                ],
-              ),
-            ],
               ),
             ),
           ],
@@ -168,23 +198,94 @@ class AccountPage extends StatelessWidget {
 
 // ---------------------------------------------------------------------------
 // Header profil (avatar, nama, badge peran, rating)
+// Catatan: avatar di sini hanya menampilkan foto (read-only). Untuk
+// mengganti foto profil, buka Edit Profil lewat tanda panah di kanan —
+// fungsi pilih & upload foto ada di edit_profile_page.dart.
 // ---------------------------------------------------------------------------
-class _ProfileHeader extends StatelessWidget {
+class _ProfileHeader extends StatefulWidget {
+  @override
+  State<_ProfileHeader> createState() => _ProfileHeaderState();
+}
+
+class _ProfileHeaderState extends State<_ProfileHeader> {
+  final _auth = FirebaseAuth.instance;
+  final _firestore = FirebaseFirestore.instance;
+
+  ImageProvider? _avatarImageFor(String? photoUrl) {
+    if (photoUrl != null) return NetworkImage(photoUrl);
+    return null;
+  }
+
+  // Inisial avatar dihitung dari nama asli (bukan hardcode), supaya
+  // konsisten dengan logika _avatarInitials di edit_profile_page.dart.
+  String _initialsFor(String userName) {
+    final name = userName.trim();
+    if (name.isEmpty) return '?';
+    final parts = name.split(RegExp(r'\s+'));
+    if (parts.length == 1) return parts[0].substring(0, 1).toUpperCase();
+    return (parts[0].substring(0, 1) + parts[1].substring(0, 1)).toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final uid = _auth.currentUser?.uid;
+
+    // Kalau belum login, tampilkan versi default (Pembeli) tanpa stream.
+    if (uid == null) {
+      return _buildContent(
+        context,
+        userName: 'Nama Pengguna',
+        photoUrl: null,
+        isSeller: false,
+        rating: null,
+      );
+    }
+
+    // StreamBuilder mendengarkan perubahan dokumen user secara realtime.
+    // Begitu pendaftaran gerai di Nemu+ berhasil dan backend meng-update
+    // roles.seller jadi true, badge di sini otomatis berubah dari
+    // "Pembeli" ke "Penjual" tanpa perlu keluar-masuk halaman.
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _firestore.collection('users').doc(uid).snapshots(),
+      builder: (context, snapshot) {
+        final data = snapshot.data?.data();
+        final roles = data?['roles'] as Map<String, dynamic>?;
+
+        return _buildContent(
+          context,
+          userName: (data?['name'] as String?) ?? 'Nama Pengguna',
+          photoUrl: data?['photoUrl'] as String?,
+          isSeller: (roles?['seller'] as bool?) ?? false,
+          rating: (data?['sellerRating'] as num?)?.toDouble(),
+        );
+      },
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context, {
+    required String userName,
+    required String? photoUrl,
+    required bool isSeller,
+    required double? rating,
+  }) {
+    final avatarImage = _avatarImageFor(photoUrl);
     return Row(
       children: [
         CircleAvatar(
           radius: 26,
           backgroundColor: kCream,
-          child: Text(
-            'RA',
-            style: GoogleFonts.manrope(
-              color: kInk,
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-            ),
-          ),
+          backgroundImage: avatarImage,
+          child: avatarImage == null
+              ? Text(
+                  _initialsFor(userName),
+                  style: GoogleFonts.manrope(
+                    color: kInk,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                  ),
+                )
+              : null,
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -192,7 +293,7 @@ class _ProfileHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Rangga Adi',
+                userName,
                 style: GoogleFonts.manrope(
                   color: kInk,
                   fontWeight: FontWeight.w700,
@@ -202,35 +303,20 @@ class _ProfileHeader extends StatelessWidget {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: kCream,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'Penjual',
+                  _RoleBadge(label: isSeller ? 'Penjual' : 'Pembeli'),
+                  if (isSeller) ...[
+                    const SizedBox(width: 8),
+                    Icon(Icons.star, size: 14, color: kInk),
+                    const SizedBox(width: 2),
+                    Text(
+                      (rating ?? 0).toStringAsFixed(1),
                       style: GoogleFonts.manrope(
                         color: kInk,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(Icons.star, size: 14, color: kInk),
-                  const SizedBox(width: 2),
-                  Text(
-                    '4.8',
-                    style: GoogleFonts.manrope(
-                      color: kInk,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  ],
                 ],
               ),
             ],
@@ -257,64 +343,27 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Baris statistik (Aktif / Selesai / Poin)
+// Badge kecil untuk role (Pembeli / Penjual)
 // ---------------------------------------------------------------------------
-class _StatsRow extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: _StatCard(value: '12', label: 'Aktif')),
-        const SizedBox(width: 8),
-        Expanded(child: _StatCard(value: '87', label: 'Selesai')),
-        const SizedBox(width: 8),
-        Expanded(child: _StatCard(value: '320', label: 'Poin')),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String value;
+class _RoleBadge extends StatelessWidget {
   final String label;
-
-  const _StatCard({required this.value, required this.label});
+  const _RoleBadge({required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: kCream,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(6),
       ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: GoogleFonts.manrope(
-              color: kInk,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: GoogleFonts.manrope(
-              color: kInk.withOpacity(0.7),
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: GoogleFonts.manrope(
+          color: kInk,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -425,6 +474,35 @@ class _MenuGroup extends StatelessWidget {
           );
         }),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DEBUG ONLY — reset roles.seller jadi false di Firestore, supaya badge
+// balik ke "Pembeli" tanpa perlu ubah data manual lewat Firebase Console.
+// StreamBuilder di _ProfileHeader otomatis nangkep perubahan ini.
+// ---------------------------------------------------------------------------
+Future<void> _resetToBuyer(BuildContext context) async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
+
+  try {
+    await FirebaseFirestore.instance.collection('users').doc(uid).set(
+      {
+        'roles': {'seller': false},
+      },
+      SetOptions(merge: true),
+    );
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Status di-reset jadi Pembeli')),
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Gagal reset: $e')),
     );
   }
 }

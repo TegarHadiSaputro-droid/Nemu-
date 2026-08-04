@@ -1,6 +1,7 @@
 // produk_layanan_page.dart
 //
 // Halaman Produk / Layanan — Flutter
+// Card produk berbentuk kotak (grid 2 kolom), bukan memanjang horizontal.
 // Background: linear-gradient(180deg, #d9df36 0%, #007c3f 100%)
 // Font       : Manrope, warna teks utama #0f1b11
 
@@ -104,10 +105,23 @@ class ProdukLayananPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  ..._produk.map((p) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _ProdukCard(data: p),
-                      )),
+
+                  // ---------------- Grid kartu produk (kotak) ----------------
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _produk.length,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 0.82,
+                    ),
+                    itemBuilder: (context, index) {
+                      return _ProdukCard(data: _produk[index]);
+                    },
+                  ),
                 ],
               ),
             ),
@@ -161,6 +175,10 @@ class _ProdukData {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Kartu produk — bentuk kotak: ikon di atas, badge status di pojok,
+// nama & harga di bawah.
+// ---------------------------------------------------------------------------
 class _ProdukCard extends StatelessWidget {
   final _ProdukData data;
   const _ProdukCard({required this.data});
@@ -170,65 +188,81 @@ class _ProdukCard extends StatelessWidget {
     final isActive = data.status == 'Aktif';
     return InkWell(
       onTap: () {},
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: kCream,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: kGradientBottom.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              alignment: Alignment.center,
-              child: Icon(Icons.build_outlined, color: kGradientBottom),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    data.nama,
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: kGradientBottom.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(Icons.build_outlined, color: kGradientBottom),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? Colors.green.withOpacity(0.15)
+                        : Colors.grey.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    data.status,
                     style: GoogleFonts.manrope(
-                      color: kInk,
-                      fontSize: 13.5,
+                      color: isActive
+                          ? Colors.green.shade800
+                          : Colors.grey.shade700,
+                      fontSize: 9.5,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${data.kategori} • ${data.harga}',
-                    style: GoogleFonts.manrope(
-                      color: kInk.withOpacity(0.6),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+                ),
+              ],
+            ),
+            const Spacer(),
+            Text(
+              data.nama,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.manrope(
+                color: kInk,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                height: 1.25,
               ),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? Colors.green.withOpacity(0.15)
-                    : Colors.grey.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
+            const SizedBox(height: 4),
+            Text(
+              data.kategori,
+              style: GoogleFonts.manrope(
+                color: kInk.withOpacity(0.55),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w500,
               ),
-              child: Text(
-                data.status,
-                style: GoogleFonts.manrope(
-                  color: isActive ? Colors.green.shade800 : Colors.grey.shade700,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              data.harga,
+              style: GoogleFonts.manrope(
+                color: kGradientBottom,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
