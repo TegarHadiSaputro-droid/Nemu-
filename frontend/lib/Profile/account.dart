@@ -196,8 +196,9 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
   bool _uploading = false;
 
   // Role: setiap user otomatis 'Pembeli' sejak registrasi.
-  // 'Penjual' hanya aktif kalau gerai di Nemu+ sudah berstatus aktif
-  // (di-set oleh Cloud Function, bukan diubah langsung dari client).
+  // 'Penjual' cuma aktif kalau ada dokumen di collection 'seller'
+  // (document ID = uid) dengan field status == 'active'. Selama masih
+  // 'menunggu_verifikasi' atau belum daftar sama sekali, badge tetap 'Pembeli'.
   bool _isBuyer = true;
   bool _isSeller = false;
   double? _rating;
@@ -213,16 +214,24 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
     if (uid == null) return;
 
     try {
-      final doc = await _firestore.collection('users').doc(uid).get();
-      if (doc.exists && mounted) {
-        final data = doc.data();
-        final roles = data?['roles'] as Map<String, dynamic>?;
+      // Data dasar (nama, foto) tetap dari collection 'users'.
+      final userDoc = await _firestore.collection('users').doc(uid).get();
+
+      // Status penjual dibaca dari collection 'seller', document ID = uid.
+      // Badge "Penjual" cuma muncul kalau field status == 'active'
+      // (bukan cuma karena sudah pernah daftar / masih 'menunggu_verifikasi').
+      final sellerDoc = await _firestore.collection('seller').doc(uid).get();
+
+      if (mounted) {
+        final userData = userDoc.data();
+        final sellerData = sellerDoc.data();
         setState(() {
-          _userName = (data?['name'] as String?) ?? 'Nama Pengguna';
-          _photoUrl = data?['photoUrl'] as String?;
-          _isBuyer = (roles?['buyer'] as bool?) ?? true;
-          _isSeller = (roles?['seller'] as bool?) ?? false;
-          _rating = (data?['sellerRating'] as num?)?.toDouble();
+          _userName = (userData?['name'] as String?) ?? 'Nama Pengguna';
+          _photoUrl = userData?['photoUrl'] as String?;
+          _isBuyer = true;
+          _isSeller =
+              sellerDoc.exists && (sellerData?['status'] as String?) == 'active';
+          _rating = (userData?['sellerRating'] as num?)?.toDouble();
         });
       }
     } catch (e) {
@@ -363,9 +372,10 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  if (_isBuyer) _RoleBadge(label: 'Pembeli'),
-                  if (_isBuyer && _isSeller) const SizedBox(width: 6),
-                  if (_isSeller) _RoleBadge(label: 'Penjual'),
+                  // Cuma satu badge yang tampil: default "Pembeli",
+                  // otomatis berganti jadi "Penjual" begitu _isSeller true
+                  // (nggak ditampilkan berdampingan lagi).
+                  _RoleBadge(label: _isSeller ? 'Penjual' : 'Pembeli'),
                   if (_isSeller) ...[
                     const SizedBox(width: 8),
                     Icon(Icons.star, size: 14, color: kInk),
