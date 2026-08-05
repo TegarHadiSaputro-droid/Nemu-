@@ -260,5 +260,5 @@ class LanguageData {
       "changes_details":
           "Kami dapat mengubah Syarat & Ketentuan sewaktu-waktu tanpa pemberitahuan sebelumnya.",
     },
-  };
+};
 }

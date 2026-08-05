@@ -218,7 +218,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_loading) {
       return Scaffold(
         body: Container(
           width: double.infinity,
