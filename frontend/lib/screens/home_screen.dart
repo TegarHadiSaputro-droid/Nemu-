@@ -407,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     child: _navIndex == 1
                         ? const PasarScreen()
                         : _navIndex == 3
-                            ? _buildKangScreen()
+                            ? const MitraCategoryPage()
                             : _navIndex == 4
                                 ? const OrdersScreen()
                                 : RefreshIndicator(
@@ -480,46 +480,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ],
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ──────────────────────────────────────────
-  //  KANG! SCREEN
-  // ──────────────────────────────────────────
-  Widget _buildKangScreen() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.25),
-              shape: BoxShape.circle,
-            ),
-            child: const Text('👋', style: TextStyle(fontSize: 64)),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Kang!',
-            style: GoogleFonts.manrope(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Fitur komunitas & obrolan pasar\nsegera hadir!',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.manrope(
-              fontSize: 15,
-              color: Colors.white.withOpacity(0.85),
-              height: 1.5,
             ),
           ),
         ],

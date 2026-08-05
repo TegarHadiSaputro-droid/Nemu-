@@ -20,6 +20,7 @@ SubLayanan? cariSubLayanan(String keyword) {
     for (final sub in kategori.subLayanan) {
       final gabungan = '${sub.nama} ${sub.spesialisasi}'.toLowerCase();
       if (gabungan.contains(kw)) return sub;
+
     }
   }
   return null;
