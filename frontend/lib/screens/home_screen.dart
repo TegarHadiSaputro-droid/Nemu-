@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/Profile/account.dart';
 import 'package:frontend/widgets/bottom_navbar.dart';
 import 'package:frontend/screens/orders_screen.dart';
+import 'package:frontend/screens/pasar/pasar_screen.dart';
 
 // ─────────────────────────────────────────────
 //  Warna Palette
@@ -99,20 +100,56 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _CommodityData(name: 'Bawang Putih', icon: '🧄', unit: '/kg', currentPrice: 32000, predictedPrice: 31000, changePercent: 3.1, isUp: false, predictionNote: 'Prediksi Besok: Sedikit turun.', historyPrices: [34000, 33500, 33000, 32500, 32500, 32000, 31000], days: ['5 hari lalu', '4 hari lalu', '3 hari lalu', 'Lusa', 'Kemarin', 'Hari Ini', 'Prediksi']),
   ];
 
-  List<_QuickProduct> _quickProducts = const [
-    _QuickProduct(name: 'Kangkung Segar', store: 'Lapak Bu Sari', price: 3000, unit: '/ikat', icon: '🥬', restock: '1 jam lalu', imageUrl: 'assets/products/kangkung.jpg'),
-    _QuickProduct(name: 'Tomat Merah', store: 'Lapak Bu Sari', price: 12000, unit: '/kg', icon: '🍅', restock: '30 mnt lalu', imageUrl: 'assets/products/tomat.jpg'),
-    _QuickProduct(name: 'Tempe Papan', store: 'Kios Pak Budi', price: 4000, unit: '/papan', icon: '🍱', restock: '2 jam lalu', imageUrl: 'assets/products/tempe.jpg'),
-    _QuickProduct(name: 'Cabai Keriting', store: 'Warung Tani', price: 42000, unit: '/kg', icon: '🌶️', restock: '45 mnt lalu', imageUrl: 'assets/products/cabai_keriting.jpg'),
-    _QuickProduct(name: 'Bayam Hijau', store: 'Lapak Bu Sari', price: 4000, unit: '/ikat', icon: '🥗', restock: '20 mnt lalu', imageUrl: 'https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=400&q=80'),
-    _QuickProduct(name: 'Tahu Putih', store: 'Toko Harapan', price: 8000, unit: '/papan', icon: '🧈', restock: '1 jam lalu', imageUrl: 'assets/products/tahu.jpg'),
-  ];
+
 
   List<_MarketStore> _stores = const [
     _MarketStore(name: 'Pasar Sepinggan', category: 'Sayur, Buah & Daging', rating: 4.8, distance: '1.5 km', isOpen: true),
     _MarketStore(name: 'Pasar Buton', category: 'Sembako & Rempah', rating: 4.6, distance: '4.8 km', isOpen: true),
     _MarketStore(name: 'Pasar Klandasan', category: 'Ikan & Seafood Segar', rating: 4.9, distance: '9.5 km', isOpen: true),
     _MarketStore(name: 'Pasar Pandansari', category: 'Beras & Palawija', rating: 4.7, distance: '13.0 km', isOpen: false),
+  ];
+
+  List<_RecipeBundle> _recipeBundles = const [
+    _RecipeBundle(
+      title: 'Sayur Sop Komplit',
+      duration: '20 mnt',
+      portion: '3-4 porsi',
+      totalPrice: 18000,
+      icon: '🍲',
+      ingredients: ['Wortel', 'Kentang', 'Buncis', 'Ayam', 'Bumbu Sup'],
+      tagColor: Colors.orange,
+      imageUrl: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=400&q=80',
+    ),
+    _RecipeBundle(
+      title: 'Capcay Seafood Segar',
+      duration: '15 mnt',
+      portion: '2-3 porsi',
+      totalPrice: 26000,
+      icon: '🥦',
+      ingredients: ['Sawi Hijau', 'Wortel', 'Udang', 'Bakso Ikan', 'Bumbu Capcay'],
+      tagColor: Colors.green,
+      imageUrl: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&q=80',
+    ),
+    _RecipeBundle(
+      title: 'Soto Ayam Kampung',
+      duration: '35 mnt',
+      portion: '4 porsi',
+      totalPrice: 32000,
+      icon: '🍜',
+      ingredients: ['Ayam Kampung', 'Tauge', 'Sohun', 'Telur', 'Bumbu Rempah'],
+      tagColor: Color(0xFFD97706),
+      imageUrl: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400&q=80',
+    ),
+    _RecipeBundle(
+      title: 'Sambal Goreng Ati',
+      duration: '25 mnt',
+      portion: '3 porsi',
+      totalPrice: 24000,
+      icon: '🌶️',
+      ingredients: ['Ati Ampela', 'Kentang', 'Cabai Merah', 'Santan', 'Bumbu'],
+      tagColor: Colors.red,
+      imageUrl: 'https://images.unsplash.com/photo-1596797038530-2c107229654b?w=400&q=80',
+    ),
   ];
 
   @override
@@ -273,17 +310,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           )).toList();
         }
 
-        if (apiData['quick_products'] != null) {
-          _quickProducts = (apiData['quick_products'] as List).map((p) => _QuickProduct(
-            name: p['name'] ?? '',
-            store: p['store'] ?? '',
-            price: (p['price'] as num).toInt(),
-            unit: p['unit'] ?? '',
-            icon: p['icon'] ?? '🥬',
-            restock: p['restock'] ?? '',
-            imageUrl: p['image_url'] ?? '',
-          )).toList();
-        }
+
 
         if (apiData['stores'] != null) {
           _stores = (apiData['stores'] as List).map((s) => _MarketStore(
@@ -375,9 +402,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   Expanded(
-                    child: _navIndex == 4
-                        ? const OrdersScreen()
-                        : RefreshIndicator(
+                    child: _navIndex == 1
+                        ? const PasarScreen()
+                        : _navIndex == 3
+                            ? _buildKangScreen()
+                            : _navIndex == 4
+                                ? const OrdersScreen()
+                                : RefreshIndicator(
                             color: _greenBottom,
                             backgroundColor: Colors.white,
                             onRefresh: _handleRefresh,
@@ -423,10 +454,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   _buildInteractivePriceTrendSection(),
                                   const SizedBox(height: 24),
 
-                                  // 🥦 5. ELEMEN BARU 4: Bahan Segar Kilat (Horizontal Scroll + Button Tambah)
-                                  _buildSectionTitle('Bahan Segar Langsung Lapak', 'Dipajang & diperbarui hari ini'),
+                                  // 🍲 ELEMEN BARU: MASAK APA HARI INI? (Paket Resep Instan Sekali Klik)
+                                  _buildSectionTitle('Masak Apa Hari Ini?', 'Beli komplit bahan resep favorit dalam sekali klik'),
                                   const SizedBox(height: 12),
-                                  _buildQuickProductsScroll(),
+                                  _buildRecipeBundlesScroll(),
                                   const SizedBox(height: 24),
 
                                   // Gerai Pasar Terdekat
@@ -447,6 +478,46 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ──────────────────────────────────────────
+  //  KANG! SCREEN
+  // ──────────────────────────────────────────
+  Widget _buildKangScreen() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.25),
+              shape: BoxShape.circle,
+            ),
+            child: const Text('👋', style: TextStyle(fontSize: 64)),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Kang!',
+            style: GoogleFonts.manrope(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Fitur komunitas & obrolan pasar\nsegera hadir!',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.manrope(
+              fontSize: 15,
+              color: Colors.white.withOpacity(0.85),
+              height: 1.5,
             ),
           ),
         ],
@@ -494,22 +565,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // Cart dengan Ikon Troli
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              _iconButton(Icons.shopping_cart_outlined),
-              if (_cartItemCount > 0)
-                Positioned(
-                  top: -4,
-                  right: -4,
-                  child: Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
-                    child: Text('$_cartItemCount', style: _m(size: 9, color: Colors.white, weight: FontWeight.bold)),
-                  ),
-                ),
-            ],
+          // Tombol Notifikasi
+          GestureDetector(
+            onTap: _showNotificationPanel,
+            child: Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.35),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.notifications_outlined, color: _textDark, size: 22),
+            ),
           ),
           const SizedBox(width: 10),
 
@@ -543,6 +609,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         ],
       ),
+    );
+  }
+
+  void _showNotificationPanel() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _NotificationSheet(),
     );
   }
 
@@ -1461,25 +1536,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   // ──────────────────────────────────────────
-  //  🥦 5. BAHAN SEGAR KILAT (HORIZONTAL SCROLL + BUTTON TAMBAH)
+  //  🍲 MASAK APA HARI INI? (PAKET RESEP KILAT - FULL PHOTO CARD)
   // ──────────────────────────────────────────
-  Widget _buildQuickProductsScroll() {
+  Widget _buildRecipeBundlesScroll() {
     return SizedBox(
       height: 210,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: _quickProducts.length,
+        itemCount: _recipeBundles.length,
         itemBuilder: (_, i) {
-          final item = _quickProducts[i];
+          final recipe = _recipeBundles[i];
           return GestureDetector(
             onTap: () {
-              setState(() => _cartItemCount++);
+              setState(() => _cartItemCount += recipe.ingredients.length);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('${item.name} ditambahkan ke keranjang!', style: _m(size: 11, color: Colors.white)),
-                  duration: const Duration(seconds: 1),
+                  content: Row(
+                    children: [
+                      const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Paket ${recipe.title} (${recipe.ingredients.length} bahan) masuk keranjang!',
+                          style: _m(size: 11, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                  duration: const Duration(seconds: 2),
                   backgroundColor: _greenBottom,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
               );
             },
@@ -1489,7 +1577,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.18), blurRadius: 12, offset: const Offset(0, 5)),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.18),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
                 ],
               ),
               child: ClipRRect(
@@ -1497,38 +1589,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                     // ── Foto Produk Real (Unsplash / Local Asset) ──
-                    item.imageUrl.isNotEmpty
-                      ? (item.imageUrl.startsWith('http')
-                          ? Image.network(
-                              item.imageUrl,
-                              fit: BoxFit.cover,
-                              loadingBuilder: (ctx, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return Container(
-                                  color: Colors.grey.shade200,
-                                  child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                                );
-                              },
-                              errorBuilder: (ctx, _, __) => Container(
-                                color: Colors.grey.shade200,
-                                child: Center(child: Text(item.icon, style: const TextStyle(fontSize: 40))),
-                              ),
-                            )
-                          : Image.asset(
-                              item.imageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (ctx, _, __) => Container(
-                                color: Colors.grey.shade200,
-                                child: Center(child: Text(item.icon, style: const TextStyle(fontSize: 40))),
-                              ),
-                            ))
-                      : Container(
-                          color: Colors.grey.shade200,
-                          child: Center(child: Text(item.icon, style: const TextStyle(fontSize: 40))),
-                        ),
+                    // ── 1. Foto Full Resep (No White Border) ──
+                    Image.network(
+                      recipe.imageUrl,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (ctx, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          color: _greenBottom.withOpacity(0.15),
+                          child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _greenBottom)),
+                        );
+                      },
+                      errorBuilder: (ctx, _, __) => Container(
+                        color: _greenBottom.withOpacity(0.2),
+                        child: Center(child: Text(recipe.icon, style: const TextStyle(fontSize: 42))),
+                      ),
+                    ),
 
-                    // ── Gradient Gelap Bawah (Info Produk) ──
+                    // ── 2. Gradient Gelap Bawah ──
                     Positioned.fill(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
@@ -1538,29 +1616,39 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             colors: [
                               Colors.transparent,
                               Colors.black.withOpacity(0.25),
-                              Colors.black.withOpacity(0.80),
+                              Colors.black.withOpacity(0.85),
                             ],
-                            stops: const [0.35, 0.60, 1.0],
+                            stops: const [0.30, 0.58, 1.0],
                           ),
                         ),
                       ),
                     ),
 
-                    // ── Badge Restock (Pojok Kanan Atas) ──
+                    // ── 3. Badge Durasi (Pojok Kanan Atas) ──
                     Positioned(
                       top: 8,
                       right: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.88),
+                          color: Colors.black.withOpacity(0.60),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(item.restock, style: _m(size: 8, weight: FontWeight.bold, color: _greenBottom)),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.timer_outlined, color: Colors.white, size: 10),
+                            const SizedBox(width: 3),
+                            Text(
+                              recipe.duration,
+                              style: _m(size: 8.5, weight: FontWeight.bold, color: Colors.white),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 
-                    // ── Info Bawah: Nama, Lapak, Harga + Tombol + ──
+                    // ── 4. Info Bawah: Judul, Isi Bahan, Harga + Tombol ──
                     Positioned(
                       left: 10,
                       right: 10,
@@ -1569,23 +1657,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          Row(
+                            children: [
+                              Text(recipe.icon, style: const TextStyle(fontSize: 12)),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  recipe.title,
+                                  style: _m(size: 12.5, weight: FontWeight.bold, color: Colors.white),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
                           Text(
-                            item.name,
-                            style: _m(size: 12.5, weight: FontWeight.bold, color: Colors.white),
+                            recipe.ingredients.join(', '),
+                            style: _m(size: 9.5, color: Colors.white70),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                          ),
-                          Text(
-                            item.store,
-                            style: _m(size: 9.5, color: Colors.white70),
                           ),
                           const SizedBox(height: 6),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Rp${_formatPrice(item.price)}${item.unit}',
-                                style: _m(size: 11, weight: FontWeight.bold, color: Colors.white),
+                                'Rp${_formatPrice(recipe.totalPrice)}',
+                                style: _m(size: 11.5, weight: FontWeight.bold, color: Colors.white),
                               ),
                               Container(
                                 padding: const EdgeInsets.all(5),
@@ -1593,7 +1692,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   color: _greenBottom,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(Icons.add, color: Colors.white, size: 15),
+                                child: const Icon(Icons.add_shopping_cart_rounded, color: Colors.white, size: 14),
                               ),
                             ],
                           ),
@@ -2029,19 +2128,7 @@ class _CommodityData {
   });
 }
 
-class _QuickProduct {
-  final String name, store, unit, icon, restock, imageUrl;
-  final int price;
-  const _QuickProduct({
-    required this.name,
-    required this.store,
-    required this.price,
-    required this.unit,
-    required this.icon,
-    required this.restock,
-    this.imageUrl = '',
-  });
-}
+
 
 class _MarketStore {
   final String name, category, distance;
@@ -2054,4 +2141,201 @@ class _MarketStore {
     required this.distance,
     required this.isOpen,
   });
+}
+
+class _RecipeBundle {
+  final String title, duration, portion, icon, imageUrl;
+  final int totalPrice;
+  final List<String> ingredients;
+  final Color tagColor;
+  const _RecipeBundle({
+    required this.title,
+    required this.duration,
+    required this.portion,
+    required this.totalPrice,
+    required this.icon,
+    required this.ingredients,
+    required this.tagColor,
+    required this.imageUrl,
+  });
+}
+
+// ─────────────────────────────────────────────
+//  _NotificationSheet — Panel Notifikasi
+// ─────────────────────────────────────────────
+class _NotificationSheet extends StatelessWidget {
+  const _NotificationSheet();
+
+  static const _notifs = [
+    _NotifItem(
+      icon: Icons.local_shipping_rounded,
+      iconColor: Color(0xFFFF7B00),
+      title: 'Pesanan dikirim!',
+      sub: 'Pak Budi sedang mengantar pesananmu • 2 mnt lalu',
+      isUnread: true,
+    ),
+    _NotifItem(
+      icon: Icons.check_circle_rounded,
+      iconColor: Color(0xFF007C3F),
+      title: 'Pesanan dikonfirmasi',
+      sub: 'Lapak Sari menerima pesananmu • 15 mnt lalu',
+      isUnread: true,
+    ),
+    _NotifItem(
+      icon: Icons.campaign_rounded,
+      iconColor: Color(0xFF0071FF),
+      title: 'Promo hari ini!',
+      sub: 'Ongkir flat Rp2.000 untuk semua pesanan • 1 jam lalu',
+      isUnread: false,
+    ),
+    _NotifItem(
+      icon: Icons.star_rounded,
+      iconColor: Color(0xFFF5A623),
+      title: 'Beri ulasan',
+      sub: 'Bagaimana pesananmu kemarin? Beri bintang yuk! • 1 hari lalu',
+      isUnread: false,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle bar
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Text(
+                'Notifikasi',
+                style: GoogleFonts.manrope(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF0F1B11),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007C3F).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '2 baru',
+                  style: GoogleFonts.manrope(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF007C3F),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ..._notifs.map((n) => _NotifTile(item: n)),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotifItem {
+  final IconData icon;
+  final Color iconColor;
+  final String title, sub;
+  final bool isUnread;
+  const _NotifItem({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.sub,
+    required this.isUnread,
+  });
+}
+
+class _NotifTile extends StatelessWidget {
+  final _NotifItem item;
+  const _NotifTile({super.key, required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: item.isUnread
+            ? const Color(0xFF007C3F).withOpacity(0.05)
+            : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: item.isUnread
+              ? const Color(0xFF007C3F).withOpacity(0.15)
+              : Colors.grey.shade200,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: item.iconColor.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(item.icon, color: item.iconColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  style: GoogleFonts.manrope(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF0F1B11),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  item.sub,
+                  style: GoogleFonts.manrope(
+                    fontSize: 11.5,
+                    color: Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (item.isUnread)
+            Container(
+              width: 8,
+              height: 8,
+              margin: const EdgeInsets.only(top: 4),
+              decoration: const BoxDecoration(
+                color: Color(0xFF007C3F),
+                shape: BoxShape.circle,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
