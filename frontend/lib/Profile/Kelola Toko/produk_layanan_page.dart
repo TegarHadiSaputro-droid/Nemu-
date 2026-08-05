@@ -68,7 +68,7 @@ class ProdukLayananPage extends StatelessWidget {
                         child: Text(
                           '${_produk.length} item terdaftar',
                           style: GoogleFonts.manrope(
-                            color: kInk.withOpacity(0.75),
+                            color: kInk.withValues(alpha: 0.75),
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
                           ),
@@ -204,7 +204,7 @@ class _ProdukCard extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: kGradientBottom.withOpacity(0.15),
+                    color: kGradientBottom.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   alignment: Alignment.center,
@@ -218,8 +218,8 @@ class _ProdukCard extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: isActive
-                        ? Colors.green.withOpacity(0.15)
-                        : Colors.grey.withOpacity(0.2),
+                        ? Colors.green.withValues(alpha: 0.15)
+                        : Colors.grey.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -251,7 +251,7 @@ class _ProdukCard extends StatelessWidget {
             Text(
               data.kategori,
               style: GoogleFonts.manrope(
-                color: kInk.withOpacity(0.55),
+                color: kInk.withValues(alpha: 0.55),
                 fontSize: 10.5,
                 fontWeight: FontWeight.w500,
               ),

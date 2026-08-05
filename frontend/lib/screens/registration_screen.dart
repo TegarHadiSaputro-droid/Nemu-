@@ -181,7 +181,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   Text(
                     'Lengkapi data di bawah untuk mendaftar',
                     style: GoogleFonts.manrope(
-                      color: AppColors.beige.withOpacity(0.85),
+                      color: AppColors.beige.withValues(alpha: 0.85),
                       fontSize: 14,
                     ),
                   ),
@@ -195,7 +195,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
+                          color: Colors.black.withValues(alpha: 0.15),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -253,7 +253,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                 _obscurePassword
                                     ? Icons.visibility_off_outlined
                                     : Icons.visibility_outlined,
-                                color: AppColors.nightmare.withOpacity(0.5),
+                                color: AppColors.nightmare.withValues(alpha: 0.5),
                               ),
                               onPressed: () => setState(
                                   () => _obscurePassword = !_obscurePassword),
@@ -274,7 +274,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                             child: Text(
                               'Minimal $_minPasswordLength karakter',
                               style: GoogleFonts.manrope(
-                                color: AppColors.nightmare.withOpacity(0.55),
+                                color: AppColors.nightmare.withValues(alpha: 0.55),
                                 fontSize: 12,
                               ),
                             ),
@@ -292,7 +292,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                                 _obscureConfirmPassword
                                     ? Icons.visibility_off_outlined
                                     : Icons.visibility_outlined,
-                                color: AppColors.nightmare.withOpacity(0.5),
+                                color: AppColors.nightmare.withValues(alpha: 0.5),
                               ),
                               onPressed: () => setState(() =>
                                   _obscureConfirmPassword = !_obscureConfirmPassword),
@@ -407,7 +407,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         text: TextSpan(
                           text: 'Sudah punya akun? ',
                           style: GoogleFonts.manrope(
-                            color: AppColors.beige.withOpacity(0.85),
+                            color: AppColors.beige.withValues(alpha: 0.85),
                             fontSize: 14,
                           ),
                           children: [
@@ -447,7 +447,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withValues(alpha: 0.15),
               blurRadius: 14,
               offset: const Offset(0, 6),
             ),
@@ -478,24 +478,24 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       decoration: InputDecoration(
         labelText: label,
         labelStyle: GoogleFonts.manrope(
-          color: AppColors.nightmare.withOpacity(0.5),
+          color: AppColors.nightmare.withValues(alpha: 0.5),
         ),
         prefixIcon: Icon(icon, color: AppColors.gradientBottom),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: AppColors.surface.withOpacity(0.55),
+        fillColor: AppColors.surface.withValues(alpha: 0.55),
         contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: AppColors.gradientBottom.withOpacity(0.25),
+            color: AppColors.gradientBottom.withValues(alpha: 0.25),
             width: 1,
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: AppColors.gradientBottom.withOpacity(0.25),
+            color: AppColors.gradientBottom.withValues(alpha: 0.25),
             width: 1,
           ),
         ),

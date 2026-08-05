@@ -151,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     showDialog(
       context: parentContext,
-      barrierColor: Colors.black.withOpacity(0.45),
+      barrierColor: Colors.black.withValues(alpha: 0.45),
       builder: (dialogContext) {
         return Dialog(
           backgroundColor: Colors.transparent,
@@ -163,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.25),
+                  color: Colors.black.withValues(alpha: 0.25),
                   blurRadius: 24,
                   offset: const Offset(0, 10),
                 ),
@@ -184,7 +184,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Icon(
                           Icons.close,
                           size: 22,
-                          color: AppColors.nightmare.withOpacity(0.55),
+                          color: AppColors.nightmare.withValues(alpha: 0.55),
                         ),
                       ),
                     ],
@@ -201,7 +201,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     'Masukkan email kamu, kami akan kirim tautan untuk atur ulang kata sandi.',
                     style: GoogleFonts.manrope(
-                      color: AppColors.nightmare.withOpacity(0.65),
+                      color: AppColors.nightmare.withValues(alpha: 0.65),
                       fontSize: 13,
                       height: 1.4,
                     ),
@@ -222,27 +222,27 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: InputDecoration(
                       hintText: 'Email',
                       hintStyle: GoogleFonts.manrope(
-                        color: AppColors.nightmare.withOpacity(0.4),
+                        color: AppColors.nightmare.withValues(alpha: 0.4),
                       ),
                       prefixIcon: Icon(
                         Icons.email_outlined,
                         color: AppColors.gradientBottom,
                       ),
                       filled: true,
-                      fillColor: Colors.white.withOpacity(0.4),
+                      fillColor: Colors.white.withValues(alpha: 0.4),
                       contentPadding:
                           const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(
-                          color: AppColors.gradientBottom.withOpacity(0.25),
+                          color: AppColors.gradientBottom.withValues(alpha: 0.25),
                           width: 1,
                         ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(
-                          color: AppColors.gradientBottom.withOpacity(0.25),
+                          color: AppColors.gradientBottom.withValues(alpha: 0.25),
                           width: 1,
                         ),
                       ),
@@ -351,7 +351,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
+                            color: Colors.black.withValues(alpha: 0.15),
                             blurRadius: 14,
                             offset: const Offset(0, 6),
                           ),
@@ -373,7 +373,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     'Masuk untuk melanjutkan ke akun kamu',
                     style: GoogleFonts.manrope(
-                      color: AppColors.beige.withOpacity(0.85),
+                      color: AppColors.beige.withValues(alpha: 0.85),
                       fontSize: 14,
                     ),
                   ),
@@ -387,7 +387,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
+                          color: Colors.black.withValues(alpha: 0.15),
                           blurRadius: 20,
                           offset: const Offset(0, 8),
                         ),
@@ -422,7 +422,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 _obscurePassword
                                     ? Icons.visibility_off_outlined
                                     : Icons.visibility_outlined,
-                                color: AppColors.nightmare.withOpacity(0.5),
+                                color: AppColors.nightmare.withValues(alpha: 0.5),
                               ),
                               onPressed: () => setState(
                                   () => _obscurePassword = !_obscurePassword),
@@ -504,7 +504,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         text: TextSpan(
                           text: 'Belum punya akun? ',
                           style: GoogleFonts.manrope(
-                            color: AppColors.beige.withOpacity(0.85),
+                            color: AppColors.beige.withValues(alpha: 0.85),
                             fontSize: 14,
                           ),
                           children: [
@@ -553,24 +553,24 @@ class _LoginScreenState extends State<LoginScreen> {
       decoration: InputDecoration(
         labelText: label,
         labelStyle: GoogleFonts.manrope(
-          color: AppColors.nightmare.withOpacity(0.5),
+          color: AppColors.nightmare.withValues(alpha: 0.5),
         ),
         prefixIcon: Icon(icon, color: AppColors.gradientBottom),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: AppColors.surface.withOpacity(0.55),
+        fillColor: AppColors.surface.withValues(alpha: 0.55),
         contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: AppColors.gradientBottom.withOpacity(0.25),
+            color: AppColors.gradientBottom.withValues(alpha: 0.25),
             width: 1,
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
-            color: AppColors.gradientBottom.withOpacity(0.25),
+            color: AppColors.gradientBottom.withValues(alpha: 0.25),
             width: 1,
           ),
         ),

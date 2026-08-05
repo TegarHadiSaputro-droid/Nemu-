@@ -120,7 +120,7 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         text,
         style: GoogleFonts.manrope(
-          color: kInk.withOpacity(0.75),
+          color: kInk.withValues(alpha: 0.75),
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
@@ -231,7 +231,7 @@ class _FaqCard extends StatelessWidget {
                 border: Border(
                   bottom: isLast
                       ? BorderSide.none
-                      : BorderSide(color: kInk.withOpacity(0.08)),
+                      : BorderSide(color: kInk.withValues(alpha: 0.08)),
                 ),
               ),
               child: ExpansionTile(
@@ -239,7 +239,7 @@ class _FaqCard extends StatelessWidget {
                 childrenPadding:
                     const EdgeInsets.fromLTRB(12, 0, 12, 14),
                 iconColor: kInk,
-                collapsedIconColor: kInk.withOpacity(0.5),
+                collapsedIconColor: kInk.withValues(alpha: 0.5),
                 title: Text(
                   item.question,
                   style: GoogleFonts.manrope(
@@ -254,7 +254,7 @@ class _FaqCard extends StatelessWidget {
                     child: Text(
                       item.answer,
                       style: GoogleFonts.manrope(
-                        color: kInk.withOpacity(0.65),
+                        color: kInk.withValues(alpha: 0.65),
                         fontSize: 12.5,
                         fontWeight: FontWeight.w500,
                         height: 1.4,

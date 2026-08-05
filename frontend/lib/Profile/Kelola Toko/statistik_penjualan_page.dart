@@ -142,7 +142,7 @@ class _StatBox extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -163,7 +163,7 @@ class _StatBox extends StatelessWidget {
           Text(
             label,
             style: GoogleFonts.manrope(
-              color: kInk.withOpacity(0.6),
+              color: kInk.withValues(alpha: 0.6),
               fontSize: 11,
               fontWeight: FontWeight.w500,
               height: 1.3,
@@ -206,7 +206,7 @@ class _BarChart extends StatelessWidget {
                   Text(
                     labels[i],
                     style: GoogleFonts.manrope(
-                      color: kInk.withOpacity(0.6),
+                      color: kInk.withValues(alpha: 0.6),
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                     ),
@@ -239,12 +239,12 @@ class _TopItem extends StatelessWidget {
         border: Border(
           bottom: isLast
               ? BorderSide.none
-              : BorderSide(color: kInk.withOpacity(0.08)),
+              : BorderSide(color: kInk.withValues(alpha: 0.08)),
         ),
       ),
       child: Row(
         children: [
-          Icon(Icons.build_outlined, size: 18, color: kInk.withOpacity(0.6)),
+          Icon(Icons.build_outlined, size: 18, color: kInk.withValues(alpha: 0.6)),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -259,7 +259,7 @@ class _TopItem extends StatelessWidget {
           Text(
             '$jumlah terjual',
             style: GoogleFonts.manrope(
-              color: kInk.withOpacity(0.55),
+              color: kInk.withValues(alpha: 0.55),
               fontSize: 11.5,
               fontWeight: FontWeight.w500,
             ),

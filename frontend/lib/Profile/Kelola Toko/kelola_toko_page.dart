@@ -213,7 +213,7 @@ class _StoreHeader extends StatelessWidget {
                   Text(
                     'Buka sekarang',
                     style: GoogleFonts.manrope(
-                      color: kInk.withOpacity(0.7),
+                      color: kInk.withValues(alpha: 0.7),
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
@@ -257,7 +257,7 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -277,7 +277,7 @@ class _StatCard extends StatelessWidget {
           Text(
             label,
             style: GoogleFonts.manrope(
-              color: kInk.withOpacity(0.7),
+              color: kInk.withValues(alpha: 0.7),
               fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
@@ -299,7 +299,7 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         text,
         style: GoogleFonts.manrope(
-          color: kInk.withOpacity(0.75),
+          color: kInk.withValues(alpha: 0.75),
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
@@ -351,12 +351,12 @@ class _MenuGroup extends StatelessWidget {
                 border: Border(
                   bottom: isLast
                       ? BorderSide.none
-                      : BorderSide(color: kInk.withOpacity(0.08)),
+                      : BorderSide(color: kInk.withValues(alpha: 0.08)),
                 ),
               ),
               child: Row(
                 children: [
-                  Icon(item.icon, size: 18, color: kInk.withOpacity(0.75)),
+                  Icon(item.icon, size: 18, color: kInk.withValues(alpha: 0.75)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -372,7 +372,7 @@ class _MenuGroup extends StatelessWidget {
                     Text(
                       item.trailing!,
                       style: GoogleFonts.manrope(
-                        color: kInk.withOpacity(0.6),
+                        color: kInk.withValues(alpha: 0.6),
                         fontSize: 12.5,
                         fontWeight: FontWeight.w500,
                       ),
@@ -382,7 +382,7 @@ class _MenuGroup extends StatelessWidget {
                   Icon(
                     Icons.chevron_right,
                     size: 16,
-                    color: kInk.withOpacity(0.4),
+                    color: kInk.withValues(alpha: 0.4),
                   ),
                 ],
               ),

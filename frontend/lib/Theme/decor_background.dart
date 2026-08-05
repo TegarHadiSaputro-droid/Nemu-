@@ -28,7 +28,7 @@ class DecorCircle extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: kCream.withOpacity(opacity),
+        color: kCream.withValues(alpha: opacity),
       ),
     );
   }

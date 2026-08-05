@@ -175,7 +175,7 @@ class _FormCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -212,7 +212,7 @@ class _FormField extends StatelessWidget {
         border: Border(
           bottom: isLast
               ? BorderSide.none
-              : BorderSide(color: kInk.withOpacity(0.08)),
+              : BorderSide(color: kInk.withValues(alpha: 0.08)),
         ),
       ),
       child: Row(
@@ -221,7 +221,7 @@ class _FormField extends StatelessWidget {
         children: [
           Padding(
             padding: EdgeInsets.only(top: maxLines > 1 ? 4 : 0),
-            child: Icon(icon, size: 18, color: kInk.withOpacity(0.6)),
+            child: Icon(icon, size: 18, color: kInk.withValues(alpha: 0.6)),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -231,7 +231,7 @@ class _FormField extends StatelessWidget {
                 Text(
                   label,
                   style: GoogleFonts.manrope(
-                    color: kInk.withOpacity(0.55),
+                    color: kInk.withValues(alpha: 0.55),
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),

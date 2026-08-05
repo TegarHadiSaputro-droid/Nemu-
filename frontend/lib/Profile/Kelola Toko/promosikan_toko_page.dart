@@ -115,7 +115,7 @@ class _HeroBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -150,7 +150,7 @@ class _HeroBanner extends StatelessWidget {
                 Text(
                   'Naikkan tokomu ke posisi atas biar makin dilirik pembeli.',
                   style: GoogleFonts.manrope(
-                    color: kInk.withOpacity(0.65),
+                    color: kInk.withValues(alpha: 0.65),
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                     height: 1.3,
@@ -241,7 +241,7 @@ class _PromoCard extends StatelessWidget {
                   Text(
                     subtitle,
                     style: GoogleFonts.manrope(
-                      color: kInk.withOpacity(0.6),
+                      color: kInk.withValues(alpha: 0.6),
                       fontSize: 11.5,
                       fontWeight: FontWeight.w500,
                     ),

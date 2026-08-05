@@ -14,7 +14,7 @@ class SpendingChart extends StatelessWidget {
         borderRadius: BorderRadius.circular(25),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: .05),
             blurRadius: 18,
             offset: const Offset(0, 8),
           )
@@ -60,7 +60,7 @@ Row(
         vertical: 8,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFD9DF36).withOpacity(.18),
+        color: const Color(0xFFD9DF36).withValues(alpha: .18),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Text(

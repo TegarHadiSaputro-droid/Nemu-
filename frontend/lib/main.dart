@@ -17,8 +17,8 @@ import 'screens/home_screen.dart'; // berisi HomeScreen
 import 'theme/app_colors.dart';
 import 'widgets/background_decoration.dart';
 import 'utils/page_transitions.dart';
-import 'Theme/app_theme.dart'; // berisi kInk, kCream, kGradientTop, kGradientBottom
-import 'Profile/account.dart'; // berisi AccountPage
+// berisi kInk, kCream, kGradientTop, kGradientBottom
+// berisi AccountPage
 import 'package:provider/provider.dart';
 import 'localization/language_provider.dart'; // berisi LanguageProvider
 
@@ -140,7 +140,7 @@ class LandingPage extends StatelessWidget {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.18),
+                            color: Colors.black.withValues(alpha: 0.18),
                             blurRadius: 24,
                             offset: const Offset(0, 10),
                           ),
@@ -161,7 +161,7 @@ class LandingPage extends StatelessWidget {
                     Text(
                       'Belanja kebutuhan segar jadi lebih mudah',
                       style: GoogleFonts.manrope(
-                        color: AppColors.beige.withOpacity(0.85),
+                        color: AppColors.beige.withValues(alpha: 0.85),
                         fontSize: 14,
                       ),
                       textAlign: TextAlign.center,
@@ -214,7 +214,7 @@ class LandingPage extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.beige,
                           side: BorderSide(
-                            color: AppColors.beige.withOpacity(0.8),
+                            color: AppColors.beige.withValues(alpha: 0.8),
                             width: 1.5,
                           ),
                           shape: RoundedRectangleBorder(

@@ -9,6 +9,8 @@ import 'package:frontend/Profile/account.dart';
 import 'package:frontend/widgets/bottom_navbar.dart';
 import 'package:frontend/screens/orders_screen.dart';
 import 'package:frontend/screens/pasar/pasar_screen.dart';
+import 'package:frontend/mitra/pages/mitra_category_page.dart';
+import 'package:frontend/mitra/mitra_navigation_helper.dart';
 
 // ─────────────────────────────────────────────
 //  Warna Palette
@@ -388,13 +390,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
 
           // ── Dekorasi Playful Background ──
-          Positioned(top: -40, right: -50, child: _blob(200, Colors.white.withOpacity(0.12))),
-          Positioned(top: 80, left: -60, child: _blob(160, Colors.white.withOpacity(0.10))),
-          Positioned(top: 220, right: 20, child: _blob(80, Colors.white.withOpacity(0.08))),
-          Positioned(top: 300, left: 30, child: _dot(18, Colors.white.withOpacity(0.20))),
-          Positioned(top: 340, right: 60, child: _dot(10, Colors.white.withOpacity(0.18))),
-          Positioned(bottom: 200, right: -40, child: _blob(150, const Color(0xFFD9DF36).withOpacity(0.18))),
-          Positioned(bottom: 350, left: 10, child: _dot(14, Colors.white.withOpacity(0.15))),
+          Positioned(top: -40, right: -50, child: _blob(200, Colors.white.withValues(alpha: 0.12))),
+          Positioned(top: 80, left: -60, child: _blob(160, Colors.white.withValues(alpha: 0.10))),
+          Positioned(top: 220, right: 20, child: _blob(80, Colors.white.withValues(alpha: 0.08))),
+          Positioned(top: 300, left: 30, child: _dot(18, Colors.white.withValues(alpha: 0.20))),
+          Positioned(top: 340, right: 60, child: _dot(10, Colors.white.withValues(alpha: 0.18))),
+          Positioned(bottom: 200, right: -40, child: _blob(150, const Color(0xFFD9DF36).withValues(alpha: 0.18))),
+          Positioned(bottom: 350, left: 10, child: _dot(14, Colors.white.withValues(alpha: 0.15))),
 
           // ── Konten Utama ──
           Positioned.fill(
@@ -557,7 +559,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(_welcomeGreeting,
-                    style: _m(size: 13, color: _textDark.withOpacity(0.7))),
+                    style: _m(size: 13, color: _textDark.withValues(alpha: 0.7))),
                 const SizedBox(height: 2),
                 Text(_userName,
                     style: _m(size: 20, weight: FontWeight.bold, color: _textDark)),
@@ -594,7 +596,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               decoration: BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6)],
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 6)],
                 image: _photoUrl != null
                     ? DecorationImage(
                         image: NetworkImage(_photoUrl!),
@@ -625,7 +627,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Container(
       padding: const EdgeInsets.all(9),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.35),
+        color: Colors.white.withValues(alpha: 0.35),
         shape: BoxShape.circle,
       ),
       child: Icon(icon, color: _textDark, size: 22),
@@ -641,7 +643,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 3))],
       ),
       child: Row(
         children: [
@@ -651,7 +653,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: _greenBottom.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: _greenBottom.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
             child: Text('Filter', style: _m(size: 11, color: _greenBottom, weight: FontWeight.w600)),
           ),
         ],
@@ -707,7 +709,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   sub: 'Est. 8 mnt • Lapak Sari',
                   bgColor: Colors.orange.shade700,
                   textColor: Colors.white,
-                  subTextColor: Colors.white.withOpacity(0.9),
+                  subTextColor: Colors.white.withValues(alpha: 0.9),
                   gradientColors: [Colors.orange.shade800, Colors.orange.shade600],
                   onTap: () {
                     setState(() {
@@ -757,7 +759,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: (gradientColors != null ? gradientColors.first : Colors.black).withOpacity(gradientColors != null ? 0.2 : 0.06),
+              color: (gradientColors != null ? gradientColors.first : Colors.black).withValues(alpha: gradientColors != null ? 0.2 : 0.06),
               blurRadius: 8,
               offset: const Offset(0, 3),
             )
@@ -768,7 +770,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: gradientColors != null ? Colors.white.withOpacity(0.2) : iconColor.withOpacity(0.12),
+                color: gradientColors != null ? Colors.white.withValues(alpha: 0.2) : iconColor.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: gradientColors != null ? Colors.white : iconColor, size: 18),
@@ -814,41 +816,53 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  // Banner "JASA" (Panggil Tukang Kapan Saja) diarahkan ke daftar kategori
+  // Mitra. Banner lain (Pasar/Promo) belum punya halaman tujuan, jadi
+  // sementara dibiarkan tidak melakukan apa-apa saat ditekan.
+  void _onBannerTap(_BannerData b) {
+    if (b.tag == 'JASA') {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const MitraCategoryPage()));
+    }
+  }
+
   Widget _buildBannerCard(_BannerData b) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 2),
-      decoration: BoxDecoration(
-        color: b.bgColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: b.tagColor.withOpacity(0.4), width: 2),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 5))],
-      ),
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: b.tagColor, borderRadius: BorderRadius.circular(20)),
-            child: Text(b.tag, style: _m(size: 10, weight: FontWeight.bold, color: Colors.white)),
-          ),
-          const Spacer(),
-          Text(b.title, style: _m(size: 16, weight: FontWeight.bold, height: 1.3)),
-          const SizedBox(height: 4),
-          Text(b.sub, style: _m(size: 11.5, color: Colors.black54)),
-          const SizedBox(height: 10),
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: b.tagColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              elevation: 0,
+    return GestureDetector(
+      onTap: () => _onBannerTap(b),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          color: b.bgColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: b.tagColor.withValues(alpha: 0.4), width: 2),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 5))],
+        ),
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(color: b.tagColor, borderRadius: BorderRadius.circular(20)),
+              child: Text(b.tag, style: _m(size: 10, weight: FontWeight.bold, color: Colors.white)),
             ),
-            child: Text('Lihat Detail', style: _m(size: 11, weight: FontWeight.bold, color: Colors.white)),
-          ),
-        ],
+            const Spacer(),
+            Text(b.title, style: _m(size: 16, weight: FontWeight.bold, height: 1.3)),
+            const SizedBox(height: 4),
+            Text(b.sub, style: _m(size: 11.5, color: Colors.black54)),
+            const SizedBox(height: 10),
+            ElevatedButton(
+              onPressed: () => _onBannerTap(b),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: b.tagColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                elevation: 0,
+              ),
+              child: Text('Lihat Detail', style: _m(size: 11, weight: FontWeight.bold, color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -864,7 +878,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           width: active ? 22 : 8,
           height: 8,
           decoration: BoxDecoration(
-            color: active ? Colors.white : Colors.white.withOpacity(0.45),
+            color: active ? Colors.white : Colors.white.withValues(alpha: 0.45),
             borderRadius: BorderRadius.circular(4),
           ),
         );
@@ -897,20 +911,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             itemBuilder: (_, i) {
               final item = chips[i];
               final color = item['color'] as Color;
-              return Container(
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)],
-                ),
-                child: Row(
-                  children: [
-                    Icon(item['icon'] as IconData, size: 16, color: color),
-                    const SizedBox(width: 6),
-                    Text(item['label'] as String, style: _m(size: 11, weight: FontWeight.bold, color: _textDark)),
-                  ],
+              final label = item['label'] as String;
+              return GestureDetector(
+                onTap: () => bukaPencarianCepatMitra(context, label),
+                child: Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6)],
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(item['icon'] as IconData, size: 16, color: color),
+                      const SizedBox(width: 6),
+                      Text(label, style: _m(size: 11, weight: FontWeight.bold, color: _textDark)),
+                    ],
+                  ),
                 ),
               );
             },
@@ -928,7 +946,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title, style: _m(size: 15, weight: FontWeight.bold, color: Colors.white)),
-        Text(sub, style: _m(size: 11, color: Colors.white.withOpacity(0.8))),
+        Text(sub, style: _m(size: 11, color: Colors.white.withValues(alpha: 0.8))),
       ],
     );
   }
@@ -953,14 +971,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.07), blurRadius: 8, offset: const Offset(0, 3))],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 8, offset: const Offset(0, 3))],
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: color.withOpacity(0.12), shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
                   child: Icon(c['icon'] as IconData, color: color, size: 26),
                 ),
                 const SizedBox(height: 8),
@@ -1002,7 +1020,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.10), blurRadius: 18, offset: const Offset(0, 6)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 18, offset: const Offset(0, 6)),
         ],
       ),
       child: Column(
@@ -1019,7 +1037,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: _greenBottom.withOpacity(0.1),
+                        color: _greenBottom.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Icons.analytics_rounded, color: _greenBottom, size: 20),
@@ -1080,7 +1098,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         color: isSelected ? _greenBottom : Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(22),
                         boxShadow: isSelected
-                            ? [BoxShadow(color: _greenBottom.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))]
+                            ? [BoxShadow(color: _greenBottom.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))]
                             : [],
                       ),
                       child: Row(
@@ -1348,10 +1366,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [_greenBottom.withOpacity(0.08), Colors.deepPurple.withOpacity(0.04)],
+                  colors: [_greenBottom.withValues(alpha: 0.08), Colors.deepPurple.withValues(alpha: 0.04)],
                 ),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: _greenBottom.withOpacity(0.15)),
+                border: Border.all(color: _greenBottom.withValues(alpha: 0.15)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1359,7 +1377,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: _greenBottom.withOpacity(0.12),
+                      color: _greenBottom.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.trending_up_rounded, color: _greenBottom, size: 18),
@@ -1399,7 +1417,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.15)),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
       ),
       child: Row(
         children: [
@@ -1578,7 +1596,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.18),
+                    color: Colors.black.withValues(alpha: 0.18),
                     blurRadius: 12,
                     offset: const Offset(0, 5),
                   ),
@@ -1596,12 +1614,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       loadingBuilder: (ctx, child, loadingProgress) {
                         if (loadingProgress == null) return child;
                         return Container(
-                          color: _greenBottom.withOpacity(0.15),
+                          color: _greenBottom.withValues(alpha: 0.15),
                           child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _greenBottom)),
                         );
                       },
                       errorBuilder: (ctx, _, __) => Container(
-                        color: _greenBottom.withOpacity(0.2),
+                        color: _greenBottom.withValues(alpha: 0.2),
                         child: Center(child: Text(recipe.icon, style: const TextStyle(fontSize: 42))),
                       ),
                     ),
@@ -1615,8 +1633,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             end: Alignment.bottomCenter,
                             colors: [
                               Colors.transparent,
-                              Colors.black.withOpacity(0.25),
-                              Colors.black.withOpacity(0.85),
+                              Colors.black.withValues(alpha: 0.25),
+                              Colors.black.withValues(alpha: 0.85),
                             ],
                             stops: const [0.30, 0.58, 1.0],
                           ),
@@ -1631,7 +1649,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.60),
+                          color: Colors.black.withValues(alpha: 0.60),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -1727,7 +1745,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 3))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 3))],
       ),
       child: Row(
         children: [
@@ -1735,7 +1753,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: _greenBottom.withOpacity(0.1),
+              color: _greenBottom.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.storefront_rounded, color: _greenBottom, size: 28),
@@ -1827,12 +1845,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         children: List.generate(items.length, (i) {
           final selected = _navIndex == i;
           return GestureDetector(
-            onTap: () => setState(() => _navIndex = i),
+            onTap: () async {
+              setState(() => _navIndex = i);
+              // Tab "Mitra" belum punya halaman utuh di dalam bottom nav
+              // (masih single-page app), jadi dibuka lewat push halaman
+              // terpisah, lalu index dikembalikan ke Beranda saat kembali.
+              if (items[i]['label'] == 'Mitra') {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MitraCategoryPage()),
+                );
+                if (mounted) setState(() => _navIndex = 0);
+              }
+            },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: selected ? _greenBottom.withOpacity(0.1) : Colors.transparent,
+                color: selected ? _greenBottom.withValues(alpha: 0.1) : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -1922,7 +1952,7 @@ class _EnhancedLineChartPainter extends CustomPainter {
 
     // ── 1. Grid horizontal (garis tipis) ──
     final gridPaint = Paint()
-      ..color = Colors.grey.withOpacity(0.15)
+      ..color = Colors.grey.withValues(alpha: 0.15)
       ..strokeWidth = 1;
     for (int i = 0; i <= 4; i++) {
       final y = paddingTop + (chartHeight / 4) * i;
@@ -1964,7 +1994,7 @@ class _EnhancedLineChartPainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [lineColor.withOpacity(0.20 * animationValue), lineColor.withOpacity(0.0)],
+          colors: [lineColor.withValues(alpha: 0.20 * animationValue), lineColor.withValues(alpha: 0.0)],
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
       canvas.drawPath(fillPath, fillPaint);
     }
@@ -2000,7 +2030,7 @@ class _EnhancedLineChartPainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Colors.deepPurple.withOpacity(0.10 * animationValue), Colors.deepPurple.withOpacity(0.0)],
+          colors: [Colors.deepPurple.withValues(alpha: 0.10 * animationValue), Colors.deepPurple.withValues(alpha: 0.0)],
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
       canvas.drawPath(predFillPath, predFillPaint);
     }
@@ -2015,8 +2045,8 @@ class _EnhancedLineChartPainter extends CustomPainter {
 
       if (isTouched) {
         // Lingkaran highlight besar saat disentuh
-        canvas.drawCircle(p, 12, Paint()..color = dotColor.withOpacity(0.15));
-        canvas.drawCircle(p, 8, Paint()..color = dotColor.withOpacity(0.25));
+        canvas.drawCircle(p, 12, Paint()..color = dotColor.withValues(alpha: 0.15));
+        canvas.drawCircle(p, 8, Paint()..color = dotColor.withValues(alpha: 0.25));
       }
 
       // Dot utama

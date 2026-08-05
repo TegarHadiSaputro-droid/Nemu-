@@ -81,7 +81,7 @@ class _JamOperasionalPageState extends State<JamOperasionalPage> {
                             border: Border(
                               bottom: isLast
                                   ? BorderSide.none
-                                  : BorderSide(color: kInk.withOpacity(0.08)),
+                                  : BorderSide(color: kInk.withValues(alpha: 0.08)),
                             ),
                           ),
                           child: Row(
@@ -102,7 +102,7 @@ class _JamOperasionalPageState extends State<JamOperasionalPage> {
                                     ? Text(
                                         '${h.jamBuka} - ${h.jamTutup}',
                                         style: GoogleFonts.manrope(
-                                          color: kInk.withOpacity(0.65),
+                                          color: kInk.withValues(alpha: 0.65),
                                           fontSize: 12.5,
                                           fontWeight: FontWeight.w500,
                                         ),
@@ -110,7 +110,7 @@ class _JamOperasionalPageState extends State<JamOperasionalPage> {
                                     : Text(
                                         'Tutup',
                                         style: GoogleFonts.manrope(
-                                          color: kInk.withOpacity(0.4),
+                                          color: kInk.withValues(alpha: 0.4),
                                           fontSize: 12.5,
                                           fontWeight: FontWeight.w500,
                                         ),
@@ -119,7 +119,7 @@ class _JamOperasionalPageState extends State<JamOperasionalPage> {
                               Switch(
                                 value: h.buka,
                                 onChanged: (v) => setState(() => h.buka = v),
-                                activeColor: kGradientBottom,
+                                activeThumbColor: kGradientBottom,
                               ),
                             ],
                           ),

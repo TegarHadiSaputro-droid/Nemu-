@@ -72,7 +72,7 @@ class _LogoutPageState extends State<LogoutPage> {
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
+                            color: Colors.black.withValues(alpha: 0.2),
                             blurRadius: 15,
                             offset: const Offset(0, 5),
                           ),
@@ -100,7 +100,7 @@ class _LogoutPageState extends State<LogoutPage> {
                             'Apakah Anda yakin ingin keluar dari akun ini?',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.manrope(
-                              color: kInk.withOpacity(0.7),
+                              color: kInk.withValues(alpha: 0.7),
                               fontSize: 13,
                             ),
                           ),
@@ -111,7 +111,7 @@ class _LogoutPageState extends State<LogoutPage> {
                                 child: OutlinedButton(
                                   onPressed: () => Navigator.pop(context),
                                   style: OutlinedButton.styleFrom(
-                                    side: BorderSide(color: kInk.withOpacity(0.3)),
+                                    side: BorderSide(color: kInk.withValues(alpha: 0.3)),
                                     padding: const EdgeInsets.symmetric(vertical: 12),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),

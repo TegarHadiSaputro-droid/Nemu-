@@ -135,7 +135,7 @@ class _PesananCard extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 18,
-                backgroundColor: kGradientBottom.withOpacity(0.15),
+                backgroundColor: kGradientBottom.withValues(alpha: 0.15),
                 child: Text(
                   data.nama.substring(0, 1),
                   style: GoogleFonts.manrope(
@@ -160,7 +160,7 @@ class _PesananCard extends StatelessWidget {
                     Text(
                       data.layanan,
                       style: GoogleFonts.manrope(
-                        color: kInk.withOpacity(0.6),
+                        color: kInk.withValues(alpha: 0.6),
                         fontSize: 11.5,
                         fontWeight: FontWeight.w500,
                       ),
@@ -172,8 +172,8 @@ class _PesananCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: isBaru
-                      ? kGradientBottom.withOpacity(0.15)
-                      : Colors.grey.withOpacity(0.2),
+                      ? kGradientBottom.withValues(alpha: 0.15)
+                      : Colors.grey.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -190,12 +190,12 @@ class _PesananCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Icon(Icons.access_time, size: 13, color: kInk.withOpacity(0.5)),
+              Icon(Icons.access_time, size: 13, color: kInk.withValues(alpha: 0.5)),
               const SizedBox(width: 4),
               Text(
                 data.waktu,
                 style: GoogleFonts.manrope(
-                  color: kInk.withOpacity(0.55),
+                  color: kInk.withValues(alpha: 0.55),
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
                 ),

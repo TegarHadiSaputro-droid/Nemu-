@@ -19,13 +19,13 @@ class BackgroundDecoration extends StatelessWidget {
           Positioned(
             top: -70,
             left: -70,
-            child: _blob(200, Colors.white.withOpacity(0.07)),
+            child: _blob(200, Colors.white.withValues(alpha: 0.07)),
           ),
           // Blob di kanan bawah
           Positioned(
             bottom: -90,
             right: -70,
-            child: _blob(240, Colors.black.withOpacity(0.06)),
+            child: _blob(240, Colors.black.withValues(alpha: 0.06)),
           ),
           // Ikon-ikon dekoratif tersebar tipis-tipis
           Positioned(
@@ -69,7 +69,7 @@ class BackgroundDecoration extends StatelessWidget {
   Widget _icon(IconData icon, double size, double opacity, double angle) {
     return Transform.rotate(
       angle: angle,
-      child: Icon(icon, size: size, color: Colors.white.withOpacity(opacity)),
+      child: Icon(icon, size: size, color: Colors.white.withValues(alpha: opacity)),
     );
   }
 }

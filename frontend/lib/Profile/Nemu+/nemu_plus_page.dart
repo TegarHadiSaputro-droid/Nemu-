@@ -117,7 +117,7 @@ class NemuPlusPage extends StatelessWidget {
                         Text(
                           'Tenang, kamu tetap bisa mendaftar. Nanti di form pendaftaran akan ada pertanyaan "Apakah Anda memiliki SPSTB?" — kalau belum, cukup unggah foto kios, bukti sewa/surat dari pengelola pasar (jika ada), dan keterangan tambahan. Pendaftaranmu akan diperiksa langsung oleh admin.',
                           style: GoogleFonts.manrope(
-                            color: kInk.withOpacity(0.7),
+                            color: kInk.withValues(alpha: 0.7),
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                             height: 1.5,
@@ -169,7 +169,7 @@ class NemuPlusPage extends StatelessWidget {
                     'Kamu akan diminta mengisi data gerai sesuai syarat di atas pada langkah berikutnya.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.manrope(
-                      color: kInk.withOpacity(0.6),
+                      color: kInk.withValues(alpha: 0.6),
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                     ),
@@ -225,7 +225,7 @@ class _HeroBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -249,7 +249,7 @@ class _HeroBadge extends StatelessWidget {
             'Sebelum mendaftar, siapkan dulu dokumen berikut supaya proses verifikasi gerai kamu lebih cepat.',
             textAlign: TextAlign.center,
             style: GoogleFonts.manrope(
-              color: kInk.withOpacity(0.65),
+              color: kInk.withValues(alpha: 0.65),
               fontSize: 12.5,
               fontWeight: FontWeight.w500,
             ),
@@ -306,7 +306,7 @@ class _RequirementCard extends StatelessWidget {
                 border: Border(
                   bottom: isLast
                       ? BorderSide.none
-                      : BorderSide(color: kInk.withOpacity(0.08)),
+                      : BorderSide(color: kInk.withValues(alpha: 0.08)),
                 ),
               ),
               child: Row(
@@ -337,7 +337,7 @@ class _RequirementCard extends StatelessWidget {
               child: Text(
                 note!,
                 style: GoogleFonts.manrope(
-                  color: kInk.withOpacity(0.65),
+                  color: kInk.withValues(alpha: 0.65),
                   fontSize: 11.5,
                   fontWeight: FontWeight.w500,
                   height: 1.5,
@@ -406,7 +406,7 @@ class _VerificationFlowCard extends StatelessWidget {
                       Expanded(
                         child: Container(
                           width: 2,
-                          color: kInk.withOpacity(0.15),
+                          color: kInk.withValues(alpha: 0.15),
                         ),
                       ),
                   ],
@@ -430,7 +430,7 @@ class _VerificationFlowCard extends StatelessWidget {
                         Text(
                           step.subtitle,
                           style: GoogleFonts.manrope(
-                            color: kInk.withOpacity(0.6),
+                            color: kInk.withValues(alpha: 0.6),
                             fontSize: 11.5,
                             fontWeight: FontWeight.w500,
                           ),

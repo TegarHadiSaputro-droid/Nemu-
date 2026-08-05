@@ -108,7 +108,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: kInk.withOpacity(0.2),
+                  color: kInk.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -270,7 +270,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                           Text(
                             'Nomor SPSTB',
                             style: GoogleFonts.manrope(
-                              color: kInk.withOpacity(0.7),
+                              color: kInk.withValues(alpha: 0.7),
                               fontSize: 11.5,
                               fontWeight: FontWeight.w600,
                             ),
@@ -303,7 +303,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                           Text(
                             'Keterangan tambahan',
                             style: GoogleFonts.manrope(
-                              color: kInk.withOpacity(0.7),
+                              color: kInk.withValues(alpha: 0.7),
                               fontSize: 11.5,
                               fontWeight: FontWeight.w600,
                             ),
@@ -318,7 +318,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                           Text(
                             'Pendaftaranmu tetap diproses dan akan diperiksa langsung oleh admin.',
                             style: GoogleFonts.manrope(
-                              color: kInk.withOpacity(0.6),
+                              color: kInk.withValues(alpha: 0.6),
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
                             ),
@@ -396,7 +396,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                     'Status pendaftaranmu bisa dipantau lewat halaman Kelola toko / bengkel setelah dikirim.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.manrope(
-                      color: kInk.withOpacity(0.6),
+                      color: kInk.withValues(alpha: 0.6),
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                     ),
@@ -464,7 +464,7 @@ class _FormCard extends StatelessWidget {
                 Text(
                   field.label,
                   style: GoogleFonts.manrope(
-                    color: kInk.withOpacity(0.7),
+                    color: kInk.withValues(alpha: 0.7),
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -497,7 +497,7 @@ class _PlainTextField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: GoogleFonts.manrope(
-          color: kInk.withOpacity(0.35),
+          color: kInk.withValues(alpha: 0.35),
           fontSize: 13.5,
           fontWeight: FontWeight.w500,
         ),
@@ -578,7 +578,7 @@ class _UploadButton extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: hasFile ? kGradientBottom : kInk.withOpacity(0.15),
+            color: hasFile ? kGradientBottom : kInk.withValues(alpha: 0.15),
           ),
         ),
         child: Row(
@@ -612,13 +612,13 @@ class _UploadButton extends StatelessWidget {
                 ),
               )
             else
-              Icon(icon, size: 18, color: kInk.withOpacity(0.6)),
+              Icon(icon, size: 18, color: kInk.withValues(alpha: 0.6)),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 hasFile ? '$label — foto terpilih' : label,
                 style: GoogleFonts.manrope(
-                  color: hasFile ? kInk : kInk.withOpacity(0.75),
+                  color: hasFile ? kInk : kInk.withValues(alpha: 0.75),
                   fontSize: 12.5,
                   fontWeight: FontWeight.w500,
                 ),
@@ -627,7 +627,7 @@ class _UploadButton extends StatelessWidget {
             Icon(
               hasFile ? Icons.check_circle : Icons.chevron_right,
               size: 18,
-              color: hasFile ? kGradientBottom : kInk.withOpacity(0.4),
+              color: hasFile ? kGradientBottom : kInk.withValues(alpha: 0.4),
             ),
           ],
         ),
@@ -660,7 +660,7 @@ class _RadioOption extends StatelessWidget {
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_off,
               size: 18,
-              color: selected ? kGradientBottom : kInk.withOpacity(0.4),
+              color: selected ? kGradientBottom : kInk.withValues(alpha: 0.4),
             ),
             const SizedBox(width: 10),
             Text(

@@ -335,7 +335,7 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
           customBorder: const CircleBorder(),
           child: Padding(
             padding: const EdgeInsets.all(6),
-            child: Icon(Icons.chevron_right, color: kInk.withOpacity(0.6)),
+            child: Icon(Icons.chevron_right, color: kInk.withValues(alpha: 0.6)),
           ),
         ),
       ],
@@ -384,7 +384,7 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         text,
         style: GoogleFonts.manrope(
-          color: kInk.withOpacity(0.75),
+          color: kInk.withValues(alpha: 0.75),
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
@@ -440,7 +440,7 @@ class _MenuGroup extends StatelessWidget {
                 border: Border(
                   bottom: isLast
                       ? BorderSide.none
-                      : BorderSide(color: kInk.withOpacity(0.08)),
+                      : BorderSide(color: kInk.withValues(alpha: 0.08)),
                 ),
               ),
               child: Row(
@@ -450,7 +450,7 @@ class _MenuGroup extends StatelessWidget {
                     size: 18,
                     color: item.isDanger
                         ? Colors.red.shade700
-                        : kInk.withOpacity(0.75),
+                        : kInk.withValues(alpha: 0.75),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -467,7 +467,7 @@ class _MenuGroup extends StatelessWidget {
                     Icon(
                       Icons.chevron_right,
                       size: 16,
-                      color: kInk.withOpacity(0.4),
+                      color: kInk.withValues(alpha: 0.4),
                     ),
                 ],
               ),
@@ -514,7 +514,7 @@ Future<void> _resetToBuyer(BuildContext context) async {
 void _showLogoutConfirmation(BuildContext context) {
   showDialog(
     context: context,
-    barrierColor: Colors.black.withOpacity(0.4),
+    barrierColor: Colors.black.withValues(alpha: 0.4),
     builder: (context) {
       return Dialog(
         backgroundColor: Colors.transparent,
@@ -532,7 +532,7 @@ void _showLogoutConfirmation(BuildContext context) {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.12),
+                  color: Colors.red.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 alignment: Alignment.center,
@@ -556,7 +556,7 @@ void _showLogoutConfirmation(BuildContext context) {
                 'Kamu perlu login kembali untuk mengakses akunmu.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.manrope(
-                  color: kInk.withOpacity(0.65),
+                  color: kInk.withValues(alpha: 0.65),
                   fontSize: 12.5,
                   fontWeight: FontWeight.w500,
                 ),
@@ -569,7 +569,7 @@ void _showLogoutConfirmation(BuildContext context) {
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: kInk,
-                        side: BorderSide(color: kInk.withOpacity(0.25)),
+                        side: BorderSide(color: kInk.withValues(alpha: 0.25)),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
