@@ -20,7 +20,7 @@ class InsightCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: Colors.orange.withOpacity(.15),
+            color: Colors.orange.withValues(alpha: .15),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -34,7 +34,7 @@ class InsightCard extends StatelessWidget {
             width: 58,
             height: 58,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(.25),
+              color: Colors.white.withValues(alpha: .25),
               borderRadius: BorderRadius.circular(18),
             ),
             child: const Icon(
@@ -79,7 +79,7 @@ class InsightCard extends StatelessWidget {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.25),
+                    color: Colors.white.withValues(alpha: .25),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(

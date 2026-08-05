@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "980749205851",
+    "project_id": "nemu-aba25",
+    "storage_bucket": "nemu-aba25.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:980749205851:android:c25c895196b278c2979a7e",
+        "android_client_info": {
+          "package_name": "com.nemu.frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCUapQ3WL-2TYxWmKmn6HkfGWAxKoXJMp8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

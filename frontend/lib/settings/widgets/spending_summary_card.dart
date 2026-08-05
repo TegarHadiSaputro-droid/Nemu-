@@ -20,7 +20,7 @@ class SpendingSummaryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.green.withOpacity(.25),
+            color: Colors.green.withValues(alpha: .25),
             blurRadius: 20,
             offset: const Offset(0, 10),
           )
@@ -37,7 +37,7 @@ class SpendingSummaryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.18),
+                  color: Colors.white.withValues(alpha: .18),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(
@@ -55,7 +55,7 @@ class SpendingSummaryCard extends StatelessWidget {
                   vertical: 7,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(.18),
+                  color: Colors.white.withValues(alpha: .18),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Text(
@@ -98,7 +98,7 @@ class SpendingSummaryCard extends StatelessWidget {
               vertical: 10,
             ),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(.15),
+              color: Colors.white.withValues(alpha: .15),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Row(

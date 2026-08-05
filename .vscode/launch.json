@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Nemu! Frontend (Debug)",
+      "request": "launch",
+      "type": "dart",
+      "cwd": "frontend",
+      "program": "frontend/lib/main.dart"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../Theme/app_theme.dart';
 
 class SettingSection extends StatelessWidget {
   final String title;
@@ -13,17 +14,17 @@ class SettingSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(
+        top: 18,
+        bottom: 10,
         left: 4,
-        top: 20,
-        bottom: 12,
       ),
       child: Text(
-        title.toUpperCase(),
+        title,
         style: GoogleFonts.manrope(
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1.2,
-          color: const Color(0xFF0F1B11),
+          color: kInk.withValues(alpha: 0.75),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
         ),
       ),
     );
