@@ -36,9 +36,9 @@ class _NemuBottomNavbarState extends State<NemuBottomNavbar>
 
   static const _navItems = [
     _NavItem(icon: Icons.home_rounded, label: 'Beranda'),
+    _NavItem(icon: Icons.storefront_rounded, label: 'Pasar'),
     _NavItem(icon: Icons.search_rounded, label: 'Cari'),
-    _NavItem(icon: Icons.storefront_rounded, label: 'Toko'),
-    _NavItem(icon: Icons.notifications_rounded, label: 'Notif'),
+    _NavItem(icon: Icons.waving_hand_rounded, label: 'Kang!'),
     _NavItem(icon: Icons.receipt_long_rounded, label: 'Pesanan', hasBadge: true),
   ];
 
