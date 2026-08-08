@@ -6,16 +6,15 @@ import 'package:frontend/screens/pasar/gerai_screen.dart';
 // ─────────────────────────────────────────────
 //  Warna
 // ─────────────────────────────────────────────
-const Color _green  = Color(0xFF007C3F);
+const Color _green = Color(0xFF007C3F);
 const Color _yellow = Color(0xFFD9DF36);
-const Color _dark   = Color(0xFF0F1B11);
+const Color _dark = Color(0xFF0F1B11);
 
 TextStyle _ms({
   double size = 14,
   FontWeight weight = FontWeight.normal,
   Color color = _dark,
-}) =>
-    GoogleFonts.manrope(fontSize: size, fontWeight: weight, color: color);
+}) => GoogleFonts.manrope(fontSize: size, fontWeight: weight, color: color);
 
 // ─────────────────────────────────────────────
 //  PasarScreen
@@ -31,15 +30,21 @@ class _PasarScreenState extends State<PasarScreen> {
   String _query = '';
 
   List<PasarMarket> get _filtered => mockDaftarPasar
-      .where((p) =>
-          p.nama.toLowerCase().contains(_query.toLowerCase()) ||
-          p.kategori.toLowerCase().contains(_query.toLowerCase()))
+      .where(
+        (p) =>
+            p.nama.toLowerCase().contains(_query.toLowerCase()) ||
+            p.kategori.toLowerCase().contains(_query.toLowerCase()),
+      )
       .toList();
 
   static const Map<String, String> _emojis = {
     'p1': '🥬',
     'p2': '🐟',
     'p3': '🌽',
+  };
+
+  static const Map<String, String> _marketImages = {
+    'p1': 'assets/products/pasar_sepinggan.jpg',
   };
 
   static const Map<String, Color> _accentColors = {
@@ -87,10 +92,15 @@ class _PasarScreenState extends State<PasarScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Pilih Pasar', style: _ms(size: 24, weight: FontWeight.bold, color: _dark)),
+          Text(
+            'Pilih Pasar',
+            style: _ms(size: 24, weight: FontWeight.bold, color: _dark),
+          ),
           const SizedBox(height: 2),
-          Text('${mockDaftarPasar.length} pasar tradisional tersedia',
-              style: _ms(size: 13, color: _dark.withOpacity(0.65))),
+          Text(
+            '${mockDaftarPasar.length} pasar tradisional tersedia',
+            style: _ms(size: 13, color: _dark.withOpacity(0.65)),
+          ),
         ],
       ),
     );
@@ -105,9 +115,10 @@ class _PasarScreenState extends State<PasarScreen> {
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 10,
-                offset: const Offset(0, 3))
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
           ],
         ),
         child: TextField(
@@ -116,7 +127,11 @@ class _PasarScreenState extends State<PasarScreen> {
           decoration: InputDecoration(
             hintText: 'Cari pasar...',
             hintStyle: _ms(size: 13, color: Colors.black38),
-            prefixIcon: const Icon(Icons.search_rounded, color: _green, size: 20),
+            prefixIcon: const Icon(
+              Icons.search_rounded,
+              color: _green,
+              size: 20,
+            ),
             border: InputBorder.none,
             contentPadding: const EdgeInsets.symmetric(vertical: 14),
           ),
@@ -127,15 +142,14 @@ class _PasarScreenState extends State<PasarScreen> {
 
   Widget _buildPasarCard(PasarMarket market) {
     final accent = _accentColors[market.id] ?? _green;
-    final emoji  = _emojis[market.id] ?? '🏪';
+    final emoji = _emojis[market.id] ?? '🏪';
+    final imagePath = _marketImages[market.id];
 
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (_) => GeraiScreen(market: market),
-          ),
+          MaterialPageRoute(builder: (_) => GeraiScreen(market: market)),
         );
       },
       child: Container(
@@ -146,9 +160,10 @@ class _PasarScreenState extends State<PasarScreen> {
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 3))
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
           ],
         ),
         child: Row(
@@ -159,17 +174,30 @@ class _PasarScreenState extends State<PasarScreen> {
               width: 90,
               height: 90,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [accent.withOpacity(0.2), accent.withOpacity(0.05)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: imagePath == null
+                    ? LinearGradient(
+                        colors: [
+                          accent.withOpacity(0.2),
+                          accent.withOpacity(0.05),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                image: imagePath != null
+                    ? DecorationImage(
+                        image: AssetImage(imagePath),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: accent.withOpacity(0.15), width: 1.5),
               ),
-              child: Center(
-                child: Text(emoji, style: const TextStyle(fontSize: 42)),
-              ),
+              child: imagePath == null
+                  ? Center(
+                      child: Text(emoji, style: const TextStyle(fontSize: 42)),
+                    )
+                  : null,
             ),
             const SizedBox(width: 14),
 
@@ -185,7 +213,11 @@ class _PasarScreenState extends State<PasarScreen> {
                   const SizedBox(height: 3),
                   Row(
                     children: [
-                      const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 14),
+                      const Icon(
+                        Icons.star_rounded,
+                        color: Color(0xFFF59E0B),
+                        size: 14,
+                      ),
                       const SizedBox(width: 3),
                       Text(
                         market.rating.toString(),
@@ -199,9 +231,17 @@ class _PasarScreenState extends State<PasarScreen> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  _infoRow(Icons.location_on_rounded, market.alamat, Colors.redAccent),
+                  _infoRow(
+                    Icons.location_on_rounded,
+                    market.alamat,
+                    Colors.redAccent,
+                  ),
                   const SizedBox(height: 4),
-                  _infoRow(Icons.access_time_rounded, 'Buka: ${market.jamBuka}', _green),
+                  _infoRow(
+                    Icons.access_time_rounded,
+                    'Buka: ${market.jamBuka}',
+                    _green,
+                  ),
                 ],
               ),
             ),
@@ -236,12 +276,16 @@ class _PasarScreenState extends State<PasarScreen> {
         children: [
           const Text('🔍', style: TextStyle(fontSize: 48)),
           const SizedBox(height: 12),
-          Text('Pasar tidak ditemukan', style: _ms(size: 16, weight: FontWeight.bold)),
-          Text('Coba kata kunci lain', style: _ms(size: 13, color: Colors.black45)),
+          Text(
+            'Pasar tidak ditemukan',
+            style: _ms(size: 16, weight: FontWeight.bold),
+          ),
+          Text(
+            'Coba kata kunci lain',
+            style: _ms(size: 13, color: Colors.black45),
+          ),
         ],
       ),
     );
   }
 }
-
-
