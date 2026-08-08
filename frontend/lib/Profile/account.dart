@@ -19,6 +19,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Theme/app_theme.dart';
 import '../Theme/decor_background.dart';
+import 'logout_page.dart';
 import 'Edit Profile/edit_profile_page.dart';
 import 'Nemu+/nemu_plus_page.dart';
 import 'Kelola Toko/kelola_toko_page.dart';

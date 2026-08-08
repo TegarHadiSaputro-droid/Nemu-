@@ -6,6 +6,8 @@ import 'package:frontend/services/api_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/Profile/account.dart';
+import 'package:frontend/widgets/bottom_navbar.dart';
+import 'package:frontend/screens/orders_screen.dart';
 
 // ─────────────────────────────────────────────
 //  Warna Palette
@@ -54,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late Animation<double> _chartAnimation;
 
   String _userName = 'Sobat Nemu'; // placeholder sebelum nickname dimuat/diisi
+  String? _photoUrl; // foto profil dari Firestore (users/{uid}.photoUrl)
   int _cartItemCount = 1;
   bool _isDelivering = true; // State status pengantaran
   
@@ -119,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _loadApiData();
     _loadNicknameOrAsk();
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (!mounted) return;
+      if (!mounted || !_pageCtrl.hasClients) return;
       final next = (_bannerIndex + 1) % _banners.length;
       _pageCtrl.animateToPage(
         next,
@@ -154,6 +157,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           .get();
 
       final existingNickname = doc.data()?['nickname'] as String?;
+      final photoUrl = doc.data()?['photoUrl'] as String?;
+
+      if (mounted) setState(() => _photoUrl = photoUrl);
 
       if (existingNickname != null && existingNickname.trim().isNotEmpty) {
         if (mounted) setState(() => _userName = existingNickname);
@@ -369,71 +375,76 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Column(
                 children: [
                   Expanded(
-                    child: RefreshIndicator(
-                      color: _greenBottom,
-                      backgroundColor: Colors.white,
-                      onRefresh: _handleRefresh,
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(
-                          parent: BouncingScrollPhysics(),
-                        ),
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // 1. Top Bar (Ikut scroll)
-                            _buildTopBar(),
-                            const SizedBox(height: 12),
+                    child: _navIndex == 4
+                        ? const OrdersScreen()
+                        : RefreshIndicator(
+                            color: _greenBottom,
+                            backgroundColor: Colors.white,
+                            onRefresh: _handleRefresh,
+                            child: SingleChildScrollView(
+                              physics: const AlwaysScrollableScrollPhysics(
+                                parent: BouncingScrollPhysics(),
+                              ),
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // 1. Top Bar (Ikut scroll)
+                                  _buildTopBar(),
+                                  const SizedBox(height: 12),
 
-                            // Search Bar
-                            _buildSearchBar(),
-                            const SizedBox(height: 14),
+                                  // Search Bar
+                                  _buildSearchBar(),
+                                  const SizedBox(height: 14),
 
-                            // Quick Info Row (Alamat & Kurir Pak Budi)
-                            _buildQuickInfoRow(),
-                            const SizedBox(height: 14),
+                                  // Quick Info Row (Alamat & Kurir Pak Budi)
+                                  _buildQuickInfoRow(),
+                                  const SizedBox(height: 14),
 
-                            // Banner Carousel (auto-scroll 10s)
-                            _buildBannerCarousel(),
-                            const SizedBox(height: 10),
-                            _buildCarouselDots(),
-                            const SizedBox(height: 20),
+                                  // Banner Carousel (auto-scroll 10s)
+                                  _buildBannerCarousel(),
+                                  const SizedBox(height: 10),
+                                  _buildCarouselDots(),
+                                  const SizedBox(height: 20),
 
-                            // 🛠️ 4. ELEMEN BARU 3: Quick Chips Jasa Tukang
-                            _buildHandymanQuickChips(),
-                            const SizedBox(height: 20),
+                                  // 🛠️ 4. ELEMEN BARU 3: Quick Chips Jasa Tukang
+                                  _buildHandymanQuickChips(),
+                                  const SizedBox(height: 20),
 
-                            // 3 Kategori Utama
-                            _buildSectionTitle('Layanan Utama', 'Pilih kategori kebutuhanmu'),
-                            const SizedBox(height: 12),
-                            _buildCategoryRow(),
-                            const SizedBox(height: 24),
+                                  // 3 Kategori Utama
+                                  _buildSectionTitle('Layanan Utama', 'Pilih kategori kebutuhanmu'),
+                                  const SizedBox(height: 12),
+                                  _buildCategoryRow(),
+                                  const SizedBox(height: 24),
 
-                            // 📈 FEATURE GRAFIK PREDIKSI HARGA PASAR (Kotak Gede + Interaktif)
-                            _buildSectionTitle('Pemantauan Harga Pasar', 'Pantau fluktuasi & prediksi harga komoditas terkini'),
-                            const SizedBox(height: 12),
-                            _buildInteractivePriceTrendSection(),
-                            const SizedBox(height: 24),
+                                  // 📈 FEATURE GRAFIK PREDIKSI HARGA PASAR (Kotak Gede + Interaktif)
+                                  _buildSectionTitle('Pemantauan Harga Pasar', 'Pantau fluktuasi & prediksi harga komoditas terkini'),
+                                  const SizedBox(height: 12),
+                                  _buildInteractivePriceTrendSection(),
+                                  const SizedBox(height: 24),
 
-                            // 🥦 5. ELEMEN BARU 4: Bahan Segar Kilat (Horizontal Scroll + Button Tambah)
-                            _buildSectionTitle('Bahan Segar Langsung Lapak', 'Dipajang & diperbarui hari ini'),
-                            const SizedBox(height: 12),
-                            _buildQuickProductsScroll(),
-                            const SizedBox(height: 24),
+                                  // 🥦 5. ELEMEN BARU 4: Bahan Segar Kilat (Horizontal Scroll + Button Tambah)
+                                  _buildSectionTitle('Bahan Segar Langsung Lapak', 'Dipajang & diperbarui hari ini'),
+                                  const SizedBox(height: 12),
+                                  _buildQuickProductsScroll(),
+                                  const SizedBox(height: 24),
 
-                            // Gerai Pasar Terdekat
-                            _buildSectionTitle('Pasar Terdekat dari Rumah', 'Rekomendasi pasar tradisional di Kota Balikpapan'),
-                            const SizedBox(height: 12),
-                            _buildStoreList(),
-                            const SizedBox(height: 8),
-                          ],
-                        ),
-                      ),
-                    ),
+                                  // Gerai Pasar Terdekat
+                                  _buildSectionTitle('Pasar Terdekat dari Rumah', 'Rekomendasi pasar tradisional di Kota Balikpapan'),
+                                  const SizedBox(height: 12),
+                                  _buildStoreList(),
+                                  const SizedBox(height: 8),
+                                ],
+                              ),
+                            ),
+                          ),
                   ),
 
                   // Bottom Nav
-                  _buildBottomNav(),
+                  NemuBottomNavbar(
+                    currentIndex: _navIndex,
+                    onTap: (i) => setState(() => _navIndex = i),
+                  ),
                 ],
               ),
             ),
@@ -518,8 +529,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 color: Colors.white,
                 shape: BoxShape.circle,
                 boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6)],
+                image: _photoUrl != null
+                    ? DecorationImage(
+                        image: NetworkImage(_photoUrl!),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
               ),
-              child: const Icon(Icons.person, color: _greenBottom, size: 24),
+              child: _photoUrl == null
+                  ? const Icon(Icons.person, color: _greenBottom, size: 24)
+                  : null,
             ),
           ),
         ],

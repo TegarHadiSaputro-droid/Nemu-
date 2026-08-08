@@ -1,9 +1,14 @@
 // nemu_plus_page.dart
 //
 // Halaman Nemu+ — Penjelasan syarat pendaftaran gerai.
-// Berisi rincian dokumen yang dibutuhkan, penjelasan soal SPSTB, alur
-// verifikasi bertingkat, lalu tombol untuk lanjut ke form pendaftaran
-// (DaftarGeraiFormPage).
+// Berisi rincian data yang dibutuhkan, alur verifikasi, lalu tombol untuk
+// lanjut ke form pendaftaran (DaftarGeraiFormPage).
+//
+// VERSI DISEDERHANAKAN UNTUK TAHAP DEVELOPMENT — disesuaikan dengan
+// daftar_gerai_form_page.dart yang sekarang cuma minta 3 data:
+// Nama lengkap, Nama pasar, Nomor rekening. Bagian dokumen wajib/opsional
+// versi lengkap (NIK, foto KTP, SPSTB, dst) dihapus dulu sampai tahap
+// verifikasi beneran mulai dikerjakan.
 //
 // Background: linear-gradient(180deg, #d9df36 0%, #007c3f 100%)
 // Font       : Manrope, warna teks utama #0f1b11
@@ -42,89 +47,14 @@ class NemuPlusPage extends StatelessWidget {
                   _HeroBadge(),
                   const SizedBox(height: 24),
 
-                  _SectionHeading('Dokumen wajib'),
+                  _SectionHeading('Data yang dibutuhkan'),
                   const SizedBox(height: 10),
                   _RequirementCard(
                     items: const [
                       'Nama lengkap',
-                      'NIK (KTP)',
-                      'Nomor HP',
                       'Nama pasar',
-                      'Nomor kios / los / lapak',
-                      'Foto KTP',
-                      'Foto gerai',
-                      'Foto produk',
-                      'Foto pemilik gerai',
+                      'Nomor rekening',
                     ],
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  _SectionHeading('Sangat disarankan'),
-                  const SizedBox(height: 10),
-                  _RequirementCard(
-                    items: const ['Nomor SPSTB', 'Foto SPSTB'],
-                    note:
-                        'SPSTB adalah dokumen yang menunjukkan hak penggunaan kios/los di pasar rakyat milik Pemerintah Kota Balikpapan.',
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  _SectionHeading('Opsional'),
-                  const SizedBox(height: 10),
-                  _RequirementCard(
-                    items: const [
-                      'NPWP (jika ada)',
-                      'Nomor rekening atau QRIS',
-                      'Jam operasional',
-                      'Titik lokasi kios',
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: kCream,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              size: 18,
-                              color: kGradientBottom,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Belum punya SPSTB?',
-                                style: GoogleFonts.manrope(
-                                  color: kInk,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 13.5,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tenang, kamu tetap bisa mendaftar. Nanti di form pendaftaran akan ada pertanyaan "Apakah Anda memiliki SPSTB?" — kalau belum, cukup unggah foto kios, bukti sewa/surat dari pengelola pasar (jika ada), dan keterangan tambahan. Pendaftaranmu akan diperiksa langsung oleh admin.',
-                          style: GoogleFonts.manrope(
-                            color: kInk.withOpacity(0.7),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
 
                   const SizedBox(height: 24),
@@ -166,7 +96,7 @@ class NemuPlusPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Kamu akan diminta mengisi data gerai sesuai syarat di atas pada langkah berikutnya.',
+                    'Kamu akan diminta mengisi data gerai sesuai daftar di atas pada langkah berikutnya.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.manrope(
                       color: kInk.withOpacity(0.6),
@@ -246,7 +176,7 @@ class _HeroBadge extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Sebelum mendaftar, siapkan dulu dokumen berikut supaya proses verifikasi gerai kamu lebih cepat.',
+            'Sebelum mendaftar, siapkan dulu data berikut supaya proses pendaftaran gerai kamu lebih cepat.',
             textAlign: TextAlign.center,
             style: GoogleFonts.manrope(
               color: kInk.withOpacity(0.65),
@@ -361,13 +291,8 @@ class _VerificationFlowCard extends StatelessWidget {
       ),
       _FlowStep(
         title: 'Menunggu Verifikasi',
-        subtitle: 'Verifikasi otomatis: KTP, foto gerai, nomor HP',
+        subtitle: 'Data gerai diperiksa oleh admin',
         icon: Icons.hourglass_top,
-      ),
-      _FlowStep(
-        title: 'Verifikasi Admin',
-        subtitle: 'Cek SPSTB (jika ada), nomor kios, foto gerai',
-        icon: Icons.fact_check_outlined,
       ),
       _FlowStep(
         title: 'Aktif',

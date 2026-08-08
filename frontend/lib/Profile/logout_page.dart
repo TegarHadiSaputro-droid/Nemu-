@@ -4,11 +4,44 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '/Theme/app_theme.dart';
-import '/Theme/decor_background.dart';
+import '../Theme/app_theme.dart';
+import '../Theme/decor_background.dart';
+import '../services/auth_service.dart';
+import '../screens/login_screen.dart';
 
-class LogoutPage extends StatelessWidget {
+class LogoutPage extends StatefulWidget {
   const LogoutPage({super.key});
+
+  @override
+  State<LogoutPage> createState() => _LogoutPageState();
+}
+
+class _LogoutPageState extends State<LogoutPage> {
+  bool _isLoggingOut = false;
+
+  Future<void> _confirmLogout() async {
+    setState(() => _isLoggingOut = true);
+    try {
+      // Await ini penting — sebelum sign-out beneran selesai, currentUser
+      // masih belum null. Kalau LoginScreen langsung dibuka duluan
+      // (tanpa nunggu), LoginScreen bisa saja melihat currentUser masih
+      // ada dan langsung redirect balik ke HomeScreen.
+      await AuthService.logout();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoggingOut = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal keluar: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,10 +129,7 @@ class LogoutPage extends StatelessWidget {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: ElevatedButton(
-                                  onPressed: () {
-                                    // Aksi logout (misal: hapus token/session)
-                                    // Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-                                  },
+                                  onPressed: _isLoggingOut ? null : _confirmLogout,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.red.shade700,
                                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -107,13 +137,22 @@ class LogoutPage extends StatelessWidget {
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                   ),
-                                  child: Text(
-                                    'Keluar',
-                                    style: GoogleFonts.manrope(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
+                                  child: _isLoggingOut
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Text(
+                                          'Keluar',
+                                          style: GoogleFonts.manrope(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                 ),
                               ),
                             ],
