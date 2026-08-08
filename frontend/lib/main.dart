@@ -4,10 +4,9 @@
 // avatar di pojok kanan atas. Ketuk lingkaran itu untuk pindah ke
 // Halaman Akun (profil/account_page.dart) lewat Navigator.push.
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'Theme/app_theme.dart'; // berisi kInk, kCream, kGradientTop, kGradientBottom
-import 'Profile/account.dart'; // berisi AccountPage
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
@@ -17,8 +16,8 @@ import 'screens/home_screen.dart'; // berisi HomeScreen
 import 'theme/app_colors.dart';
 import 'widgets/background_decoration.dart';
 import 'utils/page_transitions.dart';
-// berisi kInk, kCream, kGradientTop, kGradientBottom
-// berisi AccountPage
+import 'Theme/app_theme.dart'; // berisi kInk, kCream, kGradientTop, kGradientBottom
+import 'Profile/account.dart'; // berisi AccountPage
 import 'package:provider/provider.dart';
 import 'localization/language_provider.dart'; // berisi LanguageProvider
 
@@ -46,6 +45,20 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         textTheme: GoogleFonts.manropeTextTheme(),
+        // Transisi default buat SEMUA Navigator.push yang pakai
+        // MaterialPageRoute polos (dipakai di hampir semua halaman).
+        // CupertinoPageTransitionsBuilder ngasih animasi slide yang lebih
+        // halus & konsisten di semua platform, dibanding animasi
+        // "fade upwards" default Android yang agak kaku.
+        pageTransitionsTheme: PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.windows: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+          },
+        ),
       ),
       home: const AuthGate(),
     );
@@ -140,7 +153,7 @@ class LandingPage extends StatelessWidget {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.18),
+                            color: Colors.black.withOpacity(0.18),
                             blurRadius: 24,
                             offset: const Offset(0, 10),
                           ),
@@ -161,7 +174,7 @@ class LandingPage extends StatelessWidget {
                     Text(
                       'Belanja kebutuhan segar jadi lebih mudah',
                       style: GoogleFonts.manrope(
-                        color: AppColors.beige.withValues(alpha: 0.85),
+                        color: AppColors.beige.withOpacity(0.85),
                         fontSize: 14,
                       ),
                       textAlign: TextAlign.center,
@@ -214,7 +227,7 @@ class LandingPage extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.beige,
                           side: BorderSide(
-                            color: AppColors.beige.withValues(alpha: 0.8),
+                            color: AppColors.beige.withOpacity(0.8),
                             width: 1.5,
                           ),
                           shape: RoundedRectangleBorder(

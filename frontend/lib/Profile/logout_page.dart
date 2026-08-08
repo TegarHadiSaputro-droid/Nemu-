@@ -7,8 +7,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../Theme/app_theme.dart';
 import '../Theme/decor_background.dart';
 import '../services/auth_service.dart';
-import '../screens/login_screen.dart';
-import '../utils/page_transitions.dart';
 
 class LogoutPage extends StatefulWidget {
   const LogoutPage({super.key});
@@ -24,16 +22,15 @@ class _LogoutPageState extends State<LogoutPage> {
     setState(() => _isLoggingOut = true);
     try {
       // Await ini penting — sebelum sign-out beneran selesai, currentUser
-      // masih belum null. Kalau LoginScreen langsung dibuka duluan
-      // (tanpa nunggu), LoginScreen bisa saja melihat currentUser masih
-      // ada dan langsung redirect balik ke HomeScreen.
+      // masih belum null. Kalau kita pop ke AuthGate duluan (tanpa nunggu),
+      // AuthGate bisa saja masih lihat currentUser lama dan malah nampilin
+      // HomeScreen lagi alih-alih LandingPage.
       await AuthService.logout();
       if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
-        slideRoute(const LoginScreen()),
-        (route) => false,
-      );
+      // Balik ke root (AuthGate di main.dart), bukan push LoginScreen baru.
+      // AuthGate reaktif lewat authStateChanges(), jadi begitu user == null
+      // dia otomatis nampilin LandingPage sendiri.
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
       if (mounted) {
         setState(() => _isLoggingOut = false);

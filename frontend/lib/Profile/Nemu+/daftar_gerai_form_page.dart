@@ -17,10 +17,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Theme/app_theme.dart';
 import '../../Theme/decor_background.dart';
-import '../../services/auth_service.dart';
+import '../../main.dart'; // untuk AuthGate — sesuaikan path kalau struktur foldermu beda
+import '../../services/gerai_service.dart'; // sesuaikan path kalau struktur foldermu beda
 
 class DaftarGeraiFormPage extends StatefulWidget {
   const DaftarGeraiFormPage({super.key});
@@ -37,56 +37,82 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
   // {'Foto KTP': XFile(...), 'Foto gerai': XFile(...)}
   final Map<String, XFile> _uploadedFiles = {};
 
-  bool _isSubmitting = false;
+  bool _submitting = false;
 
   Future<void> _submitForm() async {
-    if (_isSubmitting) return;
-    setState(() => _isSubmitting = true);
+    if (_submitting) return;
+    setState(() => _submitting = true);
 
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) {
-        throw Exception('Kamu harus login terlebih dahulu untuk mendaftar.');
-      }
-
-      // TODO: upload isi _uploadedFiles ke Firebase Storage lalu simpan
-      // URL-nya di sini, plus field teks lain dari _FormCard (nama, NIK,
-      // nama pasar, nomor kios, SPSTB, dst) — sambungkan lewat
-      // TextEditingController lalu masukkan ke geraiData di bawah.
-      final geraiData = <String, dynamic>{
-        'punyaSpstb': _punyaSpstb,
-        'status': 'menunggu_verifikasi', // lihat alur di nemu_plus_page.dart
-      };
-
-      // Simpan record pendaftaran gerai (untuk histori/verifikasi admin)...
-      await FirebaseFirestore.instance.collection('gerai').add({
-        'ownerId': uid,
-        ...geraiData,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      // ...lalu aktifkan label "Penjual" DAN buat dokumen di koleksi
-      // "seller" (setara "users") dalam satu langkah atomik.
-      // Catatan: kalau nanti verifikasi admin sudah jalan (lihat alur di
-      // nemu_plus_page.dart), pertimbangkan pindahkan pemanggilan ini ke
-      // Cloud Function yang trigger saat status gerai berubah jadi "aktif",
-      // supaya tidak bisa dimanipulasi langsung dari client.
-      await AuthService.registerAsSeller(geraiData: geraiData);
+      // TODO: ganti nilai di bawah dengan controller field form yang
+      // sesungguhnya (Nama toko, Nama pasar, Nomor kios, dll) begitu
+      // _FormCard/_PlainTextField di halaman ini sudah pakai TextEditingController.
+      await GeraiService.registerGerai(
+        namaToko: 'Toko Baru',
+        namaPasar: 'Pasar',
+        nomorKios: '-',
+        punyaSpstb: _punyaSpstb ?? false,
+      );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Pendaftaran gerai berhasil dikirim'),
+
+      // Popup: minta user login ulang supaya label Pembeli -> Penjual
+      // ke-refresh di seluruh aplikasi (halaman akun cuma baca roles
+      // sekali waktu dibuka, jadi cara paling gampang buat prototipe
+      // sekarang adalah paksa re-login).
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: kCream,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            'Pendaftaran Berhasil',
+            style: GoogleFonts.manrope(
+              color: kInk,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          content: Text(
+            'Mohon login ulang untuk memverifikasi data.',
+            style: GoogleFonts.manrope(
+              color: kInk.withOpacity(0.75),
+              fontSize: 13,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: Text(
+                'OK',
+                style: GoogleFonts.manrope(
+                  color: kGradientBottom,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
         ),
       );
-      Navigator.pop(context);
+
+      // Sign out, lalu balik ke root aplikasi. AuthGate otomatis
+      // mengarahkan ke LandingPage/LoginScreen karena user sudah logout.
+      await FirebaseAuth.instance.signOut();
+
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Gagal mengirim pendaftaran: $e')),
       );
     } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -108,7 +134,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: kInk.withValues(alpha: 0.2),
+                  color: kInk.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -270,7 +296,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                           Text(
                             'Nomor SPSTB',
                             style: GoogleFonts.manrope(
-                              color: kInk.withValues(alpha: 0.7),
+                              color: kInk.withOpacity(0.7),
                               fontSize: 11.5,
                               fontWeight: FontWeight.w600,
                             ),
@@ -303,7 +329,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                           Text(
                             'Keterangan tambahan',
                             style: GoogleFonts.manrope(
-                              color: kInk.withValues(alpha: 0.7),
+                              color: kInk.withOpacity(0.7),
                               fontSize: 11.5,
                               fontWeight: FontWeight.w600,
                             ),
@@ -318,7 +344,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                           Text(
                             'Pendaftaranmu tetap diproses dan akan diperiksa langsung oleh admin.',
                             style: GoogleFonts.manrope(
-                              color: kInk.withValues(alpha: 0.6),
+                              color: kInk.withOpacity(0.6),
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
                             ),
@@ -363,7 +389,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _submitForm,
+                      onPressed: _submitting ? null : _submitForm,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: kInk,
                         foregroundColor: kCream,
@@ -373,7 +399,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                         ),
                         elevation: 0,
                       ),
-                      child: _isSubmitting
+                      child: _submitting
                           ? const SizedBox(
                               width: 18,
                               height: 18,
@@ -396,7 +422,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                     'Status pendaftaranmu bisa dipantau lewat halaman Kelola toko / bengkel setelah dikirim.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.manrope(
-                      color: kInk.withValues(alpha: 0.6),
+                      color: kInk.withOpacity(0.6),
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                     ),
@@ -464,7 +490,7 @@ class _FormCard extends StatelessWidget {
                 Text(
                   field.label,
                   style: GoogleFonts.manrope(
-                    color: kInk.withValues(alpha: 0.7),
+                    color: kInk.withOpacity(0.7),
                     fontSize: 11.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -497,7 +523,7 @@ class _PlainTextField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: GoogleFonts.manrope(
-          color: kInk.withValues(alpha: 0.35),
+          color: kInk.withOpacity(0.35),
           fontSize: 13.5,
           fontWeight: FontWeight.w500,
         ),
@@ -578,7 +604,7 @@ class _UploadButton extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: hasFile ? kGradientBottom : kInk.withValues(alpha: 0.15),
+            color: hasFile ? kGradientBottom : kInk.withOpacity(0.15),
           ),
         ),
         child: Row(
@@ -612,13 +638,13 @@ class _UploadButton extends StatelessWidget {
                 ),
               )
             else
-              Icon(icon, size: 18, color: kInk.withValues(alpha: 0.6)),
+              Icon(icon, size: 18, color: kInk.withOpacity(0.6)),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 hasFile ? '$label — foto terpilih' : label,
                 style: GoogleFonts.manrope(
-                  color: hasFile ? kInk : kInk.withValues(alpha: 0.75),
+                  color: hasFile ? kInk : kInk.withOpacity(0.75),
                   fontSize: 12.5,
                   fontWeight: FontWeight.w500,
                 ),
@@ -627,7 +653,7 @@ class _UploadButton extends StatelessWidget {
             Icon(
               hasFile ? Icons.check_circle : Icons.chevron_right,
               size: 18,
-              color: hasFile ? kGradientBottom : kInk.withValues(alpha: 0.4),
+              color: hasFile ? kGradientBottom : kInk.withOpacity(0.4),
             ),
           ],
         ),
@@ -660,7 +686,7 @@ class _RadioOption extends StatelessWidget {
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_off,
               size: 18,
-              color: selected ? kGradientBottom : kInk.withValues(alpha: 0.4),
+              color: selected ? kGradientBottom : kInk.withOpacity(0.4),
             ),
             const SizedBox(width: 10),
             Text(

@@ -188,7 +188,7 @@ class AccountPage extends StatelessWidget {
                       items: [
                         _MenuItemData(
                           icon: Icons.restart_alt,
-                          label: 'Reset jadi Pembeli',
+                          label: 'Reset jadi Pembeli (hapus data gerai)',
                           onTap: () => _resetToBuyer(context),
                         ),
                       ],
@@ -487,25 +487,85 @@ class _MenuGroup extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// DEBUG ONLY — reset roles.seller jadi false di Firestore, supaya badge
-// balik ke "Pembeli" tanpa perlu ubah data manual lewat Firebase Console.
-// StreamBuilder di _ProfileHeader otomatis nangkep perubahan ini.
+// DEBUG ONLY — reset roles.seller jadi false DAN hapus semua dokumen
+// gerai milik user ini di collection "gerai", supaya data prototipe
+// benar-benar bersih (bukan cuma matiin badge-nya doang). StreamBuilder
+// di _ProfileHeader otomatis nangkep perubahan roles.seller ini.
 // ---------------------------------------------------------------------------
 Future<void> _resetToBuyer(BuildContext context) async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return;
 
+  // Konfirmasi dulu karena ini aksi destruktif (hapus data gerai permanen).
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: kCream,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        'Reset ke Pembeli?',
+        style: GoogleFonts.manrope(color: kInk, fontWeight: FontWeight.w700),
+      ),
+      content: Text(
+        'Semua data gerai yang terdaftar untuk akun ini akan dihapus '
+        'permanen dari Firestore, dan label akan kembali jadi Pembeli.',
+        style: GoogleFonts.manrope(color: kInk.withValues(alpha: 0.75), fontSize: 13),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: Text('Batal', style: GoogleFonts.manrope(color: kInk)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: Text(
+            'Hapus & Reset',
+            style: GoogleFonts.manrope(
+              color: Colors.red.shade700,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  if (confirmed != true) return;
+
   try {
-    await FirebaseFirestore.instance.collection('users').doc(uid).set(
+    final firestore = FirebaseFirestore.instance;
+
+    // Cari semua dokumen gerai milik user ini (biasanya cuma satu,
+    // tapi jaga-jaga kalau ada sisa data dari percobaan sebelumnya).
+    final geraiDocs = await firestore
+        .collection('gerai')
+        .where('ownerId', isEqualTo: uid)
+        .get();
+
+    // Satu batch buat hapus semua dokumen gerai + reset roles.seller
+    // sekaligus, supaya kalau salah satu gagal, semuanya di-rollback
+    // (nggak ada state setengah-setengah).
+    final batch = firestore.batch();
+    for (final doc in geraiDocs.docs) {
+      batch.delete(doc.reference);
+    }
+    batch.set(
+      firestore.collection('users').doc(uid),
       {
         'roles': {'seller': false},
+        'sellerRating': FieldValue.delete(),
       },
       SetOptions(merge: true),
     );
+    await batch.commit();
 
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Status di-reset jadi Pembeli')),
+      SnackBar(
+        content: Text(
+          'Direset ke Pembeli — ${geraiDocs.docs.length} data gerai dihapus',
+        ),
+      ),
     );
   } catch (e) {
     if (!context.mounted) return;
