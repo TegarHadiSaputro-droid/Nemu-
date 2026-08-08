@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/Profile/account.dart';
 import 'package:frontend/widgets/bottom_navbar.dart';
+import 'package:frontend/widgets/address_editor_sheet.dart';
 import 'package:frontend/screens/orders_screen.dart';
 import 'package:frontend/screens/pasar/pasar_screen.dart';
 import 'package:frontend/mitra/pages/mitra_category_page.dart';
@@ -61,7 +62,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _userName = 'Sobat Nemu'; // placeholder sebelum nickname dimuat/diisi
   String? _photoUrl; // foto profil dari Firestore (users/{uid}.photoUrl)
   int _cartItemCount = 1;
-  bool _isDelivering = true; // State status pengantaran
+  String? _deliveryAddress; // alamat pengiriman aktif, null = belum diisi
+  bool _isDelivering = false; // State status pengantaran (perlu order asli buat jadi true)
   
   static const List<String> _welcomeGreetings = [
     'Sini mampir enggih!',                   // Jawa Tengah / Solo
@@ -621,6 +623,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  void _openAddressEditor() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddressEditorSheet(
+        initialAddress: _deliveryAddress,
+        onSaved: (address) => setState(() => _deliveryAddress = address),
+      ),
+    );
+  }
+
   // ──────────────────────────────────────────
   //  QUICK INFO ROW (ALAMAT & KURIR)
   // ──────────────────────────────────────────
@@ -629,37 +643,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       children: [
         // Widget Alamat Kirim (Sebelah kiri)
         Expanded(
-          child: _isDelivering
+          child: _deliveryAddress != null
               ? _quickCard(
                   icon: Icons.location_on_rounded,
                   iconColor: Colors.redAccent,
-                  title: 'Kirim ke Rumah',
-                  sub: 'Rumah Egii (Jl. Mawar 12)',
+                  title: 'Kirim ke Sini',
+                  sub: _deliveryAddress!,
                   bgColor: Colors.white,
-                  onTap: () {
-                    setState(() {
-                      _isDelivering = false;
-                      _welcomeGreeting = _welcomeGreetings[math.Random().nextInt(_welcomeGreetings.length)];
-                    });
-                  },
+                  onTap: _openAddressEditor,
                 )
               : _quickCard(
                   icon: Icons.location_on_rounded,
                   iconColor: _greenBottom,
                   title: 'Yuk Belanja!',
-                  sub: 'Ubah Alamat',
+                  sub: 'Ganti Alamat',
                   bgColor: Colors.white,
                   subTextColor: _greenBottom,
-                  onTap: () {
-                    setState(() {
-                      _isDelivering = true;
-                      _welcomeGreeting = _welcomeGreetings[math.Random().nextInt(_welcomeGreetings.length)];
-                    });
-                  },
+                  onTap: _openAddressEditor,
                 ),
         ),
         const SizedBox(width: 12),
         // Widget Status Kurir (Sebelah kanan)
+        // TODO: sambungkan ke data order asli (mis. stream pesanan aktif
+        // dari Firestore) supaya _isDelivering & detail kurir/estimasi di
+        // bawah ini bukan lagi nilai statis.
         Expanded(
           child: _isDelivering
               ? _quickCard(
@@ -671,12 +678,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   textColor: Colors.white,
                   subTextColor: Colors.white.withValues(alpha: 0.9),
                   gradientColors: [Colors.orange.shade800, Colors.orange.shade600],
-                  onTap: () {
-                    setState(() {
-                      _isDelivering = false;
-                      _welcomeGreeting = _welcomeGreetings[math.Random().nextInt(_welcomeGreetings.length)];
-                    });
-                  },
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const OrdersScreen()),
+                  ),
                 )
               : _quickCard(
                   icon: Icons.local_shipping_outlined,
@@ -686,12 +691,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   bgColor: Colors.grey.shade200,
                   textColor: Colors.grey.shade800,
                   subTextColor: Colors.grey.shade500,
-                  onTap: () {
-                    setState(() {
-                      _isDelivering = true;
-                      _welcomeGreeting = _welcomeGreetings[math.Random().nextInt(_welcomeGreetings.length)];
-                    });
-                  },
+                  onTap: null,
                 ),
         ),
       ],

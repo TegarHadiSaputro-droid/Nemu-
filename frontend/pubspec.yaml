@@ -45,6 +45,11 @@ dependencies:
   provider: ^6.1.5            # dipakai LanguageProvider di halaman settings
   fl_chart: ^1.0.0            # dipakai chart di monthly_spending_page.dart
 
+  geolocator: ^13.0.1         # izin lokasi + ambil posisi GPS (AddressEditorSheet)
+  geocoding: ^3.0.0           # ubah koordinat GPS jadi alamat teks
+  flutter_map: ^7.0.2         # peta drop-pin manual (tile OpenStreetMap, gratis)
+  latlong2: ^0.9.1            # tipe LatLng yang dipakai flutter_map
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

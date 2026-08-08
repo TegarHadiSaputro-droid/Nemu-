@@ -8,6 +8,7 @@ import '../Theme/app_theme.dart';
 import '../Theme/decor_background.dart';
 import '../services/auth_service.dart';
 import '../screens/login_screen.dart';
+import '../utils/page_transitions.dart';
 
 class LogoutPage extends StatefulWidget {
   const LogoutPage({super.key});
@@ -30,7 +31,7 @@ class _LogoutPageState extends State<LogoutPage> {
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        slideRoute(const LoginScreen()),
         (route) => false,
       );
     } catch (e) {

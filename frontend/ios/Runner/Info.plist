@@ -4,8 +4,6 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
-	<key>NSPhotoLibraryUsageDescription</key>
-   <string>Aplikasi ini butuh akses galeri untuk mengganti foto profil</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -69,8 +67,10 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-<	string>Aplikasi butuh akses kamera untuk foto dokumen pendaftaran gerai</string>
+	<string>Aplikasi butuh akses kamera untuk foto dokumen pendaftaran gerai</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Aplikasi butuh akses galeri untuk unggah foto dokumen pendaftaran gerai</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Nemu pakai lokasimu buat isi alamat pengiriman otomatis</string>
 </dict>
 </plist>
