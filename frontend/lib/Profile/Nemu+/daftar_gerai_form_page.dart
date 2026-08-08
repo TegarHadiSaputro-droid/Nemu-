@@ -1,26 +1,48 @@
 // daftar_gerai_form_page.dart
 //
 // Form Pendaftaran Gerai — dibuka dari tombol "Lanjutkan ke Pendaftaran"
-// di nemu_plus_page.dart. Berisi data wajib, pertanyaan SPSTB (dengan
-// field kondisional Ya/Tidak), dan data opsional.
+// di nemu_plus_page.dart.
 //
-// Upload foto memakai package image_picker (pilih dari galeri/kamera).
-// Tambahkan di pubspec.yaml:
-//   dependencies:
-//     image_picker: ^1.1.2
+// VERSI PALING SEDERHANA UNTUK TAHAP DEVELOPMENT:
+// Cuma 3 data yang diminta — Nama lengkap, Nama pasar, Nomor rekening.
+// Tidak ada upload foto, tidak ada SPSTB, tidak ada NIK/HP/dll.
+// Fokusnya cuma memastikan alur: isi form -> submit -> data masuk
+// Firestore -> muncul pop-up sukses.
+//
+// TODO ke depan kalau development lanjut ke tahap verifikasi beneran:
+// tambahkan lagi field wajib lain (NIK, nomor HP, nomor kios) dan upload
+// foto (KTP, gerai, produk) sesuai kebutuhan verifikasi admin.
 //
 // Background: linear-gradient(180deg, #d9df36 0%, #007c3f 100%)
 // Font       : Manrope, warna teks utama #0f1b11
 
 import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Theme/app_theme.dart';
 import '../../Theme/decor_background.dart';
 import '../../main.dart'; // untuk AuthGate — sesuaikan path kalau struktur foldermu beda
 import '../../services/gerai_service.dart'; // sesuaikan path kalau struktur foldermu beda
+import '../../services/auth_service.dart'; // untuk AuthService.registerAsSeller
+
+// Daftar pasar yang bisa dipilih user sebagai lokasi gerai.
+// NOTE: kalau daftar pasar ini nanti sering berubah/ditambah, sebaiknya
+// dipindah ke Firestore (collection 'pasar') supaya tidak perlu update
+// aplikasi tiap ada pasar baru — untuk sekarang di-hardcode dulu.
+const List<String> kDaftarPasarBalikpapan = [
+  'Pasar Klandasan',
+  'Pasar Baru',
+  'Pasar Pandansari',
+  'Pasar Sepinggan',
+  'Pasar Segar',
+  'Pasar Balikpapan Permai',
+  'Pasar Manggar',
+  'Pasar Buton',
+  'Pasar Kebun Sayur',
+];
 
 class DaftarGeraiFormPage extends StatefulWidget {
   const DaftarGeraiFormPage({super.key});
@@ -30,29 +52,76 @@ class DaftarGeraiFormPage extends StatefulWidget {
 }
 
 class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
-  // null = belum dipilih, true = Ya, false = Tidak
-  bool? _punyaSpstb;
+  final _namaController = TextEditingController();
+  final _alamatGeraiController = TextEditingController();
+  final _rekeningController = TextEditingController();
 
-  // Menyimpan foto yang sudah dipilih per label, misalnya:
-  // {'Foto KTP': XFile(...), 'Foto gerai': XFile(...)}
-  final Map<String, XFile> _uploadedFiles = {};
+  // Pasar yang dipilih user sebagai lokasi kios.
+  String? _selectedPasar;
 
-  bool _submitting = false;
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _namaController.dispose();
+    _alamatGeraiController.dispose();
+    _rekeningController.dispose();
+    super.dispose();
+  }
+
+  String? _validateBeforeSubmit() {
+    if (_namaController.text.trim().isEmpty) return 'Nama lengkap wajib diisi.';
+    if (_selectedPasar == null) return 'Pilih pasar tempat kios kamu berada.';
+    if (_alamatGeraiController.text.trim().isEmpty) {
+      return 'Alamat gerai wajib diisi.';
+    }
+    if (_rekeningController.text.trim().isEmpty) {
+      return 'Nomor rekening wajib diisi.';
+    }
+    return null; // lolos validasi
+  }
 
   Future<void> _submitForm() async {
-    if (_submitting) return;
-    setState(() => _submitting = true);
+    if (_isSubmitting) return;
+
+    final validationError = _validateBeforeSubmit();
+    if (validationError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(validationError)),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
 
     try {
-      // TODO: ganti nilai di bawah dengan controller field form yang
-      // sesungguhnya (Nama toko, Nama pasar, Nomor kios, dll) begitu
-      // _FormCard/_PlainTextField di halaman ini sudah pakai TextEditingController.
-      await GeraiService.registerGerai(
-        namaToko: 'Toko Baru',
-        namaPasar: 'Pasar',
-        nomorKios: '-',
-        punyaSpstb: _punyaSpstb ?? false,
-      );
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        throw Exception('Kamu harus login terlebih dahulu untuk mendaftar.');
+      }
+
+      final geraiData = <String, dynamic>{
+        'nama': _namaController.text.trim(),
+        'namaPasar': _selectedPasar,
+        'alamatGerai': _alamatGeraiController.text.trim(),
+        'nomorRekening': _rekeningController.text.trim(),
+        'status': 'menunggu_verifikasi', // lihat alur di nemu_plus_page.dart
+      };
+
+      // Simpan record pendaftaran gerai (untuk histori/verifikasi admin)...
+      await FirebaseFirestore.instance.collection('gerai').add({
+        'ownerId': uid,
+        ...geraiData,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      // ...lalu aktifkan label "Penjual" DAN buat dokumen di koleksi
+      // "seller" (setara "users") dalam satu langkah atomik.
+      // Catatan: kalau nanti verifikasi admin sudah jalan (lihat alur di
+      // nemu_plus_page.dart), pertimbangkan pindahkan pemanggilan ini ke
+      // Cloud Function yang trigger saat status gerai berubah jadi "aktif",
+      // supaya tidak bisa dimanipulasi langsung dari client.
+      await AuthService.registerAsSeller(geraiData: geraiData);
 
       if (!mounted) return;
 
@@ -112,13 +181,95 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
         SnackBar(content: Text('Gagal mengirim pendaftaran: $e')),
       );
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
-  Future<void> _pickImage(String label) async {
-    // Tampilkan pilihan sumber: Kamera atau Galeri
-    final source = await showModalBottomSheet<ImageSource>(
+  // Pop-up yang muncul setelah pendaftaran berhasil dikirim.
+  Future<void> _showSuccessDialog() async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: kCream,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: kGradientBottom.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  color: kGradientBottom,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Pendaftaran Berhasil Dikirim',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.manrope(
+                  color: kInk,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Terima kasih! Data gerai kamu sudah kami terima dan sedang menunggu proses persetujuan dari admin. Kami akan memberi tahu kamu begitu gerai kamu aktif.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.manrope(
+                  color: kInk.withOpacity(0.7),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kInk,
+                  foregroundColor: kCream,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                onPressed: () {
+                  Navigator.pop(dialogContext); // tutup dialog
+                  Navigator.pop(context); // kembali dari form pendaftaran
+                },
+                child: Text(
+                  'Oke, Mengerti',
+                  style: GoogleFonts.manrope(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Bottom sheet untuk memilih pasar.
+  Future<void> _pickPasar() async {
+    final result = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: kCream,
       shape: const RoundedRectangleBorder(
@@ -138,22 +289,52 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
-              const SizedBox(height: 12),
-              ListTile(
-                leading: Icon(Icons.photo_camera_outlined, color: kInk),
-                title: Text(
-                  'Ambil dari kamera',
-                  style: GoogleFonts.manrope(color: kInk, fontSize: 13.5),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Pilih Pasar',
+                    style: GoogleFonts.manrope(
+                      color: kInk,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
                 ),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
               ),
-              ListTile(
-                leading: Icon(Icons.photo_library_outlined, color: kInk),
-                title: Text(
-                  'Pilih dari galeri',
-                  style: GoogleFonts.manrope(color: kInk, fontSize: 13.5),
+              const SizedBox(height: 4),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: kDaftarPasarBalikpapan.length,
+                  itemBuilder: (context, index) {
+                    final pasar = kDaftarPasarBalikpapan[index];
+                    final isSelected = pasar == _selectedPasar;
+                    return ListTile(
+                      leading: Icon(
+                        isSelected
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                        color: isSelected
+                            ? kGradientBottom
+                            : kInk.withOpacity(0.4),
+                        size: 20,
+                      ),
+                      title: Text(
+                        pasar,
+                        style: GoogleFonts.manrope(
+                          color: kInk,
+                          fontSize: 13.5,
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                      onTap: () => Navigator.pop(context, pasar),
+                    );
+                  },
                 ),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
               ),
               const SizedBox(height: 8),
             ],
@@ -162,18 +343,8 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
       },
     );
 
-    if (source == null) return;
-
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(
-      source: source,
-      imageQuality: 80,
-    );
-
-    if (pickedFile != null) {
-      setState(() {
-        _uploadedFiles[label] = pickedFile;
-      });
+    if (result != null) {
+      setState(() => _selectedPasar = result);
     }
   }
 
@@ -220,168 +391,52 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  _SectionHeading('Data diri & gerai (wajib)'),
+                  _SectionHeading('Data gerai'),
                   const SizedBox(height: 10),
                   _FormCard(
-                    fields: const [
+                    fields: [
                       _TextFieldData(
                         label: 'Nama lengkap',
                         hint: 'Sesuai KTP',
-                      ),
-                      _TextFieldData(
-                        label: 'NIK (KTP)',
-                        hint: '16 digit nomor KTP',
-                      ),
-                      _TextFieldData(
-                        label: 'Nomor HP',
-                        hint: '08xx-xxxx-xxxx',
-                      ),
-                      _TextFieldData(
-                        label: 'Nama pasar',
-                        hint: 'Contoh: Pasar Klandasan',
-                      ),
-                      _TextFieldData(
-                        label: 'Nomor kios / los / lapak',
-                        hint: 'Contoh: Blok A No. 12',
+                        controller: _namaController,
+                        keyboardType: TextInputType.name,
                       ),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  _UploadGroup(
-                    items: const [
-                      'Foto KTP',
-                      'Foto gerai',
-                      'Foto produk',
-                      'Foto pemilik gerai',
-                    ],
-                    uploadedFiles: _uploadedFiles,
-                    onPick: _pickImage,
+                  // Pilih pasar.
+                  _PasarPickerField(
+                    selectedPasar: _selectedPasar,
+                    onTap: _pickPasar,
                   ),
 
-                  const SizedBox(height: 24),
-
-                  _SectionHeading('Kepemilikan SPSTB'),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: kCream,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Apakah Anda memiliki SPSTB?',
-                          style: GoogleFonts.manrope(
-                            color: kInk,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13.5,
-                          ),
+                  // Muncul cuma setelah pasar dipilih — alamat spesifik
+                  // gerai di dalam pasar tersebut (bukan alamat pasarnya).
+                  if (_selectedPasar != null) ...[
+                    const SizedBox(height: 10),
+                    _FormCard(
+                      fields: [
+                        _TextFieldData(
+                          label: 'Alamat gerai',
+                          hint:
+                              'Contoh: Blok A, Los 5, dekat pintu masuk utama',
+                          controller: _alamatGeraiController,
+                          maxLines: 2,
                         ),
-                        const SizedBox(height: 6),
-                        _RadioOption(
-                          label: 'Ya, saya punya SPSTB',
-                          selected: _punyaSpstb == true,
-                          onTap: () => setState(() => _punyaSpstb = true),
-                        ),
-                        _RadioOption(
-                          label: 'Tidak / belum punya',
-                          selected: _punyaSpstb == false,
-                          onTap: () => setState(() => _punyaSpstb = false),
-                        ),
-
-                        if (_punyaSpstb == true) ...[
-                          const SizedBox(height: 14),
-                          Text(
-                            'Nomor SPSTB',
-                            style: GoogleFonts.manrope(
-                              color: kInk.withOpacity(0.7),
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          _PlainTextField(hint: 'Masukkan nomor SPSTB'),
-                          const SizedBox(height: 10),
-                          _UploadButton(
-                            label: 'Upload foto SPSTB',
-                            file: _uploadedFiles['Foto SPSTB'],
-                            onTap: () => _pickImage('Foto SPSTB'),
-                          ),
-                        ],
-
-                        if (_punyaSpstb == false) ...[
-                          const SizedBox(height: 14),
-                          _UploadButton(
-                            label: 'Upload foto kios',
-                            file: _uploadedFiles['Foto kios'],
-                            onTap: () => _pickImage('Foto kios'),
-                          ),
-                          const SizedBox(height: 10),
-                          _UploadButton(
-                            label:
-                                'Upload bukti sewa / surat pengelola pasar (jika ada)',
-                            file: _uploadedFiles['Bukti sewa'],
-                            onTap: () => _pickImage('Bukti sewa'),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            'Keterangan tambahan',
-                            style: GoogleFonts.manrope(
-                              color: kInk.withOpacity(0.7),
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          _PlainTextField(
-                            hint:
-                                'Ceritakan kondisi kios/losmu, misalnya lama berjualan di sini',
-                            maxLines: 3,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Pendaftaranmu tetap diproses dan akan diperiksa langsung oleh admin.',
-                            style: GoogleFonts.manrope(
-                              color: kInk.withOpacity(0.6),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
                       ],
                     ),
-                  ),
+                  ],
 
-                  const SizedBox(height: 24),
-
-                  _SectionHeading('Data tambahan (opsional)'),
                   const SizedBox(height: 10),
                   _FormCard(
-                    fields: const [
+                    fields: [
                       _TextFieldData(
-                        label: 'NPWP (jika ada)',
-                        hint: 'Nomor NPWP',
-                      ),
-                      _TextFieldData(
-                        label: 'Nomor rekening atau QRIS',
+                        label: 'Nomor rekening',
                         hint: 'Untuk pencairan pembayaran',
-                      ),
-                      _TextFieldData(
-                        label: 'Jam operasional',
-                        hint: 'Contoh: 06.00 - 15.00',
+                        controller: _rekeningController,
+                        keyboardType: TextInputType.number,
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 10),
-                  _UploadButton(
-                    label: 'Pilih titik lokasi kios di peta',
-                    file: null,
-                    onTap: () {
-                      // TODO: buka map picker (google_maps_flutter / geolocator)
-                    },
-                    icon: Icons.location_on_outlined,
                   ),
 
                   const SizedBox(height: 28),
@@ -389,7 +444,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _submitting ? null : _submitForm,
+                      onPressed: _isSubmitting ? null : _submitForm,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: kInk,
                         foregroundColor: kCream,
@@ -399,7 +454,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                         ),
                         elevation: 0,
                       ),
-                      child: _submitting
+                      child: _isSubmitting
                           ? const SizedBox(
                               width: 18,
                               height: 18,
@@ -463,7 +518,17 @@ class _SectionHeading extends StatelessWidget {
 class _TextFieldData {
   final String label;
   final String hint;
-  const _TextFieldData({required this.label, required this.hint});
+  final TextEditingController controller;
+  final TextInputType? keyboardType;
+  final int maxLines;
+
+  const _TextFieldData({
+    required this.label,
+    required this.hint,
+    required this.controller,
+    this.keyboardType,
+    this.maxLines = 1,
+  });
 }
 
 class _FormCard extends StatelessWidget {
@@ -496,7 +561,12 @@ class _FormCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                _PlainTextField(hint: field.hint),
+                _PlainTextField(
+                  hint: field.hint,
+                  controller: field.controller,
+                  keyboardType: field.keyboardType,
+                  maxLines: field.maxLines,
+                ),
               ],
             ),
           );
@@ -508,12 +578,22 @@ class _FormCard extends StatelessWidget {
 
 class _PlainTextField extends StatelessWidget {
   final String hint;
+  final TextEditingController? controller;
+  final TextInputType? keyboardType;
   final int maxLines;
-  const _PlainTextField({required this.hint, this.maxLines = 1});
+
+  const _PlainTextField({
+    required this.hint,
+    this.controller,
+    this.keyboardType,
+    this.maxLines = 1,
+  });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
       maxLines: maxLines,
       style: GoogleFonts.manrope(
         color: kInk,
@@ -543,162 +623,86 @@ class _PlainTextField extends StatelessWidget {
   }
 }
 
-// Grup tombol upload foto (Foto KTP, Foto gerai, dst)
-class _UploadGroup extends StatelessWidget {
-  final List<String> items;
-  final Map<String, XFile> uploadedFiles;
-  final void Function(String label) onPick;
-
-  const _UploadGroup({
-    required this.items,
-    required this.uploadedFiles,
-    required this.onPick,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: List.generate(items.length, (index) {
-        final label = items[index];
-        final isLast = index == items.length - 1;
-        return Padding(
-          padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
-          child: _UploadButton(
-            label: label,
-            file: uploadedFiles[label],
-            onTap: () => onPick(label),
-          ),
-        );
-      }),
-    );
-  }
-}
-
-// Satu tombol upload foto/dokumen — sudah tersambung ke image_picker lewat
-// callback onTap. Kalau file sudah dipilih, tampilkan thumbnail + nama file.
-// Pakai XFile + Image.memory supaya jalan di semua platform (termasuk Web),
-// karena dart:io File tidak didukung di Flutter Web.
-class _UploadButton extends StatelessWidget {
-  final String label;
-  final XFile? file;
+// Field untuk memilih pasar — dropdown lewat bottom sheet.
+class _PasarPickerField extends StatelessWidget {
+  final String? selectedPasar;
   final VoidCallback onTap;
-  final IconData icon;
 
-  const _UploadButton({
-    required this.label,
-    required this.file,
+  const _PasarPickerField({
+    required this.selectedPasar,
     required this.onTap,
-    this.icon = Icons.upload_file_outlined,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasFile = file != null;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: hasFile ? kGradientBottom : kInk.withOpacity(0.15),
-          ),
-        ),
-        child: Row(
-          children: [
-            if (hasFile)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: FutureBuilder<Uint8List>(
-                  future: file!.readAsBytes(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const SizedBox(
-                        width: 34,
-                        height: 34,
-                        child: Center(
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      );
-                    }
-                    return Image.memory(
-                      snapshot.data!,
-                      width: 34,
-                      height: 34,
-                      fit: BoxFit.cover,
-                    );
-                  },
-                ),
-              )
-            else
-              Icon(icon, size: 18, color: kInk.withOpacity(0.6)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                hasFile ? '$label — foto terpilih' : label,
-                style: GoogleFonts.manrope(
-                  color: hasFile ? kInk : kInk.withOpacity(0.75),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            Icon(
-              hasFile ? Icons.check_circle : Icons.chevron_right,
-              size: 18,
-              color: hasFile ? kGradientBottom : kInk.withOpacity(0.4),
-            ),
-          ],
-        ),
+    final hasSelection = selectedPasar != null;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kCream,
+        borderRadius: BorderRadius.circular(14),
       ),
-    );
-  }
-}
-
-// Opsi radio kustom Ya/Tidak
-class _RadioOption extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _RadioOption({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          children: [
-            Icon(
-              selected ? Icons.radio_button_checked : Icons.radio_button_off,
-              size: 18,
-              color: selected ? kGradientBottom : kInk.withOpacity(0.4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Nama pasar',
+            style: GoogleFonts.manrope(
+              color: kInk.withOpacity(0.7),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: GoogleFonts.manrope(
-                color: kInk,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
+          ),
+          const SizedBox(height: 6),
+          InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: hasSelection
+                      ? kGradientBottom
+                      : kInk.withOpacity(0.15),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.storefront_outlined,
+                    size: 18,
+                    color: hasSelection
+                        ? kGradientBottom
+                        : kInk.withOpacity(0.6),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      selectedPasar ?? 'Pilih pasar tempat kios kamu berada',
+                      style: GoogleFonts.manrope(
+                        color: hasSelection ? kInk : kInk.withOpacity(0.4),
+                        fontSize: 13.5,
+                        fontWeight:
+                            hasSelection ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 20,
+                    color: kInk.withOpacity(0.5),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

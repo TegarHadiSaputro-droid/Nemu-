@@ -2,6 +2,8 @@
 //
 // Halaman Produk / Layanan — Flutter
 // Card produk berbentuk kotak (grid 2 kolom), bukan memanjang horizontal.
+// Gambar/ikon produk dibesarkan mengisi bagian atas kartu, dengan badge
+// status ditumpuk (overlay) di pojok kanan atas gambar.
 // Background: linear-gradient(180deg, #d9df36 0%, #007c3f 100%)
 // Font       : Manrope, warna teks utama #0f1b11
 
@@ -176,8 +178,9 @@ class _ProdukData {
 }
 
 // ---------------------------------------------------------------------------
-// Kartu produk — bentuk kotak: ikon di atas, badge status di pojok,
-// nama & harga di bawah.
+// Kartu produk — bentuk kotak: gambar besar mengisi bagian atas kartu
+// (badge status ditumpuk di pojok kanan atas gambar), lalu nama, kategori
+// & harga di bawahnya.
 // ---------------------------------------------------------------------------
 class _ProdukCard extends StatelessWidget {
   final _ProdukData data;
@@ -190,7 +193,6 @@ class _ProdukCard extends StatelessWidget {
       onTap: () {},
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: kCream,
           borderRadius: BorderRadius.circular(16),
@@ -198,71 +200,96 @@ class _ProdukCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: kGradientBottom.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(Icons.build_outlined, color: kGradientBottom),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isActive
-                        ? Colors.green.withValues(alpha: 0.15)
-                        : Colors.grey.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    data.status,
-                    style: GoogleFonts.manrope(
-                      color: isActive
-                          ? Colors.green.shade800
-                          : Colors.grey.shade700,
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w700,
+            // ---------------- Gambar/ikon produk (besar, isi lebar kartu) ----------------
+            Expanded(
+              flex: 3,
+              child: Stack(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: kGradientBottom.withOpacity(0.15),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(16),
+                      ),
+                    ),
+                    // TODO: ganti Icon di bawah ini dengan Image.network(...)
+                    // atau Image.asset(...) begitu foto produk sudah ada,
+                    // pakai BoxFit.cover supaya tetap mengisi penuh area ini.
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.build_outlined,
+                      color: kGradientBottom,
+                      size: 40,
                     ),
                   ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isActive
+                            ? Colors.green.withOpacity(0.85)
+                            : Colors.grey.withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        data.status,
+                        style: GoogleFonts.manrope(
+                          color: Colors.white,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // ---------------- Detail produk ----------------
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      data.nama,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.manrope(
+                        color: kInk,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      data.kategori,
+                      style: GoogleFonts.manrope(
+                        color: kInk.withOpacity(0.55),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      data.harga,
+                      style: GoogleFonts.manrope(
+                        color: kGradientBottom,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              data.nama,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.manrope(
-                color: kInk,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                height: 1.25,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              data.kategori,
-              style: GoogleFonts.manrope(
-                color: kInk.withValues(alpha: 0.55),
-                fontSize: 10.5,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              data.harga,
-              style: GoogleFonts.manrope(
-                color: kGradientBottom,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w800,
               ),
             ),
           ],

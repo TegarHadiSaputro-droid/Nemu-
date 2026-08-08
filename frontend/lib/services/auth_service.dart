@@ -192,6 +192,82 @@ class AuthService {
     });
   }
 
+  static Future<bool> isSeller() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+ 
+    final snapshot = await _firestore.collection('users').doc(user.uid).get();
+    final data = snapshot.data();
+    if (data == null) return false;
+ 
+    final roles = data['roles'] as Map<String, dynamic>?;
+    return roles?['seller'] == true;
+  }
+ 
+  /// Versi stream dari isSeller(), untuk halaman yang perlu langsung
+  /// bereaksi kalau status seller berubah selagi halaman terbuka
+  /// (misalnya role di-nonaktifkan admin saat user masih di halaman itu).
+  static Stream<bool> isSellerStream() {
+    final user = _auth.currentUser;
+    if (user == null) return Stream.value(false);
+ 
+    return _firestore
+        .collection('users')
+        .doc(user.uid)
+        .snapshots()
+        .map((snapshot) {
+      final data = snapshot.data();
+      if (data == null) return false;
+      final roles = data['roles'] as Map<String, dynamic>?;
+      return roles?['seller'] == true;
+    });
+  }
+ 
+  /// Update status buka/tutup toko secara cepat (di luar jam operasional
+  /// tersimpan). Disimpan di field `isOpen` pada dokumen seller/{uid}.
+  ///
+  /// Dipanggil dari tombol toggle cepat di halaman Kelola Toko — TIDAK
+  /// mengubah data jam operasional yang tersimpan di field lain, cuma
+  /// menimpa status "buka sekarang" saja.
+  static Future<void> updateStoreOpenStatus(bool isOpen) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'no-current-user',
+        message: 'Tidak ada user yang sedang login',
+      );
+    }
+ 
+    await _firestore.collection('seller').doc(user.uid).set({
+      'isOpen': isOpen,
+      'isOpenUpdatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+ 
+  /// Stream status buka/tutup toko milik user yang sedang login, untuk
+  /// dipakai langsung dengan StreamBuilder di halaman Kelola Toko.
+  /// Default `true` (dianggap buka) kalau field `isOpen` belum pernah
+  /// diset sebelumnya (misalnya seller baru saja terdaftar).
+  static Stream<bool> storeOpenStatusStream() {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'no-current-user',
+        message: 'Tidak ada user yang sedang login',
+      );
+    }
+ 
+    return _firestore
+        .collection('seller')
+        .doc(user.uid)
+        .snapshots()
+        .map((snapshot) {
+      final data = snapshot.data();
+      if (data == null || data['isOpen'] == null) return true;
+      return data['isOpen'] as bool;
+    });
+  }
+
   /// Hapus dokumen profil penjual di koleksi "seller". Dipisah dari
   /// deactivateSellerRole() supaya menonaktifkan status dan menghapus
   /// data adalah dua aksi yang beda (yang kedua lebih destruktif).
