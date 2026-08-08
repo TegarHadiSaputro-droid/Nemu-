@@ -27,6 +27,7 @@ class _MitraProviderListPageState extends State<MitraProviderListPage> {
       ..sort((a, b) => b.rating.compareTo(a.rating));
 
     return Scaffold(
+      backgroundColor: mitraYellowTop,
       body: Container(
         decoration: const BoxDecoration(gradient: mitraBackgroundGradient),
         child: Stack(
@@ -36,7 +37,7 @@ class _MitraProviderListPageState extends State<MitraProviderListPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  mitraAppBar(widget.sub.nama),
+                  mitraAppBar(widget.sub.nama, titleColor: mitraTextDark, iconColor: mitraTextDark),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
                     child: Container(
@@ -70,27 +71,20 @@ class _MitraProviderListPageState extends State<MitraProviderListPage> {
                     ),
                   ),
                   Expanded(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-                      decoration: const BoxDecoration(
-                        color: mitraCream,
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                      ),
-                      child: filtered.isEmpty
-                          ? Center(
-                              child: Text(
-                                'Tidak ada penyedia dengan nama itu',
-                                style: mitraFont(size: 12.5, color: Colors.black45),
-                              ),
-                            )
-                          : ListView.separated(
-                              physics: const BouncingScrollPhysics(),
-                              itemCount: filtered.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 10),
-                              itemBuilder: (_, i) => _ProviderTile(sub: widget.sub, provider: filtered[i]),
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Text(
+                              'Tidak ada penyedia dengan nama itu',
+                              style: mitraFont(size: 12.5, color: mitraTextDark.withValues(alpha: 0.6)),
                             ),
-                    ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 10),
+                            itemBuilder: (_, i) => _ProviderTile(sub: widget.sub, provider: filtered[i]),
+                          ),
                   ),
                 ],
               ),

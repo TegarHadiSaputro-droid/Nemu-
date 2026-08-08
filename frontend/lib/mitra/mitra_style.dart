@@ -18,6 +18,7 @@ const LinearGradient mitraBackgroundGradient = LinearGradient(
   begin: Alignment.topCenter,
   end: Alignment.bottomCenter,
   colors: [mitraYellowTop, mitraGreenBottom],
+  stops: [0.0, 0.45],
 );
 
 /// Helper text style Manrope, sama pola pemakaiannya dengan `_m()` di
@@ -82,15 +83,21 @@ class _MitraDecorCircle extends StatelessWidget {
 }
 
 /// AppBar transparan standar dipakai di semua halaman Mitra.
-PreferredSizeWidget mitraAppBar(String title, {List<Widget>? actions}) {
+PreferredSizeWidget mitraAppBar(
+  String title, {
+  List<Widget>? actions,
+  Color titleColor = mitraCream,
+  Color iconColor = mitraCream,
+  double titleSize = 18,
+}) {
   return AppBar(
     backgroundColor: Colors.transparent,
     elevation: 0,
     centerTitle: false,
-    iconTheme: const IconThemeData(color: mitraCream),
+    iconTheme: IconThemeData(color: iconColor),
     title: Text(
       title,
-      style: mitraFont(size: 18, weight: FontWeight.bold, color: mitraCream),
+      style: mitraFont(size: titleSize, weight: FontWeight.bold, color: titleColor),
     ),
     actions: actions,
   );

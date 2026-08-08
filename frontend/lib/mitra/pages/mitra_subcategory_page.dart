@@ -8,13 +8,25 @@ import '../models/mitra_models.dart';
 import '../mitra_style.dart';
 import 'mitra_provider_list_page.dart';
 
-class MitraSubCategoryPage extends StatelessWidget {
+class MitraSubCategoryPage extends StatefulWidget {
   final KategoriUtama kategori;
   const MitraSubCategoryPage({super.key, required this.kategori});
 
   @override
+  State<MitraSubCategoryPage> createState() => _MitraSubCategoryPageState();
+}
+
+class _MitraSubCategoryPageState extends State<MitraSubCategoryPage> {
+  String _keyword = '';
+
+  @override
   Widget build(BuildContext context) {
+    final filtered = widget.kategori.subLayanan
+        .where((s) => s.nama.toLowerCase().contains(_keyword.toLowerCase()))
+        .toList();
+
     return Scaffold(
+      backgroundColor: mitraYellowTop,
       body: Container(
         decoration: const BoxDecoration(gradient: mitraBackgroundGradient),
         child: Stack(
@@ -24,29 +36,64 @@ class MitraSubCategoryPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  mitraAppBar(kategori.nama),
+                  mitraAppBar(widget.kategori.nama, titleColor: mitraTextDark, iconColor: mitraTextDark),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                    child: Text(
-                      'Pilih jenis layanan ${kategori.nama.toLowerCase()} yang kamu butuhkan',
-                      style: mitraFont(size: 12.5, color: mitraCream.withValues(alpha: 0.9)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Pilih jenis layanan ${widget.kategori.nama.toLowerCase()} yang kamu butuhkan',
+                          style: mitraFont(size: 12.5, color: mitraTextDark.withValues(alpha: 0.75)),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10, offset: const Offset(0, 4)),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.search_rounded, color: Colors.black45, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  onChanged: (v) => setState(() => _keyword = v),
+                                  style: mitraFont(size: 13, color: mitraTextDark),
+                                  decoration: InputDecoration(
+                                    hintText: 'Cari jenis layanan...',
+                                    hintStyle: mitraFont(size: 12.5, color: Colors.black38),
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Expanded(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-                      decoration: const BoxDecoration(
-                        color: mitraCream,
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                      ),
-                      child: ListView.separated(
-                        physics: const BouncingScrollPhysics(),
-                        itemCount: kategori.subLayanan.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) => _SubLayananTile(sub: kategori.subLayanan[i]),
-                      ),
-                    ),
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Text(
+                              'Jenis layanan tidak ditemukan',
+                              style: mitraFont(size: 12.5, color: mitraTextDark.withValues(alpha: 0.6)),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 10),
+                            itemBuilder: (_, i) => _SubLayananTile(sub: filtered[i]),
+                          ),
                   ),
                 ],
               ),
