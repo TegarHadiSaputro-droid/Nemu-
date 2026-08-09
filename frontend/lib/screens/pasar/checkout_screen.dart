@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:frontend/models/cart_model.dart';
+import 'package:frontend/screens/orders_screen.dart';
 import 'package:frontend/services/address_manager.dart';
 import 'package:frontend/services/orders_manager.dart';
 import 'package:frontend/widgets/address_editor_sheet.dart';
-import 'package:frontend/screens/orders_screen.dart' show OrderHistoryItem, OrdersScreen;
+import 'package:google_fonts/google_fonts.dart';
+import 'package:frontend/models/cart_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:frontend/screens/home_screen.dart';
-import 'dart:math' as math;
 
 const Color _cGreen  = Color(0xFF007C3F);
 const Color _cYellow = Color(0xFFD9DF36);
@@ -112,21 +111,30 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     HapticFeedback.heavyImpact();
     setState(() => _ordered = true);
 
-    String orderId = 'ORD-${math.Random().nextInt(9000) + 1000}';
-    String itemsText = '';
-    String marketName = 'Pasar Sepinggan';
-    String storeName = 'Gerai Bu Eko';
+    // Bikin ringkasan pesanan dari isi keranjang buat dikirim ke OrdersManager
+    // (dibaca orders_screen.dart). Kalau keranjang isinya dari beberapa
+    // gerai/pasar sekaligus, nama-namanya digabung.
+    final items = _cart.items.value;
+    final storeNames = items.map((i) => i.namaGerai).toSet().join(' + ');
+    final marketNames = items.map((i) => i.namaMarket).toSet().join(' + ');
+    final itemsSummary = items.map((i) => '${i.produk.nama} x${i.qty}').join(', ');
+    final order = OrderHistoryItem(
+      id: 'ORD${DateTime.now().millisecondsSinceEpoch}',
+      storeName: storeNames,
+      marketName: marketNames,
+      date: DateTime.now().toIso8601String(),
+      items: itemsSummary,
+      totalPrice: _total,
+      statusLabel: 'Diproses',
+      statusColor: _cGreen,
+    );
 
+
+    // Simpan juga ke Firestore (collection simulated_orders) supaya bisa
+    // dibaca sisi penjual/driver di luar OrdersManager lokal.
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
-        final cartItems = _cart.items.value;
-        itemsText = cartItems.map((item) => '${item.produk.nama} ${item.qty} ${item.produk.satuan}').join(', ');
-        if (cartItems.isNotEmpty) {
-          marketName = cartItems.first.namaMarket;
-          storeName = cartItems.first.namaGerai;
-        }
-
         String buyerName = 'Sobat Nemu';
         try {
           final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
@@ -136,14 +144,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         } catch (_) {}
 
         await FirebaseFirestore.instance.collection('simulated_orders').doc(uid).set({
-          'id': orderId,
+          'id': order.id,
           'buyerUid': uid,
           'buyerName': buyerName,
-          'items': itemsText.isNotEmpty ? itemsText : 'Tomat Segar 1kg',
+          'items': itemsSummary.isNotEmpty ? itemsSummary : 'Tomat Segar 1kg',
           'totalPrice': _total,
           'status': 'dikemas',
-          'storeName': storeName,
-          'marketName': marketName,
+          'storeName': storeNames.isNotEmpty ? storeNames : 'Gerai Bu Eko',
+          'marketName': marketNames.isNotEmpty ? marketNames : 'Pasar Sepinggan',
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -153,22 +161,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     await Future.delayed(const Duration(seconds: 2));
     if (mounted) {
-      final now = DateTime.now();
-      final dateStr = '${now.day}/${now.month}/${now.year}';
-      final orderItem = OrderHistoryItem(
-        id: orderId,
-        storeName: storeName,
-        marketName: marketName,
-        date: dateStr,
-        items: itemsText.isNotEmpty ? itemsText : 'Tomat Segar 1kg',
-        totalPrice: _total,
-        statusLabel: 'Sedang Dikemas',
-        statusColor: const Color(0xFFFF9800),
-      );
-      OrdersManager.instance.placeOrder(orderItem);
+      OrdersManager.instance.placeOrder(order);
       _cart.kosongkan();
       _showSuccessDialog();
     }
+
   }
 
   void _showSuccessDialog() {
@@ -179,9 +176,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         onDone: () {
           HomeScreen.navIndexNotifier.value = 4; // Switch to Tab Pesanan
           Navigator.of(context).popUntil((r) => r.isFirst);
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const OrdersScreen()),
-          );
         },
       ),
     );
