@@ -53,18 +53,11 @@ class _MitraReviewPageState extends State<MitraReviewPage> {
         .toList();
   }
 
-  double get _rataRata {
-    if (_semuaUlasan.isEmpty) return widget.provider.rating;
-    final total = _semuaUlasan.fold<double>(0, (a, b) => a + b.rating);
-    return total / _semuaUlasan.length;
-  }
+  double get _rataRata => ratingAcakUntuk(widget.provider).toDouble();
 
   Map<int, int> get _distribusiBintang {
     final map = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0};
-    for (final u in _semuaUlasan) {
-      final bintang = u.rating.round().clamp(1, 5);
-      map[bintang] = (map[bintang] ?? 0) + 1;
-    }
+    map[ratingAcakUntuk(widget.provider)] = 1;
     return map;
   }
 
@@ -106,7 +99,7 @@ class _MitraReviewPageState extends State<MitraReviewPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _RingkasanRating(rataRata: _rataRata, distribusi: _distribusiBintang, total: _semuaUlasan.length),
+                          _RingkasanRating(rataRata: _rataRata, distribusi: _distribusiBintang, total: 1),
                           const SizedBox(height: 14),
                           _FilterBintangRow(
                             distribusi: _distribusiBintang,
@@ -137,7 +130,7 @@ class _MitraReviewPageState extends State<MitraReviewPage> {
                                     padding: const EdgeInsets.symmetric(vertical: 24),
                                     child: Center(
                                       child: Text(
-                                        'Belum ada ulasan bintang $_filterBintang',
+                                        _filterBintang == null ? 'Belum ada ulasan' : 'Belum ada ulasan bintang $_filterBintang',
                                         style: mitraFont(size: 12, color: mitraTextDark.withValues(alpha: 0.6)),
                                       ),
                                     ),
