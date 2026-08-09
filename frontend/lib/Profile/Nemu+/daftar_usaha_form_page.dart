@@ -140,11 +140,19 @@ class _DaftarUsahaFormPageState extends State<DaftarUsahaFormPage> {
       final kategoriValue =
           _selectedKategori == KategoriUsaha.pasar ? 'pasar' : 'jasa';
 
+      // Trial gratis 1 bulan dihitung dari saat pendaftaran dikirim.
+      // Field ini juga dipakai oleh SellerLanggananScreen untuk menampilkan
+      // tanggal kadaluarsa langganan. Setelah trial habis, langganan
+      // Nemu+ ditagih Rp599.000/tahun (bukan bulanan) — kalau nanti user
+      // membayar, field ini yang di-update (+365 hari) oleh alur pembayaran.
+      final trialEndsAt = DateTime.now().add(const Duration(days: 30));
+
       final usahaData = <String, dynamic>{
         'nama': _namaController.text.trim(),
         'kategori': kategoriValue,
         'nomorRekening': _rekeningController.text.trim(),
         'status': 'menunggu_verifikasi', // lihat alur di nemu_plus_page.dart
+        'nemuPlusAktifSampai': Timestamp.fromDate(trialEndsAt),
         if (_selectedKategori == KategoriUsaha.pasar) ...{
           'namaPasar': _selectedPasar,
           'alamatGerai': _alamatGeraiController.text.trim(),
