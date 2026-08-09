@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:frontend/services/address_manager.dart';
+import 'package:frontend/services/orders_manager.dart';
+import 'package:frontend/widgets/address_editor_sheet.dart';
 
 // ─────────────────────────────────────────────
 //  Color Palette (sesuai AppColors Nemu)
@@ -71,17 +74,26 @@ class _OrdersScreenState extends State<OrdersScreen>
 
   // ── State ──
   int _currentStep = 1; // 0=Diterima, 1=Diproses, 2=Diantar, 3=Selesai
-  String _activeAddress = 'Jl. Mawar No. 12, Balikpapan Selatan';
 
   // Dynamic state management
   // `_activeOrder` == null => Empty State (tidak ada pesanan aktif)
   // `_orderHistory` menyimpan pesanan yang sudah selesai / riwayat
+  // Keduanya sekarang sumbernya dari OrdersManager.instance -- diisi begitu
+  // checkout_screen.dart manggil OrdersManager.instance.placeOrder(...).
   List<OrderHistoryItem> _orderHistory = [];
   OrderHistoryItem? _activeOrder;
 
   @override
   void initState() {
     super.initState();
+
+    // Ambil state pesanan yang udah ada di OrdersManager (mis. baru aja
+    // dipesan dari checkout_screen.dart), lalu dengerin perubahan
+    // selanjutnya biar layar ini selalu update tanpa perlu di-refresh manual.
+    _activeOrder = OrdersManager.instance.activeOrder.value;
+    _orderHistory = List.of(OrdersManager.instance.history.value);
+    OrdersManager.instance.activeOrder.addListener(_onActiveOrderChanged);
+    OrdersManager.instance.history.addListener(_onHistoryChanged);
 
     _progressAnim = AnimationController(
       vsync: this,
@@ -164,8 +176,18 @@ class _OrdersScreenState extends State<OrdersScreen>
     );
   }
 
+  void _onActiveOrderChanged() {
+    if (mounted) setState(() => _activeOrder = OrdersManager.instance.activeOrder.value);
+  }
+
+  void _onHistoryChanged() {
+    if (mounted) setState(() => _orderHistory = List.of(OrdersManager.instance.history.value));
+  }
+
   @override
   void dispose() {
+    OrdersManager.instance.activeOrder.removeListener(_onActiveOrderChanged);
+    OrdersManager.instance.history.removeListener(_onHistoryChanged);
     _progressAnim.dispose();
     _pulseAnim.dispose();
     _kurirCardAnim.dispose();
@@ -372,62 +394,65 @@ class _OrdersScreenState extends State<OrdersScreen>
             const SizedBox(height: 12),
 
             // Alamat Card
-            GestureDetector(
-              onTap: _showChangeAddressSheet,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: _green.withOpacity(0.3),
-                    width: 1.2,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: _green.withOpacity(0.12),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.location_on_rounded,
-                        color: _green,
-                        size: 18,
+            ValueListenableBuilder<DeliveryAddress?>(
+              valueListenable: AddressManager.instance.address,
+              builder: (context, address, _) {
+                return GestureDetector(
+                  onTap: _showChangeAddressSheet,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: _green.withOpacity(0.3),
+                        width: 1.2,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Kirim ke Rumah',
-                            style: _manrope(
-                              size: 10,
-                              color: Colors.black45,
-                              weight: FontWeight.bold,
-                            ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: _green.withOpacity(0.12),
+                            shape: BoxShape.circle,
                           ),
-                          Text(
-                            _activeAddress,
-                            style: _manrope(
-                              size: 12,
-                              weight: FontWeight.bold,
-                              color: _dark,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            color: _green,
+                            size: 18,
                           ),
-                        ],
-                      ),
-                    ),
-                    Container(
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Kirim ke Rumah',
+                                style: _manrope(
+                                  size: 10,
+                                  color: Colors.black45,
+                                  weight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                address?.text ?? 'Belum ada alamat, tap untuk isi',
+                                style: _manrope(
+                                  size: 12,
+                                  weight: FontWeight.bold,
+                                  color: _dark,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 5,
@@ -448,7 +473,9 @@ class _OrdersScreenState extends State<OrdersScreen>
                   ],
                 ),
               ),
-            ),
+            );
+          },
+        ),
           ],
         ),
       ),
@@ -1069,85 +1096,15 @@ class _OrdersScreenState extends State<OrdersScreen>
   //  SHEETS & MODALS
   // ──────────────────────────────────────────
 
-  /// Sheet: Ubah Alamat
+  /// Sheet: Ubah Alamat -- pakai AddressEditorSheet yang sama dengan
+  /// home_screen.dart & checkout_screen.dart (baca/tulis AddressManager),
+  /// jadi nggak ada lagi daftar alamat palsu yang terpisah di sini.
   void _showChangeAddressSheet() {
-    final addresses = [
-      'Jl. Mawar No. 12, Balikpapan Selatan',
-      'Jl. Melati No. 5, Balikpapan Utara',
-      'Jl. Kenanga Blok A-3, Balikpapan Barat',
-    ];
-
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => _BottomSheet(
-        title: 'Pilih Alamat Pengiriman',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ...addresses.map(
-              (addr) => ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 0,
-                  vertical: 2,
-                ),
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: _green.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.location_on_rounded,
-                    color: _green,
-                    size: 18,
-                  ),
-                ),
-                title: Text(
-                  addr,
-                  style: _manrope(size: 13, weight: FontWeight.w600),
-                ),
-                trailing: addr == _activeAddress
-                    ? const Icon(
-                        Icons.check_circle_rounded,
-                        color: _green,
-                        size: 20,
-                      )
-                    : null,
-                onTap: () {
-                  setState(() => _activeAddress = addr);
-                  Navigator.pop(context);
-                },
-              ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.add_location_alt_rounded, size: 16),
-                label: Text(
-                  'Tambah Alamat Baru',
-                  style: _manrope(
-                    size: 13,
-                    weight: FontWeight.bold,
-                    color: _green,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _green,
-                  side: const BorderSide(color: _green),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-          ],
-        ),
-      ),
+      backgroundColor: Colors.transparent,
+      builder: (_) => const AddressEditorSheet(),
     );
   }
 

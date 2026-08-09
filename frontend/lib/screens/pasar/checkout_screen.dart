@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/models/cart_model.dart';
+import 'package:frontend/services/address_manager.dart';
+import 'package:frontend/services/orders_manager.dart';
+import 'package:frontend/widgets/address_editor_sheet.dart';
+import 'package:frontend/screens/orders_screen.dart';
 
 const Color _cGreen  = Color(0xFF007C3F);
 const Color _cYellow = Color(0xFFD9DF36);
@@ -40,7 +44,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _selectedDriverId;
   bool _ordered = false;
 
-  static const int _ongkir = 5000;
+  // TODO: ganti dengan hitungan jarak asli (rumus Haversine) begitu ada
+  // sumber data koordinat pasar. Untuk sekarang ongkir bervariasi TAPI
+  // KONSISTEN per nama pasar (hash sederhana dari nama pasar) -- jadi
+  // beda pasar dapat ongkir beda, pasar yang sama selalu dapat angka
+  // yang sama. Kalau keranjang isinya dari beberapa pasar sekaligus,
+  // ongkir tiap pasar dijumlah (asumsi: tiap pasar diantar terpisah).
+  int _ongkirForMarket(String marketName) {
+    final hash = marketName.codeUnits.fold<int>(0, (sum, c) => sum + c);
+    return 4000 + (hash % 9) * 1000; // Rp 4.000 - Rp 12.000
+  }
 
   static const _paymentMethods = [
     _PaymentMethod(icon: Icons.money_rounded, label: 'Bayar di Tempat (COD)', desc: 'Bayar saat barang tiba'),
@@ -49,6 +62,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   ];
 
   int get _subtotal => _cart.totalHarga;
+  int get _ongkir {
+    final marketNames = _cart.items.value.map((i) => i.namaMarket).toSet();
+    if (marketNames.isEmpty) return 0;
+    return marketNames.fold<int>(0, (sum, m) => sum + _ongkirForMarket(m));
+  }
   int get _total => _subtotal + _ongkir;
 
   @override
@@ -73,10 +91,44 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
       return;
     }
+
+    final address = AddressManager.instance.address.value;
+    if (address == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Isi alamat pengiriman dulu ya',
+              style: _cs(size: 13, color: Colors.white)),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     HapticFeedback.heavyImpact();
     setState(() => _ordered = true);
+
+    // Bikin ringkasan pesanan dari isi keranjang buat dikirim ke OrdersManager
+    // (dibaca orders_screen.dart). Kalau keranjang isinya dari beberapa
+    // gerai/pasar sekaligus, nama-namanya digabung.
+    final items = _cart.items.value;
+    final storeNames = items.map((i) => i.namaGerai).toSet().join(' + ');
+    final marketNames = items.map((i) => i.namaMarket).toSet().join(' + ');
+    final itemsSummary = items.map((i) => '${i.produk.nama} x${i.qty}').join(', ');
+    final order = OrderHistoryItem(
+      id: 'ORD${DateTime.now().millisecondsSinceEpoch}',
+      storeName: storeNames,
+      marketName: marketNames,
+      date: DateTime.now().toIso8601String(),
+      items: itemsSummary,
+      totalPrice: _total,
+      statusLabel: 'Diproses',
+      statusColor: _cGreen,
+    );
+
     await Future.delayed(const Duration(seconds: 2));
     if (mounted) {
+      OrdersManager.instance.placeOrder(order);
       _cart.kosongkan();
       _showSuccessDialog();
     }
@@ -88,7 +140,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       barrierDismissible: false,
       builder: (_) => _SuccessDialog(
         onDone: () {
+          // Forward ke OrdersScreen -- bersihin stack sampai halaman
+          // pertama (Beranda) dulu, baru taruh OrdersScreen di atasnya,
+          // jadi tombol back dari situ balik ke Beranda.
           Navigator.of(context).popUntil((r) => r.isFirst);
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const OrdersScreen()),
+          );
         },
       ),
     );
@@ -257,45 +315,61 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildAddressCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.location_on_rounded,
-                color: Colors.redAccent, size: 20),
+    return ValueListenableBuilder<DeliveryAddress?>(
+      valueListenable: AddressManager.instance.address,
+      builder: (context, address, _) {
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Rumah Egii',
-                    style: _cs(size: 13, weight: FontWeight.bold)),
-                Text('Jl. Mawar No. 12, Balikpapan Selatan',
-                    style: _cs(size: 11, color: Colors.black54)),
-              ],
-            ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.location_on_rounded,
+                    color: Colors.redAccent, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(address != null ? 'Kirim ke Sini' : 'Belum ada alamat',
+                        style: _cs(size: 13, weight: FontWeight.bold)),
+                    Text(
+                      address?.text ?? 'Tap "Ubah" untuk isi alamat pengiriman',
+                      style: _cs(size: 11, color: Colors.black54),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const AddressEditorSheet(),
+                  );
+                },
+                child: Text('Ubah',
+                    style: _cs(size: 12, weight: FontWeight.bold, color: _cGreen)),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () {},
-            child: Text('Ubah',
-                style: _cs(size: 12, weight: FontWeight.bold, color: _cGreen)),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -689,7 +763,7 @@ class _SuccessDialogState extends State<_SuccessDialog>
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Center(
-                  child: Text('Kembali ke Beranda',
+                  child: Text('Lihat Pesanan',
                       style: _cs(
                           size: 14,
                           weight: FontWeight.bold,
@@ -714,5 +788,3 @@ class _PaymentMethod {
   const _PaymentMethod(
       {required this.icon, required this.label, required this.desc});
 }
-
-

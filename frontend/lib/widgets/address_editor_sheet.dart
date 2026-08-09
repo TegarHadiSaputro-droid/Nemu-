@@ -42,18 +42,12 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as latlng;
+import '../services/address_manager.dart';
 
 const Color _kGreen = Color(0xFF007C3F);
 
 class AddressEditorSheet extends StatefulWidget {
-  final String? initialAddress;
-  final ValueChanged<String> onSaved;
-
-  const AddressEditorSheet({
-    super.key,
-    required this.initialAddress,
-    required this.onSaved,
-  });
+  const AddressEditorSheet({super.key});
 
   @override
   State<AddressEditorSheet> createState() => _AddressEditorSheetState();
@@ -67,13 +61,24 @@ class _AddressEditorSheetState extends State<AddressEditorSheet> {
   String? _locationError;
   bool _showPinMap = false;
 
+  // Koordinat hasil GPS/pin-drop terakhir (null kalau alamat murni diketik
+  // manual tanpa pernah pakai lokasi/pin).
+  double? _resolvedLat;
+  double? _resolvedLng;
+
   // Default: pusat Balikpapan, dipakai sebelum GPS/pin diatur manual.
   latlng.LatLng _pinLocation = const latlng.LatLng(-1.2379, 116.8529);
 
   @override
   void initState() {
     super.initState();
-    _addressController = TextEditingController(text: widget.initialAddress ?? '');
+    final current = AddressManager.instance.address.value;
+    _addressController = TextEditingController(text: current?.text ?? '');
+    if (current?.hasCoordinates ?? false) {
+      _resolvedLat = current!.lat;
+      _resolvedLng = current.lng;
+      _pinLocation = latlng.LatLng(current.lat!, current.lng!);
+    }
   }
 
   @override
@@ -141,6 +146,8 @@ class _AddressEditorSheetState extends State<AddressEditorSheet> {
 
       setState(() {
         _addressController.text = address;
+        _resolvedLat = position.latitude;
+        _resolvedLng = position.longitude;
         _isLocating = false;
       });
     } catch (e) {
@@ -172,12 +179,16 @@ class _AddressEditorSheetState extends State<AddressEditorSheet> {
     final address = await _reverseGeocode(_pinLocation.latitude, _pinLocation.longitude);
     setState(() {
       _isLocating = false;
+      _resolvedLat = _pinLocation.latitude;
+      _resolvedLng = _pinLocation.longitude;
       _addressController.text = address ??
           'Titik lokasi: ${_pinLocation.latitude.toStringAsFixed(5)}, ${_pinLocation.longitude.toStringAsFixed(5)}';
     });
   }
 
-  void _handleSave() {
+  bool _isSaving = false;
+
+  Future<void> _handleSave() async {
     final text = _addressController.text.trim();
     if (text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -185,8 +196,20 @@ class _AddressEditorSheetState extends State<AddressEditorSheet> {
       );
       return;
     }
-    widget.onSaved(text);
-    Navigator.pop(context);
+    setState(() => _isSaving = true);
+    try {
+      await AddressManager.instance.setAddress(
+        DeliveryAddress(text: text, lat: _resolvedLat, lng: _resolvedLng),
+      );
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan alamat: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -347,16 +370,22 @@ class _AddressEditorSheetState extends State<AddressEditorSheet> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _handleSave,
+                    onPressed: _isSaving ? null : _handleSave,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _kGreen,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: Text(
-                      'Simpan Alamat',
-                      style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.w700),
-                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Text(
+                            'Simpan Alamat',
+                            style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.w700),
+                          ),
                   ),
                 ),
               ],

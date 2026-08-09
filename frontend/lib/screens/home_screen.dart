@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/Profile/account.dart';
 import 'package:frontend/widgets/bottom_navbar.dart';
 import 'package:frontend/widgets/address_editor_sheet.dart';
+import 'package:frontend/services/address_manager.dart';
 import 'package:frontend/screens/orders_screen.dart';
 import 'package:frontend/screens/pasar/pasar_screen.dart';
 import 'package:frontend/mitra/pages/mitra_category_page.dart';
@@ -64,7 +65,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _userName = 'Sobat Nemu'; // placeholder sebelum nickname dimuat/diisi
   String? _photoUrl; // foto profil dari Firestore (users/{uid}.photoUrl)
   int _cartItemCount = 1;
-  String? _deliveryAddress; // alamat pengiriman aktif, null = belum diisi
   bool _isDelivering = false; // State status pengantaran (perlu order asli buat jadi true)
   
   static const List<String> _welcomeGreetings = [
@@ -164,6 +164,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _welcomeGreeting = _welcomeGreetings[math.Random().nextInt(_welcomeGreetings.length)];
     _loadApiData();
     _loadNicknameOrAsk();
+    AddressManager.instance.loadFromFirestore();
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted || !_pageCtrl.hasClients) return;
       final next = (_bannerIndex + 1) % _banners.length;
@@ -631,10 +632,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddressEditorSheet(
-        initialAddress: _deliveryAddress,
-        onSaved: (address) => setState(() => _deliveryAddress = address),
-      ),
+      builder: (_) => const AddressEditorSheet(),
     );
   }
 
@@ -644,26 +642,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildQuickInfoRow() {
     return Row(
       children: [
-        // Widget Alamat Kirim (Sebelah kiri)
+        // Widget Alamat Kirim (Sebelah kiri) — baca dari AddressManager,
+        // jadi selalu sinkron dengan checkout_screen.dart & orders_screen.dart.
         Expanded(
-          child: _deliveryAddress != null
-              ? _quickCard(
-                  icon: Icons.location_on_rounded,
-                  iconColor: Colors.redAccent,
-                  title: 'Kirim ke Sini',
-                  sub: _deliveryAddress!,
-                  bgColor: Colors.white,
-                  onTap: _openAddressEditor,
-                )
-              : _quickCard(
-                  icon: Icons.location_on_rounded,
-                  iconColor: _greenBottom,
-                  title: 'Yuk Belanja!',
-                  sub: 'Ganti Alamat',
-                  bgColor: Colors.white,
-                  subTextColor: _greenBottom,
-                  onTap: _openAddressEditor,
-                ),
+          child: ValueListenableBuilder<DeliveryAddress?>(
+            valueListenable: AddressManager.instance.address,
+            builder: (context, address, _) {
+              return address != null
+                  ? _quickCard(
+                      icon: Icons.location_on_rounded,
+                      iconColor: Colors.redAccent,
+                      title: 'Kirim ke Sini',
+                      sub: address.text,
+                      bgColor: Colors.white,
+                      onTap: _openAddressEditor,
+                    )
+                  : _quickCard(
+                      icon: Icons.location_on_rounded,
+                      iconColor: _greenBottom,
+                      title: 'Yuk Belanja!',
+                      sub: 'Ganti Alamat',
+                      bgColor: Colors.white,
+                      subTextColor: _greenBottom,
+                      onTap: _openAddressEditor,
+                    );
+            },
+          ),
         ),
         const SizedBox(width: 12),
         // Widget Status Kurir (Sebelah kanan)
