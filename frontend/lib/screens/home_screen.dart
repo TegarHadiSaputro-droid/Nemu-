@@ -11,7 +11,9 @@ import 'package:frontend/widgets/address_editor_sheet.dart';
 import 'package:frontend/screens/orders_screen.dart';
 import 'package:frontend/screens/pasar/pasar_screen.dart';
 import 'package:frontend/mitra/pages/mitra_category_page.dart';
-import 'package:frontend/mitra/mitra_navigation_helper.dart';
+import 'package:frontend/mitra/pages/mitra_subcategory_page.dart';
+import 'package:frontend/mitra/data/mitra_data.dart';
+import 'package:frontend/mitra/models/mitra_models.dart';
 
 // ─────────────────────────────────────────────
 //  Warna Palette
@@ -851,10 +853,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // ──────────────────────────────────────────
   Widget _buildHandymanQuickChips() {
     final chips = [
-      {'label': 'Pipa & Bocor', 'icon': Icons.plumbing_rounded, 'color': Colors.blue},
-      {'label': 'Servis AC', 'icon': Icons.ac_unit_rounded, 'color': Colors.cyan},
-      {'label': 'Tukang Listrik', 'icon': Icons.flash_on_rounded, 'color': Colors.amber.shade800},
-      {'label': 'Angkut Barang', 'icon': Icons.local_shipping_rounded, 'color': Colors.deepOrange},
+      {'label': 'Perbaikan', 'icon': Icons.handyman_rounded, 'color': Colors.orange.shade800},
+      {'label': 'Kebersihan', 'icon': Icons.cleaning_services_rounded, 'color': Colors.teal},
+      {'label': 'Pendidikan', 'icon': Icons.school_rounded, 'color': Colors.indigo},
+      {'label': 'Kesehatan', 'icon': Icons.health_and_safety_rounded, 'color': Colors.redAccent},
     ];
 
     return Column(
@@ -873,7 +875,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               final color = item['color'] as Color;
               final label = item['label'] as String;
               return GestureDetector(
-                onTap: () => bukaPencarianCepatMitra(context, label),
+                onTap: () => _bukaKategoriMitra(label),
                 child: Container(
                   margin: const EdgeInsets.only(right: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -895,6 +897,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         ),
       ],
+    );
+  }
+
+  // Cari KategoriUtama Mitra berdasarkan nama persis (Perbaikan, Kebersihan,
+  // Pendidikan, Kesehatan), lalu langsung buka halaman sub-kategorinya —
+  // sama seperti kalau user tap kartu kategori dari MitraCategoryPage.
+  void _bukaKategoriMitra(String namaKategori) {
+    KategoriUtama? kategori;
+    for (final k in getKategoriMitra()) {
+      if (k.nama == namaKategori) {
+        kategori = k;
+        break;
+      }
+    }
+    if (kategori == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => MitraSubCategoryPage(kategori: kategori!)),
     );
   }
 
