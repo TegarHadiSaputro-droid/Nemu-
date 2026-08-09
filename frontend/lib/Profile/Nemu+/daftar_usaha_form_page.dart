@@ -1,17 +1,23 @@
-// daftar_gerai_form_page.dart
+// daftar_usaha_form_page.dart
 //
-// Form Pendaftaran Gerai — dibuka dari tombol "Lanjutkan ke Pendaftaran"
-// di nemu_plus_page.dart.
+// Form Pendaftaran Usaha — dibuka dari tombol "Lanjutkan ke Pendaftaran"
+// di nemu_plus_page.dart. Sebelumnya bernama daftar_gerai_form_page.dart /
+// DaftarGeraiFormPage, diganti nama karena sekarang formnya juga dipakai
+// untuk kategori "Jasa" (bukan cuma "gerai" di pasar).
 //
-// VERSI PALING SEDERHANA UNTUK TAHAP DEVELOPMENT:
-// Cuma 3 data yang diminta — Nama lengkap, Nama pasar, Nomor rekening.
-// Tidak ada upload foto, tidak ada SPSTB, tidak ada NIK/HP/dll.
-// Fokusnya cuma memastikan alur: isi form -> submit -> data masuk
-// Firestore -> muncul pop-up sukses.
+// User pertama-tama pilih kategori usaha: Pasar atau Jasa. Pertanyaan
+// yang ditampilkan menyesuaikan kategori itu:
+// - Pasar : Nama pasar (pilih dari daftar) + Alamat gerai di pasar itu.
+// - Jasa  : Jenis jasa yang ditawarkan + Alamat rumah/tempat usaha.
+// Nama lengkap & Nomor rekening tetap wajib untuk kedua kategori.
+//
+// VERSI SEDERHANA UNTUK TAHAP DEVELOPMENT — tidak ada upload foto, tidak
+// ada SPSTB, tidak ada NIK/HP/dll. Fokusnya cuma memastikan alur: isi
+// form -> submit -> data masuk Firestore -> muncul pop-up sukses.
 //
 // TODO ke depan kalau development lanjut ke tahap verifikasi beneran:
-// tambahkan lagi field wajib lain (NIK, nomor HP, nomor kios) dan upload
-// foto (KTP, gerai, produk) sesuai kebutuhan verifikasi admin.
+// tambahkan lagi field wajib lain (NIK, nomor HP) dan upload foto (KTP,
+// gerai/tempat usaha, produk) sesuai kebutuhan verifikasi admin.
 //
 // Background: linear-gradient(180deg, #d9df36 0%, #007c3f 100%)
 // Font       : Manrope, warna teks utama #0f1b11
@@ -28,7 +34,7 @@ import '../../main.dart'; // untuk AuthGate — sesuaikan path kalau struktur fo
 import '../../services/gerai_service.dart'; // sesuaikan path kalau struktur foldermu beda
 import '../../services/auth_service.dart'; // untuk AuthService.registerAsSeller
 
-// Daftar pasar yang bisa dipilih user sebagai lokasi gerai.
+// Daftar pasar yang bisa dipilih user sebagai lokasi gerai (kategori Pasar).
 // NOTE: kalau daftar pasar ini nanti sering berubah/ditambah, sebaiknya
 // dipindah ke Firestore (collection 'pasar') supaya tidak perlu update
 // aplikasi tiap ada pasar baru — untuk sekarang di-hardcode dulu.
@@ -44,37 +50,65 @@ const List<String> kDaftarPasarBalikpapan = [
   'Pasar Kebun Sayur',
 ];
 
-class DaftarGeraiFormPage extends StatefulWidget {
-  const DaftarGeraiFormPage({super.key});
+// Kategori usaha yang menentukan label akun (Penjual Pasar / Penjual Jasa),
+// pertanyaan mana yang ditampilkan di form, dan halaman beranda mana yang
+// akan dituju setelah verifikasi.
+enum KategoriUsaha { pasar, jasa }
+
+class DaftarUsahaFormPage extends StatefulWidget {
+  const DaftarUsahaFormPage({super.key});
 
   @override
-  State<DaftarGeraiFormPage> createState() => _DaftarGeraiFormPageState();
+  State<DaftarUsahaFormPage> createState() => _DaftarUsahaFormPageState();
 }
 
-class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
+class _DaftarUsahaFormPageState extends State<DaftarUsahaFormPage> {
   final _namaController = TextEditingController();
-  final _alamatGeraiController = TextEditingController();
   final _rekeningController = TextEditingController();
 
-  // Pasar yang dipilih user sebagai lokasi kios.
+  // Field khusus kategori Pasar.
+  final _alamatGeraiController = TextEditingController();
   String? _selectedPasar;
+
+  // Field khusus kategori Jasa.
+  final _jenisJasaController = TextEditingController();
+  final _alamatRumahController = TextEditingController();
+
+  // Kategori usaha yang dipilih user: Pasar atau Jasa.
+  KategoriUsaha? _selectedKategori;
 
   bool _isSubmitting = false;
 
   @override
   void dispose() {
     _namaController.dispose();
-    _alamatGeraiController.dispose();
     _rekeningController.dispose();
+    _alamatGeraiController.dispose();
+    _jenisJasaController.dispose();
+    _alamatRumahController.dispose();
     super.dispose();
   }
 
   String? _validateBeforeSubmit() {
-    if (_namaController.text.trim().isEmpty) return 'Nama lengkap wajib diisi.';
-    if (_selectedPasar == null) return 'Pilih pasar tempat kios kamu berada.';
-    if (_alamatGeraiController.text.trim().isEmpty) {
-      return 'Alamat gerai wajib diisi.';
+    if (_selectedKategori == null) {
+      return 'Pilih kategori usaha: Pasar atau Jasa.';
     }
+    if (_namaController.text.trim().isEmpty) return 'Nama lengkap wajib diisi.';
+
+    if (_selectedKategori == KategoriUsaha.pasar) {
+      if (_selectedPasar == null) return 'Pilih pasar tempat kios kamu berada.';
+      if (_alamatGeraiController.text.trim().isEmpty) {
+        return 'Alamat gerai wajib diisi.';
+      }
+    } else {
+      if (_jenisJasaController.text.trim().isEmpty) {
+        return 'Jenis jasa yang ditawarkan wajib diisi.';
+      }
+      if (_alamatRumahController.text.trim().isEmpty) {
+        return 'Alamat rumah/tempat usaha wajib diisi.';
+      }
+    }
+
     if (_rekeningController.text.trim().isEmpty) {
       return 'Nomor rekening wajib diisi.';
     }
@@ -100,28 +134,55 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
         throw Exception('Kamu harus login terlebih dahulu untuk mendaftar.');
       }
 
-      final geraiData = <String, dynamic>{
+      // Kategori menentukan label akun (mis. 'penjual_pasar' / 'penjual_jasa')
+      // dan dipakai nanti oleh AuthGate/halaman beranda untuk menentukan
+      // beranda mana yang harus ditampilkan ke user ini.
+      final kategoriValue =
+          _selectedKategori == KategoriUsaha.pasar ? 'pasar' : 'jasa';
+
+      // Trial gratis 1 bulan dihitung dari saat pendaftaran dikirim.
+      // Field ini juga dipakai oleh SellerLanggananScreen untuk menampilkan
+      // tanggal kadaluarsa langganan. Setelah trial habis, langganan
+      // Nemu+ ditagih Rp599.000/tahun (bukan bulanan) — kalau nanti user
+      // membayar, field ini yang di-update (+365 hari) oleh alur pembayaran.
+      final trialEndsAt = DateTime.now().add(const Duration(days: 30));
+
+      final usahaData = <String, dynamic>{
         'nama': _namaController.text.trim(),
-        'namaPasar': _selectedPasar,
-        'alamatGerai': _alamatGeraiController.text.trim(),
+        'kategori': kategoriValue,
         'nomorRekening': _rekeningController.text.trim(),
         'status': 'menunggu_verifikasi', // lihat alur di nemu_plus_page.dart
+        'nemuPlusAktifSampai': Timestamp.fromDate(trialEndsAt),
+        if (_selectedKategori == KategoriUsaha.pasar) ...{
+          'namaPasar': _selectedPasar,
+          'alamatGerai': _alamatGeraiController.text.trim(),
+        } else ...{
+          'jenisJasa': _jenisJasaController.text.trim(),
+          'alamatRumah': _alamatRumahController.text.trim(),
+        },
       };
 
-      // Simpan record pendaftaran gerai (untuk histori/verifikasi admin)...
+      // Simpan record pendaftaran usaha (untuk histori/verifikasi admin)...
       await FirebaseFirestore.instance.collection('gerai').add({
         'ownerId': uid,
-        ...geraiData,
+        ...usahaData,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // ...lalu aktifkan label "Penjual" DAN buat dokumen di koleksi
-      // "seller" (setara "users") dalam satu langkah atomik.
+      // ...lalu aktifkan label "Penjual" (sesuai kategori: pasar/jasa) DAN
+      // buat dokumen di koleksi "seller" (setara "users") dalam satu
+      // langkah atomik.
       // Catatan: kalau nanti verifikasi admin sudah jalan (lihat alur di
       // nemu_plus_page.dart), pertimbangkan pindahkan pemanggilan ini ke
-      // Cloud Function yang trigger saat status gerai berubah jadi "aktif",
+      // Cloud Function yang trigger saat status berubah jadi "aktif",
       // supaya tidak bisa dimanipulasi langsung dari client.
-      await AuthService.registerAsSeller(geraiData: geraiData);
+      //
+      // TODO: AuthService.registerAsSeller dan AuthGate perlu dibaca field
+      // 'kategori' ini supaya user dengan label "pasar" diarahkan ke
+      // beranda pasar, dan label "jasa" diarahkan ke beranda jasa. Bagian
+      // routing beranda itu ada di luar file ini (main.dart / AuthGate),
+      // jadi perlu disesuaikan juga di sana.
+      await AuthService.registerAsSeller(geraiData: usahaData);
 
       if (!mounted) return;
 
@@ -223,7 +284,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Terima kasih! Data gerai kamu sudah kami terima dan sedang menunggu proses persetujuan dari admin. Kami akan memberi tahu kamu begitu gerai kamu aktif.',
+                'Terima kasih! Data usaha kamu sudah kami terima dan sedang menunggu proses persetujuan dari admin. Kami akan memberi tahu kamu begitu akun kamu aktif.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.manrope(
                   color: kInk.withOpacity(0.7),
@@ -350,6 +411,9 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isPasar = _selectedKategori == KategoriUsaha.pasar;
+    final isJasa = _selectedKategori == KategoriUsaha.jasa;
+
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -380,7 +444,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Form Pendaftaran Gerai',
+                        'Form Pendaftaran Usaha',
                         style: GoogleFonts.manrope(
                           color: kInk,
                           fontWeight: FontWeight.w700,
@@ -391,7 +455,18 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  _SectionHeading('Data gerai'),
+                  _SectionHeading('Kategori usaha'),
+                  const SizedBox(height: 10),
+                  _KategoriUsahaSelector(
+                    selected: _selectedKategori,
+                    onSelected: (kategori) {
+                      setState(() => _selectedKategori = kategori);
+                    },
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  _SectionHeading('Data usaha'),
                   const SizedBox(height: 10),
                   _FormCard(
                     fields: [
@@ -403,24 +478,52 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  // Pilih pasar.
-                  _PasarPickerField(
-                    selectedPasar: _selectedPasar,
-                    onTap: _pickPasar,
-                  ),
 
-                  // Muncul cuma setelah pasar dipilih — alamat spesifik
-                  // gerai di dalam pasar tersebut (bukan alamat pasarnya).
-                  if (_selectedPasar != null) ...[
+                  // ---------- Pertanyaan khusus kategori Pasar ----------
+                  if (isPasar) ...[
+                    const SizedBox(height: 10),
+                    _PasarPickerField(
+                      selectedPasar: _selectedPasar,
+                      onTap: _pickPasar,
+                    ),
+
+                    // Muncul cuma setelah pasar dipilih — alamat spesifik
+                    // gerai di dalam pasar tersebut (bukan alamat pasarnya).
+                    if (_selectedPasar != null) ...[
+                      const SizedBox(height: 10),
+                      _FormCard(
+                        fields: [
+                          _TextFieldData(
+                            label: 'Alamat gerai',
+                            hint:
+                                'Contoh: Blok A, Los 5, dekat pintu masuk utama',
+                            controller: _alamatGeraiController,
+                            maxLines: 2,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+
+                  // ---------- Pertanyaan khusus kategori Jasa ----------
+                  if (isJasa) ...[
                     const SizedBox(height: 10),
                     _FormCard(
                       fields: [
                         _TextFieldData(
-                          label: 'Alamat gerai',
-                          hint:
-                              'Contoh: Blok A, Los 5, dekat pintu masuk utama',
-                          controller: _alamatGeraiController,
+                          label: 'Jasa yang ditawarkan',
+                          hint: 'Contoh: Jasa antar galon, laundry, servis AC',
+                          controller: _jenisJasaController,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _FormCard(
+                      fields: [
+                        _TextFieldData(
+                          label: 'Alamat rumah/tempat usaha',
+                          hint: 'Alamat lengkap tempat kamu menjalankan jasa',
+                          controller: _alamatRumahController,
                           maxLines: 2,
                         ),
                       ],
@@ -474,7 +577,7 @@ class _DaftarGeraiFormPageState extends State<DaftarGeraiFormPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Status pendaftaranmu bisa dipantau lewat halaman Kelola toko / bengkel setelah dikirim.',
+                    'Gratis untuk 1 bulan pertama. Setelah itu, biaya langganan Nemu+ sebesar Rp599.000/tahun akan berlaku agar akun usaha kamu tetap aktif.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.manrope(
                       color: kInk.withOpacity(0.6),
@@ -509,6 +612,95 @@ class _SectionHeading extends StatelessWidget {
           color: kInk,
           fontWeight: FontWeight.w700,
           fontSize: 14,
+        ),
+      ),
+    );
+  }
+}
+
+// Selector "Pasar" atau "Jasa" — menentukan label akun (penjual_pasar /
+// penjual_jasa), pertanyaan yang ditampilkan di form, dan halaman beranda
+// yang dituju setelah verifikasi.
+class _KategoriUsahaSelector extends StatelessWidget {
+  final KategoriUsaha? selected;
+  final ValueChanged<KategoriUsaha> onSelected;
+
+  const _KategoriUsahaSelector({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _KategoriOptionCard(
+            label: 'Pasar',
+            icon: Icons.storefront_outlined,
+            isSelected: selected == KategoriUsaha.pasar,
+            onTap: () => onSelected(KategoriUsaha.pasar),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _KategoriOptionCard(
+            label: 'Jasa',
+            icon: Icons.handyman_outlined,
+            isSelected: selected == KategoriUsaha.jasa,
+            onTap: () => onSelected(KategoriUsaha.jasa),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _KategoriOptionCard extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _KategoriOptionCard({
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: kCream,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? kGradientBottom : Colors.transparent,
+            width: 2,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              size: 24,
+              color: isSelected ? kGradientBottom : kInk.withOpacity(0.5),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: GoogleFonts.manrope(
+                color: kInk,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 13,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -623,7 +815,8 @@ class _PlainTextField extends StatelessWidget {
   }
 }
 
-// Field untuk memilih pasar — dropdown lewat bottom sheet.
+// Field untuk memilih pasar — dropdown lewat bottom sheet. (khusus
+// kategori Pasar)
 class _PasarPickerField extends StatelessWidget {
   final String? selectedPasar;
   final VoidCallback onTap;

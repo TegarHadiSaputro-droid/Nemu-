@@ -13,6 +13,8 @@ import 'firebase_options.dart';
 import 'screens/registration_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart'; // berisi HomeScreen
+import 'screens/home_screen2.dart'; // berisi HomeScreen2
+import 'services/auth_service.dart';
 import 'theme/app_colors.dart';
 import 'widgets/background_decoration.dart';
 import 'utils/page_transitions.dart';
@@ -24,6 +26,11 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  // Wajib dipanggil sebelum runApp() karena beberapa halaman (mis.
+  // seller_langganan_screen.dart) pakai DateFormat(..., 'id_ID').
+  // Tanpa ini, DateFormat lempar LocaleDataException saat pertama
+  // kali dipanggil.
+  await initializeDateFormatting('id_ID', null);
   runApp(const MyApp());
 }
 
@@ -83,7 +90,16 @@ class AuthGate extends StatelessWidget {
         // Sudah pernah login sebelumnya (sesi tersimpan otomatis oleh
         // Firebase) -> langsung ke Beranda, tidak perlu login ulang.
         if (user != null) {
-          return const HomeScreen();
+          return FutureBuilder<bool>(
+            future: AuthService.isSeller(),
+            builder: (context, sellerSnap) {
+              if (sellerSnap.connectionState == ConnectionState.waiting) {
+                return const _SplashScreen();
+              }
+              final isSeller = sellerSnap.data ?? false;
+              return isSeller ? const HomeScreen2() : const HomeScreen();
+            },
+          );
         }
 
         // Belum login -> tampilkan halaman awal seperti biasa.

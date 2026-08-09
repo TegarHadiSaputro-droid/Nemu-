@@ -6,6 +6,7 @@ import '../widgets/background_decoration.dart';
 import '../services/auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'home_screen.dart';
+import 'home_screen2.dart';
 import '../utils/page_transitions.dart';
 
 /// ============================================================
@@ -48,6 +49,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       TextInput.finishAutofillContext(shouldSave: true);
 
+      final isSeller = await AuthService.isSeller();
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -59,10 +62,9 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
 
-        // user.uid tersedia untuk load data profil dari Firestore kalau perlu
         Navigator.pushReplacement(
           context,
-          slideRoute(const HomeScreen()),
+          slideRoute(isSeller ? const HomeScreen2() : const HomeScreen()),
         );
       }
     } on FirebaseAuthException catch (e) {

@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/Profile/account.dart';
 import 'package:frontend/widgets/bottom_navbar.dart';
 import 'package:frontend/widgets/address_editor_sheet.dart';
+import 'package:frontend/services/address_manager.dart';
 import 'package:frontend/screens/orders_screen.dart';
 import 'package:frontend/screens/pasar/pasar_screen.dart';
 import 'package:frontend/mitra/pages/mitra_category_page.dart';
@@ -44,6 +45,8 @@ TextStyle _m({
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
+  static final ValueNotifier<int> navIndexNotifier = ValueNotifier(0);
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -64,7 +67,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _userName = 'Sobat Nemu'; // placeholder sebelum nickname dimuat/diisi
   String? _photoUrl; // foto profil dari Firestore (users/{uid}.photoUrl)
   int _cartItemCount = 1;
-  String? _deliveryAddress; // alamat pengiriman aktif, null = belum diisi
   bool _isDelivering = false; // State status pengantaran (perlu order asli buat jadi true)
   
   static const List<String> _welcomeGreetings = [
@@ -161,9 +163,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    HomeScreen.navIndexNotifier.value = 0;
+    HomeScreen.navIndexNotifier.addListener(_onNavIndexChanged);
+
     _welcomeGreeting = _welcomeGreetings[math.Random().nextInt(_welcomeGreetings.length)];
     _loadApiData();
     _loadNicknameOrAsk();
+    AddressManager.instance.loadFromFirestore();
     _autoScrollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted || !_pageCtrl.hasClients) return;
       final next = (_bannerIndex + 1) % _banners.length;
@@ -184,6 +190,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       curve: Curves.easeOutCubic,
     );
     _chartAnimCtrl.forward();
+
+  }
+
+  void _onNavIndexChanged() {
+    if (mounted) {
+      setState(() {
+        _navIndex = HomeScreen.navIndexNotifier.value;
+      });
+    }
   }
 
   /// Cek apakah user sudah punya nickname tersimpan di Firestore.
@@ -354,6 +369,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    HomeScreen.navIndexNotifier.removeListener(_onNavIndexChanged);
     _autoScrollTimer?.cancel();
     _pageCtrl.dispose();
     _chartAnimCtrl.dispose();
@@ -415,66 +431,66 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             : _navIndex == 4
                                 ? const OrdersScreen()
                                 : RefreshIndicator(
-                            color: _greenBottom,
-                            backgroundColor: Colors.white,
-                            onRefresh: _handleRefresh,
-                            child: SingleChildScrollView(
-                              physics: const AlwaysScrollableScrollPhysics(
-                                parent: BouncingScrollPhysics(),
-                              ),
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // 1. Top Bar (Ikut scroll)
-                                  _buildTopBar(),
-                                  const SizedBox(height: 12),
+                                    color: _greenBottom,
+                                    backgroundColor: Colors.white,
+                                    onRefresh: _handleRefresh,
+                                    child: SingleChildScrollView(
+                                      physics: const AlwaysScrollableScrollPhysics(
+                                        parent: BouncingScrollPhysics(),
+                                      ),
+                                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          // 1. Top Bar (Ikut scroll)
+                                          _buildTopBar(),
+                                          const SizedBox(height: 12),
 
-                                  // Search Bar
-                                  _buildSearchBar(),
-                                  const SizedBox(height: 14),
+                                          // Search Bar
+                                          _buildSearchBar(),
+                                          const SizedBox(height: 14),
 
-                                  // Quick Info Row (Alamat & Kurir Pak Budi)
-                                  _buildQuickInfoRow(),
-                                  const SizedBox(height: 14),
+                                          // Quick Info Row (Alamat & Kurir Pak Budi)
+                                          _buildQuickInfoRow(),
+                                          const SizedBox(height: 14),
 
-                                  // Banner Carousel (auto-scroll 10s)
-                                  _buildBannerCarousel(),
-                                  const SizedBox(height: 10),
-                                  _buildCarouselDots(),
-                                  const SizedBox(height: 20),
+                                          // Banner Carousel (auto-scroll 10s)
+                                          _buildBannerCarousel(),
+                                          const SizedBox(height: 10),
+                                          _buildCarouselDots(),
+                                          const SizedBox(height: 20),
 
-                                  // 🛠️ 4. ELEMEN BARU 3: Quick Chips Jasa Tukang
-                                  _buildHandymanQuickChips(),
-                                  const SizedBox(height: 20),
+                                          // 🛠️ 4. ELEMEN BARU 3: Quick Chips Jasa Tukang
+                                          _buildHandymanQuickChips(),
+                                          const SizedBox(height: 20),
 
-                                  // 3 Kategori Utama
-                                  _buildSectionTitle('Layanan Utama', 'Pilih kategori kebutuhanmu'),
-                                  const SizedBox(height: 12),
-                                  _buildCategoryRow(),
-                                  const SizedBox(height: 24),
+                                          // 3 Kategori Utama
+                                          _buildSectionTitle('Layanan Utama', 'Pilih kategori kebutuhanmu'),
+                                          const SizedBox(height: 12),
+                                          _buildCategoryRow(),
+                                          const SizedBox(height: 24),
 
-                                  // 📈 FEATURE GRAFIK PREDIKSI HARGA PASAR (Kotak Gede + Interaktif)
-                                  _buildSectionTitle('Pemantauan Harga Pasar', 'Pantau fluktuasi & prediksi harga komoditas terkini'),
-                                  const SizedBox(height: 12),
-                                  _buildInteractivePriceTrendSection(),
-                                  const SizedBox(height: 24),
+                                          // 📈 FEATURE GRAFIK PREDIKSI HARGA PASAR (Kotak Gede + Interaktif)
+                                          _buildSectionTitle('Pemantauan Harga Pasar', 'Pantau fluktuasi & prediksi harga komoditas terkini'),
+                                          const SizedBox(height: 12),
+                                          _buildInteractivePriceTrendSection(),
+                                          const SizedBox(height: 24),
 
-                                  // 🍲 ELEMEN BARU: MASAK APA HARI INI? (Paket Resep Instan Sekali Klik)
-                                  _buildSectionTitle('Masak Apa Hari Ini?', 'Beli komplit bahan resep favorit dalam sekali klik'),
-                                  const SizedBox(height: 12),
-                                  _buildRecipeBundlesScroll(),
-                                  const SizedBox(height: 24),
+                                          // 🍲 ELEMEN BARU: MASAK APA HARI INI? (Paket Resep Instan Sekali Klik)
+                                          _buildSectionTitle('Masak Apa Hari Ini?', 'Beli komplit bahan resep favorit dalam sekali klik'),
+                                          const SizedBox(height: 12),
+                                          _buildRecipeBundlesScroll(),
+                                          const SizedBox(height: 24),
 
-                                  // Gerai Pasar Terdekat
-                                  _buildSectionTitle('Pasar Terdekat dari Rumah', 'Rekomendasi pasar tradisional di Kota Balikpapan'),
-                                  const SizedBox(height: 12),
-                                  _buildStoreList(),
-                                  const SizedBox(height: 8),
-                                ],
-                              ),
-                            ),
-                          ),
+                                          // Gerai Pasar Terdekat
+                                          _buildSectionTitle('Pasar Terdekat dari Rumah', 'Rekomendasi pasar tradisional di Kota Balikpapan'),
+                                          const SizedBox(height: 12),
+                                          _buildStoreList(),
+                                          const SizedBox(height: 8),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                   ),
 
                   // Bottom Nav
@@ -630,10 +646,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddressEditorSheet(
-        initialAddress: _deliveryAddress,
-        onSaved: (address) => setState(() => _deliveryAddress = address),
-      ),
+      builder: (_) => const AddressEditorSheet(),
     );
   }
 
@@ -641,60 +654,80 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   //  QUICK INFO ROW (ALAMAT & KURIR)
   // ──────────────────────────────────────────
   Widget _buildQuickInfoRow() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
     return Row(
       children: [
-        // Widget Alamat Kirim (Sebelah kiri)
+        // Widget Alamat Kirim (Sebelah kiri) — baca dari AddressManager,
+        // jadi selalu sinkron dengan checkout_screen.dart & orders_screen.dart.
         Expanded(
-          child: _deliveryAddress != null
-              ? _quickCard(
-                  icon: Icons.location_on_rounded,
-                  iconColor: Colors.redAccent,
-                  title: 'Kirim ke Sini',
-                  sub: _deliveryAddress!,
-                  bgColor: Colors.white,
-                  onTap: _openAddressEditor,
-                )
-              : _quickCard(
-                  icon: Icons.location_on_rounded,
-                  iconColor: _greenBottom,
-                  title: 'Yuk Belanja!',
-                  sub: 'Ganti Alamat',
-                  bgColor: Colors.white,
-                  subTextColor: _greenBottom,
-                  onTap: _openAddressEditor,
-                ),
+          child: ValueListenableBuilder<DeliveryAddress?>(
+            valueListenable: AddressManager.instance.address,
+            builder: (context, address, _) {
+              return address != null
+                  ? _quickCard(
+                      icon: Icons.location_on_rounded,
+                      iconColor: Colors.redAccent,
+                      title: 'Kirim ke Sini',
+                      sub: address.text,
+                      bgColor: Colors.white,
+                      onTap: _openAddressEditor,
+                    )
+                  : _quickCard(
+                      icon: Icons.location_on_rounded,
+                      iconColor: _greenBottom,
+                      title: 'Yuk Belanja!',
+                      sub: 'Ganti Alamat',
+                      bgColor: Colors.white,
+                      subTextColor: _greenBottom,
+                      onTap: _openAddressEditor,
+                    );
+            },
+          ),
         ),
         const SizedBox(width: 12),
-        // Widget Status Kurir (Sebelah kanan)
-        // TODO: sambungkan ke data order asli (mis. stream pesanan aktif
-        // dari Firestore) supaya _isDelivering & detail kurir/estimasi di
-        // bawah ini bukan lagi nilai statis.
+        // Widget Status Kurir (Sebelah kanan) - Real-time Firestore Stream
         Expanded(
-          child: _isDelivering
-              ? _quickCard(
-                  icon: Icons.two_wheeler_rounded,
+          child: StreamBuilder<DocumentSnapshot>(
+            stream: uid == null
+                ? const Stream.empty()
+                : FirebaseFirestore.instance.collection('simulated_orders').doc(uid).snapshots(),
+            builder: (context, snapshot) {
+              final data = snapshot.data?.data() as Map<String, dynamic>?;
+              final status = data?['status'] as String?;
+              final hasActiveOrder = data != null && status != 'selesai';
+
+              if (hasActiveOrder) {
+                final isPackaging = status == 'dikemas';
+                return _quickCard(
+                  icon: isPackaging ? Icons.inventory_2_rounded : Icons.two_wheeler_rounded,
                   iconColor: Colors.white,
-                  title: 'Pak Budi Antar',
-                  sub: 'Est. 8 mnt • Lapak Sari',
+                  title: isPackaging ? 'Sedang Dikemas' : 'Dalam Pengantaran',
+                  sub: isPackaging
+                      ? 'Pesanan Anda sedang dikemas oleh pedagang'
+                      : 'Pesanan Anda sedang dalam pengantaran oleh kurir',
                   bgColor: Colors.orange.shade700,
                   textColor: Colors.white,
                   subTextColor: Colors.white.withValues(alpha: 0.9),
                   gradientColors: [Colors.orange.shade800, Colors.orange.shade600],
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const OrdersScreen()),
-                  ),
-                )
-              : _quickCard(
-                  icon: Icons.local_shipping_outlined,
-                  iconColor: Colors.grey.shade600,
-                  title: 'Tidak Ada Pengantaran',
-                  sub: 'Mulai belanja yuk!',
-                  bgColor: Colors.grey.shade200,
-                  textColor: Colors.grey.shade800,
-                  subTextColor: Colors.grey.shade500,
-                  onTap: null,
-                ),
+                  onTap: () {
+                    HomeScreen.navIndexNotifier.value = 4; // Switch to tab Pesanan
+                  },
+                );
+              }
+
+              return _quickCard(
+                icon: Icons.local_shipping_outlined,
+                iconColor: Colors.grey.shade600,
+                title: 'Tidak Ada Pengantaran',
+                sub: 'Mulai belanja yuk!',
+                bgColor: Colors.grey.shade200,
+                textColor: Colors.grey.shade800,
+                subTextColor: Colors.grey.shade500,
+                onTap: null,
+              );
+            },
+          ),
         ),
       ],
     );
@@ -751,7 +784,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       color: subTextColor,
                       weight: subTextColor == _greenBottom ? FontWeight.w800 : FontWeight.normal,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
