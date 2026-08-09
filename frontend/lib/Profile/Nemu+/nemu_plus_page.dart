@@ -1,13 +1,18 @@
 // nemu_plus_page.dart
 //
-// Halaman Nemu+ — Penjelasan syarat pendaftaran gerai.
+// Halaman Nemu+ — Penjelasan syarat pendaftaran usaha (Pasar atau Jasa).
 // Berisi rincian data yang dibutuhkan, alur verifikasi, lalu tombol untuk
-// lanjut ke form pendaftaran (DaftarGeraiFormPage).
+// lanjut ke form pendaftaran (DaftarUsahaFormPage).
+//
+// Info soal biaya langganan (gratis 1 bulan pertama, lalu Rp599.000/bulan)
+// SUDAH tidak ditampilkan di sini — cukup ditampilkan sekali di halaman
+// form pendaftaran (daftar_usaha_form_page.dart) supaya tidak diulang.
 //
 // VERSI DISEDERHANAKAN UNTUK TAHAP DEVELOPMENT — disesuaikan dengan
-// daftar_gerai_form_page.dart yang sekarang cuma minta 3 data:
-// Nama lengkap, Nama pasar, Nomor rekening. Bagian dokumen wajib/opsional
-// versi lengkap (NIK, foto KTP, SPSTB, dst) dihapus dulu sampai tahap
+// daftar_usaha_form_page.dart yang sekarang minta kategori usaha (Pasar
+// atau Jasa) plus data dasar: Nama lengkap, data lokasi/jasa sesuai
+// kategori, dan Nomor rekening. Bagian dokumen wajib/opsional versi
+// lengkap (NIK, foto KTP, SPSTB, dst) dihapus dulu sampai tahap
 // verifikasi beneran mulai dikerjakan.
 //
 // Background: linear-gradient(180deg, #d9df36 0%, #007c3f 100%)
@@ -17,7 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../Theme/app_theme.dart';
 import '../../Theme/decor_background.dart';
-import 'daftar_gerai_form_page.dart';
+import 'daftar_usaha_form_page.dart';
 
 class NemuPlusPage extends StatelessWidget {
   const NemuPlusPage({super.key});
@@ -51,8 +56,9 @@ class NemuPlusPage extends StatelessWidget {
                   const SizedBox(height: 10),
                   _RequirementCard(
                     items: const [
+                      'Kategori usaha (Pasar atau Jasa)',
                       'Nama lengkap',
-                      'Nama pasar',
+                      'Data lokasi/jasa sesuai kategori yang dipilih',
                       'Nomor rekening',
                     ],
                   ),
@@ -72,7 +78,7 @@ class NemuPlusPage extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const DaftarGeraiFormPage(),
+                            builder: (context) => const DaftarUsahaFormPage(),
                           ),
                         );
                       },
@@ -96,7 +102,7 @@ class NemuPlusPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Kamu akan diminta mengisi data gerai sesuai daftar di atas pada langkah berikutnya.',
+                    'Kamu akan diminta memilih kategori usaha (Pasar atau Jasa) lalu mengisi data sesuai daftar di atas pada langkah berikutnya.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.manrope(
                       color: kInk.withValues(alpha: 0.6),
@@ -176,7 +182,7 @@ class _HeroBadge extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Sebelum mendaftar, siapkan dulu data berikut supaya proses pendaftaran gerai kamu lebih cepat.',
+            'Sebelum mendaftar, siapkan dulu data berikut supaya proses pendaftaran usaha kamu lebih cepat.',
             textAlign: TextAlign.center,
             style: GoogleFonts.manrope(
               color: kInk.withValues(alpha: 0.65),
@@ -291,12 +297,12 @@ class _VerificationFlowCard extends StatelessWidget {
       ),
       _FlowStep(
         title: 'Menunggu Verifikasi',
-        subtitle: 'Data gerai diperiksa oleh admin',
+        subtitle: 'Data usaha diperiksa oleh admin',
         icon: Icons.hourglass_top,
       ),
       _FlowStep(
         title: 'Aktif',
-        subtitle: 'Gerai tampil dan siap berjualan di aplikasi',
+        subtitle: 'Akun tampil dan siap bermitra di aplikasi',
         icon: Icons.check_circle,
       ),
     ];
