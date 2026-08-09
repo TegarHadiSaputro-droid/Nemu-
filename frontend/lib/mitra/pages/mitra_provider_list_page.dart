@@ -23,8 +23,7 @@ class _MitraProviderListPageState extends State<MitraProviderListPage> {
   Widget build(BuildContext context) {
     final filtered = widget.sub.penyedia
         .where((p) => p.nama.toLowerCase().contains(_keyword.toLowerCase()))
-        .toList()
-      ..sort((a, b) => b.rating.compareTo(a.rating));
+        .toList();
 
     return Scaffold(
       backgroundColor: mitraYellowTop,
@@ -71,20 +70,57 @@ class _MitraProviderListPageState extends State<MitraProviderListPage> {
                     ),
                   ),
                   Expanded(
-                    child: filtered.isEmpty
-                        ? Center(
+                    child: ValueListenableBuilder<List<String>>(
+                      valueListenable: mitraTersimpanNotifier,
+                      builder: (context, tersimpanList, _) {
+                        // Yang sudah disimpan selalu naik ke paling atas.
+                        // Di antara sesama yang tersimpan, yang PALING
+                        // BARU disimpan ditaruh paling depan (mengikuti
+                        // urutan di tersimpanList, index 0 = paling baru).
+                        // Yang belum disimpan tetap diurutkan dari rating
+                        // tertinggi seperti biasa.
+                        final terurut = List<PenyediaJasa>.from(filtered)
+                          ..sort((a, b) {
+                            final aIndex = tersimpanList.indexOf(a.nama);
+                            final bIndex = tersimpanList.indexOf(b.nama);
+                            final aTersimpan = aIndex != -1;
+                            final bTersimpan = bIndex != -1;
+                            if (aTersimpan && bTersimpan) {
+                              return aIndex.compareTo(bIndex);
+                            }
+                            if (aTersimpan != bTersimpan) {
+                              return aTersimpan ? -1 : 1;
+                            }
+                            return b.rating.compareTo(a.rating);
+                          });
+
+                        if (terurut.isEmpty) {
+                          return Center(
                             child: Text(
                               'Tidak ada penyedia dengan nama itu',
                               style: mitraFont(size: 12.5, color: mitraTextDark.withValues(alpha: 0.6)),
                             ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-                            physics: const BouncingScrollPhysics(),
-                            itemCount: filtered.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 10),
-                            itemBuilder: (_, i) => _ProviderTile(sub: widget.sub, provider: filtered[i]),
+                          );
+                        }
+
+                        return GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: terurut.length,
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                            childAspectRatio: 1.55,
                           ),
+                          itemBuilder: (_, i) => _ProviderTile(
+                            key: ValueKey(terurut[i].nama),
+                            sub: widget.sub,
+                            provider: terurut[i],
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -96,18 +132,30 @@ class _MitraProviderListPageState extends State<MitraProviderListPage> {
   }
 }
 
-class _ProviderTile extends StatelessWidget {
+class _ProviderTile extends StatefulWidget {
   final SubLayanan sub;
   final PenyediaJasa provider;
-  const _ProviderTile({required this.sub, required this.provider});
+  const _ProviderTile({super.key, required this.sub, required this.provider});
+
+  @override
+  State<_ProviderTile> createState() => _ProviderTileState();
+}
+
+class _ProviderTileState extends State<_ProviderTile> {
+  SubLayanan get sub => widget.sub;
+  PenyediaJasa get provider => widget.provider;
+
+  void _toggleSimpan() {
+    toggleMitraTersimpan(provider);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(13),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(13),
         onTap: () {
           Navigator.push(
             context,
@@ -117,74 +165,113 @@ class _ProviderTile extends StatelessWidget {
           );
         },
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: mitraGreenBottom.withValues(alpha: 0.10)),
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: mitraGreenBottom.withValues(alpha: 0.12), width: 1.5),
           ),
-          child: Row(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: mitraGreenBottom.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(provider.iconTipe, color: mitraGreenBottom, size: 24),
+              // ── Logo & nama toko ──
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: mitraGreenBottom.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Icon(provider.iconTipe, color: mitraGreenBottom, size: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      provider.nama,
+                      style: mitraFont(size: 12.5, weight: FontWeight.bold, color: mitraTextDark),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            provider.nama,
-                            style: mitraFont(size: 13.5, weight: FontWeight.bold, color: mitraTextDark),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              const SizedBox(height: 5),
+              // ── Spesialisasi singkat ──
+              Text(
+                sub.spesialisasi,
+                style: mitraFont(size: 10, color: Colors.black54),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 3),
+              // ── Lokasi/area mitra ──
+              Row(
+                children: [
+                  Icon(Icons.location_on_rounded, size: 11, color: mitraGreenBottom.withValues(alpha: 0.65)),
+                  const SizedBox(width: 2),
+                  Expanded(
+                    child: Text(
+                      provider.lokasi,
+                      style: mitraFont(size: 9.5, color: Colors.black45),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              // ── Status buka/tutup, rating, & ikon simpan ──
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: provider.sedangBuka ? mitraGreenBottom.withValues(alpha: 0.12) : Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      provider.sedangBuka ? 'Buka' : 'Tutup',
+                      style: mitraFont(
+                        size: 10,
+                        weight: FontWeight.bold,
+                        color: provider.sedangBuka ? mitraGreenBottom : Colors.black45,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+                  const SizedBox(width: 2),
+                  Text('${provider.rating}', style: mitraFont(size: 11, weight: FontWeight.bold, color: mitraTextDark)),
+                  const Spacer(),
+                  ValueListenableBuilder<List<String>>(
+                    valueListenable: mitraTersimpanNotifier,
+                    builder: (context, tersimpanList, _) {
+                      final tersimpan = tersimpanList.contains(provider.nama);
+                      return GestureDetector(
+                        onTap: _toggleSimpan,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: 23,
+                          height: 23,
                           decoration: BoxDecoration(
-                            color: provider.buka ? mitraGreenBottom.withValues(alpha: 0.12) : Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            provider.buka ? 'Buka' : 'Tutup',
-                            style: mitraFont(
-                              size: 9,
-                              weight: FontWeight.bold,
-                              color: provider.buka ? mitraGreenBottom : Colors.black45,
+                            shape: BoxShape.circle,
+                            color: tersimpan ? mitraGreenBottom : Colors.white,
+                            border: Border.all(
+                              color: tersimpan ? mitraGreenBottom : Colors.black26,
                             ),
                           ),
+                          child: Icon(
+                            tersimpan ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                            size: 12,
+                            color: tersimpan ? Colors.white : Colors.black45,
+                          ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      provider.labelTipe,
-                      style: mitraFont(size: 10.5, color: Colors.black54),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
-                        const SizedBox(width: 2),
-                        Text('${provider.rating}', style: mitraFont(size: 11, weight: FontWeight.bold, color: mitraTextDark)),
-                        const SizedBox(width: 10),
-                        const Icon(Icons.location_on_rounded, size: 13, color: Colors.black38),
-                        const SizedBox(width: 2),
-                        Text('${provider.jarakKm} km', style: mitraFont(size: 11, color: Colors.black54)),
-                      ],
-                    ),
-                  ],
-                ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ],
           ),

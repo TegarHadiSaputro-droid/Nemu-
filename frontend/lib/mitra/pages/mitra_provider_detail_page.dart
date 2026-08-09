@@ -5,6 +5,7 @@
 // aksi (chat / panggil sekarang) di bagian bawah.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/mitra_models.dart';
 import '../mitra_style.dart';
 import 'mitra_review_page.dart';
@@ -21,6 +22,18 @@ class MitraProviderDetailPage extends StatefulWidget {
 class _MitraProviderDetailPageState extends State<MitraProviderDetailPage> {
   SubLayanan get sub => widget.sub;
   PenyediaJasa get provider => widget.provider;
+
+  bool get _online => statusOnlineUntuk(provider);
+
+  String _cariLayanan = '';
+
+  void _toggleFavorit() {
+    toggleMitraTersimpan(provider);
+  }
+
+  List<String> get _tagTerfilter => sub.tagSpesialisasi
+      .where((t) => t.toLowerCase().contains(_cariLayanan.toLowerCase()))
+      .toList();
 
   String get _deskripsi {
     final peran = provider.isToko ? 'usaha jasa' : 'tenaga ahli lepas (kang)';
@@ -42,7 +55,22 @@ class _MitraProviderDetailPageState extends State<MitraProviderDetailPage> {
             SafeArea(
               child: Column(
                 children: [
-                  mitraAppBar('', iconColor: mitraTextDark),
+                  mitraAppBar(
+                    '',
+                    iconColor: mitraTextDark,
+                    actions: [
+                      ValueListenableBuilder<List<String>>(
+                        valueListenable: mitraTersimpanNotifier,
+                        builder: (context, tersimpanList, _) {
+                          return _TombolSimpanMitra(
+                            tersimpan: tersimpanList.contains(provider.nama),
+                            onTap: _toggleFavorit,
+                          );
+                        },
+                      ),
+                      _MenuAksiMitra(sub: sub, provider: provider),
+                    ],
+                  ),
                   Expanded(
                     child: SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
@@ -52,17 +80,35 @@ class _MitraProviderDetailPageState extends State<MitraProviderDetailPage> {
                             padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                             child: Column(
                               children: [
-                                Container(
-                                  width: 84,
-                                  height: 84,
-                                  decoration: BoxDecoration(
-                                    color: mitraCream,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 14, offset: const Offset(0, 6)),
-                                    ],
-                                  ),
-                                  child: Icon(provider.iconTipe, color: mitraGreenBottom, size: 38),
+                                Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Container(
+                                      width: 84,
+                                      height: 84,
+                                      decoration: BoxDecoration(
+                                        color: mitraCream,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 14, offset: const Offset(0, 6)),
+                                        ],
+                                      ),
+                                      child: Icon(provider.iconTipe, color: mitraGreenBottom, size: 38),
+                                    ),
+                                    Positioned(
+                                      right: 2,
+                                      bottom: 2,
+                                      child: Container(
+                                        width: 18,
+                                        height: 18,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: _online ? const Color(0xFF34C759) : Colors.grey.shade400,
+                                          border: Border.all(color: mitraCream, width: 2.5),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 12),
                                 Text(
@@ -74,6 +120,25 @@ class _MitraProviderDetailPageState extends State<MitraProviderDetailPage> {
                                 Text(
                                   '${provider.labelTipe} • ${sub.nama}',
                                   style: mitraFont(size: 11.5, color: mitraCream.withValues(alpha: 0.85)),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 7,
+                                      height: 7,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: _online ? const Color(0xFF34C759) : Colors.grey.shade400,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      _online ? 'Sedang online' : 'Sedang offline',
+                                      style: mitraFont(size: 11, weight: FontWeight.w700, color: mitraCream.withValues(alpha: 0.95)),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -92,11 +157,9 @@ class _MitraProviderDetailPageState extends State<MitraProviderDetailPage> {
                                 // ── Statistik singkat ──
                                 Row(
                                   children: [
+                                    _JamOperasionalBox(provider: provider),
+                                    const SizedBox(width: 10),
                                     _StatBox(icon: Icons.star_rounded, iconColor: Colors.amber, label: 'Rating', value: '${provider.rating}'),
-                                    const SizedBox(width: 10),
-                                    _StatBox(icon: Icons.task_alt_rounded, iconColor: mitraGreenBottom, label: 'Selesai', value: '${provider.pesananSelesai}x'),
-                                    const SizedBox(width: 10),
-                                    _StatBox(icon: Icons.location_on_rounded, iconColor: Colors.redAccent, label: 'Jarak', value: '${provider.jarakKm} km'),
                                   ],
                                 ),
                                 const SizedBox(height: 20),
@@ -106,13 +169,18 @@ class _MitraProviderDetailPageState extends State<MitraProviderDetailPage> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color: provider.buka ? mitraGreenBottom.withValues(alpha: 0.12) : Colors.grey.shade300,
+                                        color: provider.sedangBuka ? mitraGreenBottom.withValues(alpha: 0.12) : Colors.grey.shade300,
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: Text(
-                                        provider.buka ? 'Sedang Buka' : 'Sedang Tutup',
-                                        style: mitraFont(size: 10.5, weight: FontWeight.bold, color: provider.buka ? mitraGreenBottom : Colors.black54),
+                                        provider.sedangBuka ? 'Sedang Buka' : 'Sedang Tutup',
+                                        style: mitraFont(size: 10.5, weight: FontWeight.bold, color: provider.sedangBuka ? mitraGreenBottom : Colors.black54),
                                       ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      provider.labelHitungMundur,
+                                      style: mitraFont(size: 10.5, color: Colors.black45),
                                     ),
                                   ],
                                 ),
@@ -123,18 +191,80 @@ class _MitraProviderDetailPageState extends State<MitraProviderDetailPage> {
                                 Text(_deskripsi, style: mitraFont(size: 12.5, color: Colors.black87, height: 1.5)),
                                 const SizedBox(height: 20),
 
-                                Text('Layanan', style: mitraFont(size: 14, weight: FontWeight.bold, color: mitraTextDark)),
-                                const SizedBox(height: 8),
-                                SizedBox(
-                                  height: 108,
-                                  child: ListView.separated(
-                                    scrollDirection: Axis.horizontal,
-                                    physics: const BouncingScrollPhysics(),
-                                    itemCount: sub.tagSpesialisasi.length,
-                                    separatorBuilder: (_, __) => const SizedBox(width: 10),
-                                    itemBuilder: (_, i) => _FotoLayananTile(label: sub.tagSpesialisasi[i]),
-                                  ),
+                                Row(
+                                  children: [
+                                    Text('Layanan', style: mitraFont(size: 14, weight: FontWeight.bold, color: mitraTextDark)),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Container(
+                                        height: 32,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                                        decoration: BoxDecoration(
+                                          color: Colors.transparent,
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(color: mitraGreenBottom.withValues(alpha: 0.30)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.search_rounded, size: 15, color: mitraTextDark.withValues(alpha: 0.45)),
+                                            const SizedBox(width: 5),
+                                            Expanded(
+                                              child: TextField(
+                                                onChanged: (v) => setState(() => _cariLayanan = v),
+                                                style: mitraFont(size: 11, color: mitraTextDark),
+                                                decoration: InputDecoration(
+                                                  hintText: 'Cari layanan di toko ini',
+                                                  hintStyle: mitraFont(size: 10.5, color: mitraTextDark.withValues(alpha: 0.4)),
+                                                  border: InputBorder.none,
+                                                  isDense: true,
+                                                  contentPadding: EdgeInsets.zero,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    if (sub.labelEstimasiTarif != null) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: mitraGreenBottom.withValues(alpha: 0.10),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          sub.labelEstimasiTarif!,
+                                          style: mitraFont(size: 10, weight: FontWeight.bold, color: mitraGreenBottom),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
+                                const SizedBox(height: 8),
+                                _tagTerfilter.isEmpty
+                                    ? Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 16),
+                                        child: Text(
+                                          'Layanan tidak ditemukan',
+                                          style: mitraFont(size: 11.5, color: mitraTextDark.withValues(alpha: 0.5)),
+                                        ),
+                                      )
+                                    : SizedBox(
+                                        height: 132,
+                                        child: ListView.separated(
+                                          scrollDirection: Axis.horizontal,
+                                          physics: const BouncingScrollPhysics(),
+                                          itemCount: _tagTerfilter.length,
+                                          separatorBuilder: (_, __) => const SizedBox(width: 10),
+                                          itemBuilder: (_, i) {
+                                            final tarif = sub.tingkatKebutuhan.isEmpty
+                                                ? null
+                                                : sub.tingkatKebutuhan[i % sub.tingkatKebutuhan.length];
+                                            return _FotoLayananTile(label: _tagTerfilter[i], tarif: tarif);
+                                          },
+                                        ),
+                                      ),
                                 const SizedBox(height: 20),
 
                                 Text('Spesialisasi', style: mitraFont(size: 14, weight: FontWeight.bold, color: mitraTextDark)),
@@ -202,10 +332,16 @@ class _MitraProviderDetailPageState extends State<MitraProviderDetailPage> {
                                         ],
                                       ),
                                       const SizedBox(height: 10),
-                                      ...preview.map((u) => Padding(
-                                            padding: const EdgeInsets.only(bottom: 10),
-                                            child: _UlasanCard(ulasan: u),
-                                          )),
+                                      if (preview.isEmpty)
+                                        Text(
+                                          'Belum ada ulasan',
+                                          style: mitraFont(size: 12, color: mitraTextDark.withValues(alpha: 0.55)),
+                                        )
+                                      else
+                                        ...preview.map((u) => Padding(
+                                              padding: const EdgeInsets.only(bottom: 10),
+                                              child: _UlasanCard(ulasan: u),
+                                            )),
                                     ],
                                   );
                                 }),
@@ -232,16 +368,6 @@ class _MitraProviderDetailPageState extends State<MitraProviderDetailPage> {
           ),
           child: Row(
             children: [
-              _CircleActionButton(
-                icon: Icons.chat_bubble_rounded,
-                onTap: () => _snack(context, 'Membuka chat dengan ${provider.nama}...'),
-              ),
-              const SizedBox(width: 10),
-              _CircleActionButton(
-                icon: Icons.share_rounded,
-                onTap: () => _snack(context, 'Bagikan profil ${provider.nama}'),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: SizedBox(
                   height: 50,
@@ -272,6 +398,161 @@ class _MitraProviderDetailPageState extends State<MitraProviderDetailPage> {
   }
 }
 
+/// Tombol "Simpan" di appbar, sebelah kiri tombol titik tiga. Sebelum
+/// disimpan ikonnya bookmark outline warna gelap biasa; setelah ditekan
+/// (tersimpan) ikonnya berubah jadi bookmark solid + warna hijau khas
+/// Mitra.
+class _TombolSimpanMitra extends StatelessWidget {
+  final bool tersimpan;
+  final VoidCallback onTap;
+  const _TombolSimpanMitra({required this.tersimpan, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onTap,
+      tooltip: tersimpan ? 'Batal simpan' : 'Simpan',
+      icon: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+        child: Icon(
+          tersimpan ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+          key: ValueKey(tersimpan),
+          color: tersimpan ? mitraGreenBottom : mitraTextDark,
+          size: 24,
+        ),
+      ),
+    );
+  }
+}
+
+/// Tombol titik tiga di pojok kanan atas halaman detail mitra. Kalau
+/// dipencet, muncul kotak menu kecil (mirip dropdown bahasa di web) berisi
+/// "Bagikan" dan "Laporkan Mitra Ini".
+class _MenuAksiMitra extends StatelessWidget {
+  final SubLayanan sub;
+  final PenyediaJasa provider;
+  const _MenuAksiMitra({required this.sub, required this.provider});
+
+  void _bagikan(BuildContext context) {
+    final teks = 'Cek ${provider.nama} (${sub.nama}) — rating ${provider.rating}★, '
+        '${provider.pesananSelesai} pesanan selesai. Yuk pesan lewat aplikasi!';
+    Clipboard.setData(ClipboardData(text: teks));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Info mitra disalin, siap dibagikan ke teman kamu'),
+        backgroundColor: mitraGreenBottom,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _laporkan(BuildContext context) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: mitraCream,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(
+          'Laporkan ${provider.nama}',
+          style: mitraFont(size: 15, weight: FontWeight.bold, color: mitraTextDark),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Ceritakan masalah yang kamu alami dengan mitra ini. Laporanmu akan kami tinjau.',
+              style: mitraFont(size: 12, color: Colors.black54, height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              maxLines: 3,
+              style: mitraFont(size: 12.5, color: mitraTextDark),
+              decoration: InputDecoration(
+                hintText: 'Tulis alasan laporan...',
+                hintStyle: mitraFont(size: 12, color: Colors.black38),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.all(12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text('Batal', style: mitraFont(size: 12.5, color: Colors.black54)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Laporan terkirim, tim kami akan segera meninjau'),
+                  backgroundColor: mitraGreenBottom,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: mitraGreenBottom,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text('Kirim', style: mitraFont(size: 12.5, weight: FontWeight.bold, color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert_rounded),
+      tooltip: '',
+      color: Colors.white,
+      elevation: 6,
+      offset: const Offset(0, 44),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: mitraGreenBottom.withValues(alpha: 0.10)),
+      ),
+      onSelected: (value) {
+        if (value == 'share') _bagikan(context);
+        if (value == 'report') _laporkan(context);
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'share',
+          child: Row(
+            children: [
+              Icon(Icons.share_rounded, size: 18, color: mitraGreenBottom),
+              const SizedBox(width: 10),
+              Text('Bagikan', style: mitraFont(size: 12.5, color: mitraTextDark)),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'report',
+          child: Row(
+            children: [
+              const Icon(Icons.flag_rounded, size: 18, color: Colors.redAccent),
+              const SizedBox(width: 10),
+              Text('Laporkan Mitra Ini', style: mitraFont(size: 12.5, color: Colors.redAccent)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 
 /// Foto/ikon visual per item spesialisasi layanan (mis. Sapu & Pel, Cuci
 /// Piring, dll). Belum ada aset foto asli, jadi dipakai ikon representatif
@@ -295,12 +576,13 @@ IconData _iconUntukLayanan(String label) {
 
 class _FotoLayananTile extends StatelessWidget {
   final String label;
-  const _FotoLayananTile({required this.label});
+  final TingkatKebutuhan? tarif;
+  const _FotoLayananTile({required this.label, this.tarif});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 96,
+      width: 108,
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -314,8 +596,8 @@ class _FotoLayananTile extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(_iconUntukLayanan(label), color: mitraGreenBottom, size: 32),
-          const SizedBox(height: 8),
+          Icon(_iconUntukLayanan(label), color: mitraGreenBottom, size: 30),
+          const SizedBox(height: 6),
           Text(
             label,
             textAlign: TextAlign.center,
@@ -323,6 +605,24 @@ class _FotoLayananTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: mitraFont(size: 10, weight: FontWeight.w700, color: mitraTextDark),
           ),
+          if (tarif != null) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: mitraGreenBottom.withValues(alpha: 0.25)),
+              ),
+              child: Text(
+                tarif!.labelTarif,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: mitraFont(size: 8.5, weight: FontWeight.bold, color: mitraGreenBottom),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -390,6 +690,62 @@ class _UlasanCard extends StatelessWidget {
   }
 }
 
+class _JamOperasionalBox extends StatelessWidget {
+  final PenyediaJasa provider;
+  const _JamOperasionalBox({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final buka = provider.sedangBuka;
+    final warnaDot = buka ? mitraGreenBottom : Colors.black38;
+    final warnaChip = buka ? mitraGreenBottom : Colors.black45;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: mitraGreenBottom.withValues(alpha: 0.10)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.access_time_filled_rounded, color: mitraGreenBottom, size: 18),
+            const SizedBox(height: 4),
+            Text(
+              provider.labelJamOperasional,
+              style: mitraFont(size: 11.5, weight: FontWeight.bold, color: mitraTextDark),
+            ),
+            const SizedBox(height: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+              decoration: BoxDecoration(
+                color: buka ? mitraGreenBottom.withValues(alpha: 0.10) : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: warnaDot),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    buka ? 'Buka' : 'Tutup',
+                    style: mitraFont(size: 9.5, weight: FontWeight.bold, color: warnaChip),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StatBox extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
@@ -414,31 +770,6 @@ class _StatBox extends StatelessWidget {
             Text(value, style: mitraFont(size: 12.5, weight: FontWeight.bold, color: mitraTextDark)),
             Text(label, style: mitraFont(size: 9.5, color: Colors.black45)),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CircleActionButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _CircleActionButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: Container(
-          width: 50,
-          height: 50,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: mitraGreenBottom.withValues(alpha: 0.2))),
-          child: Icon(icon, color: mitraGreenBottom, size: 20),
         ),
       ),
     );
