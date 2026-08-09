@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/services/address_manager.dart';
 import 'package:frontend/services/orders_manager.dart';
 import 'package:frontend/widgets/address_editor_sheet.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 // ─────────────────────────────────────────────
 //  Color Palette (sesuai AppColors Nemu)
@@ -196,152 +198,185 @@ class _OrdersScreenState extends State<OrdersScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFD9DF36),
-      body: Stack(
-        children: [
-          // ── Base Gradient (identik Beranda) ──
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFFD9DF36), Color(0xFF007C3F)],
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: uid == null
+          ? const Stream.empty()
+          : FirebaseFirestore.instance.collection('simulated_orders').doc(uid).snapshots(),
+      builder: (context, snapshot) {
+        final data = snapshot.data?.data() as Map<String, dynamic>?;
+        final status = data?['status'] as String?;
+        final hasActiveOrder = data != null && status != 'selesai';
+
+        int currentStep = 1; // Default to processed/dikemas
+        if (status == 'dalam_pengantaran') {
+          currentStep = 2; // Diantar
+        } else if (status == 'selesai') {
+          currentStep = 3;
+        }
+
+        final OrderHistoryItem? activeOrder = hasActiveOrder
+            ? OrderHistoryItem(
+                id: data['id'] ?? 'ORD-0000',
+                storeName: data['storeName'] ?? 'Gerai Bu Eko',
+                marketName: data['marketName'] ?? 'Pasar Sepinggan',
+                date: 'Hari ini',
+                items: data['items'] ?? '',
+                totalPrice: data['totalPrice'] ?? 0,
+                statusLabel: status == 'dalam_pengantaran' ? 'Diantar' : 'Diproses',
+                statusColor: status == 'dalam_pengantaran' ? Colors.orange : Colors.blue,
+              )
+            : null;
+
+        return Scaffold(
+          backgroundColor: const Color(0xFFD9DF36),
+          body: Stack(
+            children: [
+              // ── Base Gradient (identik Beranda) ──
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFFD9DF36), Color(0xFF007C3F)],
+                  ),
+                ),
               ),
-            ),
-          ),
 
-          // ── Blob Dekorasi Standar ──
-          Positioned(
-            top: -40,
-            right: -50,
-            child: _blob(200, Colors.white.withOpacity(0.12)),
-          ),
-          Positioned(
-            top: 80,
-            left: -60,
-            child: _blob(160, Colors.white.withOpacity(0.10)),
-          ),
-          Positioned(
-            top: 220,
-            right: 20,
-            child: _blob(80, Colors.white.withOpacity(0.08)),
-          ),
-          Positioned(
-            top: 300,
-            left: 30,
-            child: _blob(18, Colors.white.withOpacity(0.20)),
-          ),
-          Positioned(
-            top: 340,
-            right: 60,
-            child: _blob(10, Colors.white.withOpacity(0.18)),
-          ),
-          Positioned(
-            bottom: 200,
-            right: -40,
-            child: _blob(150, const Color(0xFFD9DF36).withOpacity(0.18)),
-          ),
-          Positioned(
-            bottom: 350,
-            left: 10,
-            child: _blob(14, Colors.white.withOpacity(0.15)),
-          ),
+              // ── Blob Dekorasi Standar ──
+              Positioned(
+                top: -40,
+                right: -50,
+                child: _blob(200, Colors.white.withOpacity(0.12)),
+              ),
+              Positioned(
+                top: 80,
+                left: -60,
+                child: _blob(160, Colors.white.withOpacity(0.10)),
+              ),
+              Positioned(
+                top: 220,
+                right: 20,
+                child: _blob(80, Colors.white.withOpacity(0.08)),
+              ),
+              Positioned(
+                top: 300,
+                left: 30,
+                child: _blob(18, Colors.white.withOpacity(0.20)),
+              ),
+              Positioned(
+                top: 340,
+                right: 60,
+                child: _blob(10, Colors.white.withOpacity(0.18)),
+              ),
+              Positioned(
+                bottom: 200,
+                right: -40,
+                child: _blob(150, const Color(0xFFD9DF36).withOpacity(0.18)),
+              ),
+              Positioned(
+                bottom: 350,
+                left: 10,
+                child: _blob(14, Colors.white.withOpacity(0.15)),
+              ),
 
-          // ── Content ──
-          SafeArea(
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                // ── Header: Judul + Alamat (Tajam & Terbaca dengan Card Container + Border) ──
-                SliverToBoxAdapter(child: _buildHeader()),
+              // ── Content ──
+              SafeArea(
+                child: CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    // ── Header: Judul + Alamat ──
+                    SliverToBoxAdapter(child: _buildHeader()),
 
-                // Conditional: show empty state when no active order, otherwise show tracker + kurir
-                if (_activeOrder == null)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-                      child: _buildEmptyState(),
-                    ),
-                  )
-                else ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: _buildLiveTracker(),
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: _buildKurirCard(),
-                    ),
-                  ),
-                ],
-
-                // ── Riwayat Pesanan ──
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.history_rounded,
-                          color: Colors.white,
-                          size: 20,
+                    // Conditional: show empty state when no active order, otherwise show tracker + kurir
+                    if (activeOrder == null)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                          child: _buildEmptyState(),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Riwayat Pesanan',
-                          style: _manrope(
-                            size: 16,
-                            weight: FontWeight.bold,
-                            color: _dark,
-                          ),
+                      )
+                    else ...[
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                          child: _buildLiveTracker(activeOrder, currentStep),
                         ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '${_orderHistory.length} pesanan',
-                            style: _manrope(
-                              size: 11,
-                              weight: FontWeight.w600,
-                              color: _dark,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, i) => Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        16,
-                        0,
-                        16,
-                        i == _orderHistory.length - 1 ? 24 : 10,
                       ),
-                      child: _buildHistoryCard(_orderHistory[i]),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          child: _buildKurirCard(),
+                        ),
+                      ),
+                    ],
+
+                    // ── Riwayat Pesanan ──
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.history_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Riwayat Pesanan',
+                              style: _manrope(
+                                size: 16,
+                                weight: FontWeight.bold,
+                                color: _dark,
+                              ),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '${_orderHistory.length} pesanan',
+                                style: _manrope(
+                                  size: 11,
+                                  weight: FontWeight.w600,
+                                  color: _dark,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    childCount: _orderHistory.length,
-                  ),
+
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, i) => Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            0,
+                            16,
+                            i == _orderHistory.length - 1 ? 24 : 10,
+                          ),
+                          child: _buildHistoryCard(_orderHistory[i]),
+                        ),
+                        childCount: _orderHistory.length,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -485,7 +520,7 @@ class _OrdersScreenState extends State<OrdersScreen>
   // ──────────────────────────────────────────
   //  LIVE TRACKER: Status Pengiriman (Tanpa Emoji)
   // ──────────────────────────────────────────
-  Widget _buildLiveTracker() {
+  Widget _buildLiveTracker(OrderHistoryItem activeOrder, int currentStep) {
     final steps = [
       _TrackStep(icon: Icons.receipt_long_rounded, label: 'Diterima'),
       _TrackStep(icon: Icons.inventory_2_rounded, label: 'Diproses'),
@@ -550,9 +585,7 @@ class _OrdersScreenState extends State<OrdersScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            _activeOrder != null
-                ? '${_activeOrder!.id} · ${_activeOrder!.storeName}, ${_activeOrder!.marketName}'
-                : '-',
+            '${activeOrder.id} · ${activeOrder.storeName}, ${activeOrder.marketName}',
             style: _manrope(size: 11, color: Colors.black45),
           ),
           const SizedBox(height: 20),
@@ -566,10 +599,10 @@ class _OrdersScreenState extends State<OrdersScreen>
                   if (i.isOdd) {
                     // Connector line
                     final stepIdx = i ~/ 2;
-                    final isDone = stepIdx < _currentStep;
+                    final isDone = stepIdx < currentStep;
                     final progress = isDone
                         ? 1.0
-                        : (stepIdx == _currentStep - 1
+                        : (stepIdx == currentStep - 1
                               ? _progressAnim.value
                               : 0.0);
                     return Expanded(
@@ -592,12 +625,12 @@ class _OrdersScreenState extends State<OrdersScreen>
                     );
                   }
                   final stepIdx = i ~/ 2;
-                  final isDone = stepIdx <= _currentStep;
-                  final isActive = stepIdx == _currentStep;
+                  final isDone = stepIdx <= currentStep;
+                  final isActive = stepIdx == currentStep;
                   final step = steps[stepIdx];
 
                   return GestureDetector(
-                    onTap: () => setState(() => _currentStep = stepIdx),
+                    onTap: null, // Driven in real-time by database status
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.elasticOut,
@@ -635,7 +668,7 @@ class _OrdersScreenState extends State<OrdersScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: steps.asMap().entries.map((e) {
-              final isActive = e.key == _currentStep;
+              final isActive = e.key == currentStep;
               return Expanded(
                 child: Text(
                   e.value.label,
@@ -654,20 +687,26 @@ class _OrdersScreenState extends State<OrdersScreen>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: _green.withOpacity(0.06),
+              color: currentStep == 1 ? Colors.blue.withOpacity(0.06) : _green.withOpacity(0.06),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _green.withOpacity(0.2)),
+              border: Border.all(color: currentStep == 1 ? Colors.blue.withOpacity(0.2) : _green.withOpacity(0.2)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.two_wheeler_rounded, color: _green, size: 22),
+                Icon(
+                  currentStep == 1 ? Icons.inventory_2_rounded : Icons.two_wheeler_rounded,
+                  color: currentStep == 1 ? Colors.blue : _green,
+                  size: 22,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Sedang dalam perjalanan ke rumah!',
+                        currentStep == 1
+                            ? 'Pesanan Anda sedang dikemas oleh pedagang'
+                            : 'Pesanan Anda sedang dalam pengantaran oleh kurir',
                         style: _manrope(
                           size: 12,
                           weight: FontWeight.bold,
@@ -675,7 +714,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                         ),
                       ),
                       Text(
-                        'Estimasi tiba: 8–12 menit lagi',
+                        currentStep == 1 ? 'Estimasi siap: 5–10 menit lagi' : 'Estimasi tiba: 8–12 menit lagi',
                         style: _manrope(size: 11, color: Colors.black54),
                       ),
                     ],

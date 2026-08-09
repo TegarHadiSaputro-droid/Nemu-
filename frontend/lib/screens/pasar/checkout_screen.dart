@@ -2,10 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/models/cart_model.dart';
+<<<<<<< HEAD
 import 'package:frontend/services/address_manager.dart';
 import 'package:frontend/services/orders_manager.dart';
 import 'package:frontend/widgets/address_editor_sheet.dart';
 import 'package:frontend/screens/orders_screen.dart';
+=======
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:frontend/screens/home_screen.dart';
+import 'dart:math' as math;
+>>>>>>> c99b12178bc74b2e9a834d910d1ae05227b71259
 
 const Color _cGreen  = Color(0xFF007C3F);
 const Color _cYellow = Color(0xFFD9DF36);
@@ -108,6 +115,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     HapticFeedback.heavyImpact();
     setState(() => _ordered = true);
 
+<<<<<<< HEAD
     // Bikin ringkasan pesanan dari isi keranjang buat dikirim ke OrdersManager
     // (dibaca orders_screen.dart). Kalau keranjang isinya dari beberapa
     // gerai/pasar sekaligus, nama-namanya digabung.
@@ -125,6 +133,40 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       statusLabel: 'Diproses',
       statusColor: _cGreen,
     );
+=======
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final cartItems = _cart.items.value;
+        final itemsText = cartItems.map((item) => '${item.produk.nama} ${item.qty} ${item.produk.satuan}').join(', ');
+        
+        final rand = math.Random().nextInt(9000) + 1000;
+        final orderId = 'ORD-$rand';
+        
+        String buyerName = 'Sobat Nemu';
+        try {
+          final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          if (userDoc.exists) {
+            buyerName = userDoc.data()?['nickname'] ?? userDoc.data()?['name'] ?? 'Sobat Nemu';
+          }
+        } catch (_) {}
+
+        await FirebaseFirestore.instance.collection('simulated_orders').doc(uid).set({
+          'id': orderId,
+          'buyerUid': uid,
+          'buyerName': buyerName,
+          'items': itemsText.isNotEmpty ? itemsText : 'Tomat Segar 1kg',
+          'totalPrice': _total,
+          'status': 'dikemas',
+          'storeName': 'Gerai Bu Eko',
+          'marketName': 'Pasar Sepinggan',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      debugPrint('Firestore write error: $e');
+    }
+>>>>>>> c99b12178bc74b2e9a834d910d1ae05227b71259
 
     await Future.delayed(const Duration(seconds: 2));
     if (mounted) {
@@ -140,9 +182,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       barrierDismissible: false,
       builder: (_) => _SuccessDialog(
         onDone: () {
+<<<<<<< HEAD
           // Forward ke OrdersScreen -- bersihin stack sampai halaman
           // pertama (Beranda) dulu, baru taruh OrdersScreen di atasnya,
           // jadi tombol back dari situ balik ke Beranda.
+=======
+          HomeScreen.navIndexNotifier.value = 4; // Switch to Tab Pesanan
+>>>>>>> c99b12178bc74b2e9a834d910d1ae05227b71259
           Navigator.of(context).popUntil((r) => r.isFirst);
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const OrdersScreen()),

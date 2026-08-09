@@ -45,6 +45,8 @@ TextStyle _m({
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
+  static final ValueNotifier<int> navIndexNotifier = ValueNotifier(0);
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
@@ -161,6 +163,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    HomeScreen.navIndexNotifier.value = 0;
+    HomeScreen.navIndexNotifier.addListener(_onNavIndexChanged);
+
     _welcomeGreeting = _welcomeGreetings[math.Random().nextInt(_welcomeGreetings.length)];
     _loadApiData();
     _loadNicknameOrAsk();
@@ -186,6 +191,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
     _chartAnimCtrl.forward();
 
+  }
+
+  void _onNavIndexChanged() {
+    if (mounted) {
+      setState(() {
+        _navIndex = HomeScreen.navIndexNotifier.value;
+      });
+    }
   }
 
   /// Cek apakah user sudah punya nickname tersimpan di Firestore.
@@ -356,6 +369,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    HomeScreen.navIndexNotifier.removeListener(_onNavIndexChanged);
     _autoScrollTimer?.cancel();
     _pageCtrl.dispose();
     _chartAnimCtrl.dispose();
@@ -640,6 +654,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   //  QUICK INFO ROW (ALAMAT & KURIR)
   // ──────────────────────────────────────────
   Widget _buildQuickInfoRow() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
     return Row(
       children: [
         // Widget Alamat Kirim (Sebelah kiri) — baca dari AddressManager,
@@ -670,36 +686,48 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         ),
         const SizedBox(width: 12),
-        // Widget Status Kurir (Sebelah kanan)
-        // TODO: sambungkan ke data order asli (mis. stream pesanan aktif
-        // dari Firestore) supaya _isDelivering & detail kurir/estimasi di
-        // bawah ini bukan lagi nilai statis.
+        // Widget Status Kurir (Sebelah kanan) - Real-time Firestore Stream
         Expanded(
-          child: _isDelivering
-              ? _quickCard(
-                  icon: Icons.two_wheeler_rounded,
+          child: StreamBuilder<DocumentSnapshot>(
+            stream: uid == null
+                ? const Stream.empty()
+                : FirebaseFirestore.instance.collection('simulated_orders').doc(uid).snapshots(),
+            builder: (context, snapshot) {
+              final data = snapshot.data?.data() as Map<String, dynamic>?;
+              final status = data?['status'] as String?;
+              final hasActiveOrder = data != null && status != 'selesai';
+
+              if (hasActiveOrder) {
+                final isPackaging = status == 'dikemas';
+                return _quickCard(
+                  icon: isPackaging ? Icons.inventory_2_rounded : Icons.two_wheeler_rounded,
                   iconColor: Colors.white,
-                  title: 'Pak Budi Antar',
-                  sub: 'Est. 8 mnt • Lapak Sari',
+                  title: isPackaging ? 'Sedang Dikemas' : 'Dalam Pengantaran',
+                  sub: isPackaging
+                      ? 'Pesanan Anda sedang dikemas oleh pedagang'
+                      : 'Pesanan Anda sedang dalam pengantaran oleh kurir',
                   bgColor: Colors.orange.shade700,
                   textColor: Colors.white,
                   subTextColor: Colors.white.withValues(alpha: 0.9),
                   gradientColors: [Colors.orange.shade800, Colors.orange.shade600],
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const OrdersScreen()),
-                  ),
-                )
-              : _quickCard(
-                  icon: Icons.local_shipping_outlined,
-                  iconColor: Colors.grey.shade600,
-                  title: 'Tidak Ada Pengantaran',
-                  sub: 'Mulai belanja yuk!',
-                  bgColor: Colors.grey.shade200,
-                  textColor: Colors.grey.shade800,
-                  subTextColor: Colors.grey.shade500,
-                  onTap: null,
-                ),
+                  onTap: () {
+                    HomeScreen.navIndexNotifier.value = 4; // Switch to tab Pesanan
+                  },
+                );
+              }
+
+              return _quickCard(
+                icon: Icons.local_shipping_outlined,
+                iconColor: Colors.grey.shade600,
+                title: 'Tidak Ada Pengantaran',
+                sub: 'Mulai belanja yuk!',
+                bgColor: Colors.grey.shade200,
+                textColor: Colors.grey.shade800,
+                subTextColor: Colors.grey.shade500,
+                onTap: null,
+              );
+            },
+          ),
         ),
       ],
     );
@@ -756,7 +784,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       color: subTextColor,
                       weight: subTextColor == _greenBottom ? FontWeight.w800 : FontWeight.normal,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
