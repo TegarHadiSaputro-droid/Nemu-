@@ -377,29 +377,192 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   //  2. ALERT PESANAN BARU
   // ──────────────────────────────────────────
   Widget _buildOrderAlertSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('simulated_orders')
+          .where('status', whereIn: ['dikemas', 'dalam_pengantaran'])
+          .snapshots(),
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? [];
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 16),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 16),
+                ),
+                const SizedBox(width: 8),
+                Text('Pesanan Baru Masuk', style: _ms(size: 14, weight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(color: Colors.red.shade500, borderRadius: BorderRadius.circular(20)),
+                  child: Text('${docs.length + _pendingOrders.length}', style: _ms(size: 10, weight: FontWeight.bold, color: Colors.white)),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text('Pesanan Baru Masuk', style: _ms(size: 14, weight: FontWeight.bold, color: Colors.white)),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(color: Colors.red.shade500, borderRadius: BorderRadius.circular(20)),
-              child: Text('${_pendingOrders.length}', style: _ms(size: 10, weight: FontWeight.bold, color: Colors.white)),
-            ),
+            const SizedBox(height: 10),
+            ...docs.map((doc) => _buildSimulatedOrderCard(doc)),
+            ..._pendingOrders.map((order) => _buildOrderCard(order)),
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSimulatedOrderCard(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final orderId = data['id'] ?? 'ORD-XXXX';
+    final buyerName = data['buyerName'] ?? 'Pembeli';
+    final items = data['items'] ?? '';
+    final totalPrice = (data['totalPrice'] as num?)?.toInt() ?? 0;
+    final status = data['status'] ?? 'dikemas';
+    final isPackaging = status == 'dikemas';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isPackaging ? _selAmber.withValues(alpha: 0.4) : _selGreen.withValues(alpha: 0.4),
+          width: 1.5,
         ),
-        const SizedBox(height: 10),
-        ..._pendingOrders.map((order) => _buildOrderCard(order)),
-      ],
+        boxShadow: [
+          BoxShadow(
+            color: (isPackaging ? _selAmber : _selGreen).withValues(alpha: 0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: (isPackaging ? _selAmber : _selGreen).withValues(alpha: 0.06),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: (isPackaging ? _selAmber : _selGreen).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(Icons.receipt_long_rounded, size: 14, color: isPackaging ? _selAmber : _selGreen),
+                ),
+                const SizedBox(width: 8),
+                Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: isPackaging ? _selAmber : _selGreen)),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isPackaging ? Colors.orange.shade50 : Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: isPackaging ? Colors.orange.shade200 : Colors.green.shade200),
+                  ),
+                  child: Text(
+                    isPackaging ? '⏳ Sedang Dikemas' : '🛵 Dalam Pengantaran',
+                    style: _ms(
+                      size: 9,
+                      weight: FontWeight.bold,
+                      color: isPackaging ? Colors.orange.shade700 : Colors.green.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.person_rounded, size: 14, color: Colors.black38),
+                    const SizedBox(width: 6),
+                    Text(buyerName, style: _ms(size: 12, weight: FontWeight.w600)),
+                    const Spacer(),
+                    const Icon(Icons.schedule_rounded, size: 12, color: Colors.black38),
+                    const SizedBox(width: 4),
+                    Text('Real-time', style: _ms(size: 10, color: Colors.black38)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(items, style: _ms(size: 11, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text('Total: Rp${_formatRupiah(totalPrice)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
+                    const Spacer(),
+                    if (isPackaging)
+                      ElevatedButton(
+                        onPressed: () async {
+                          HapticFeedback.mediumImpact();
+                          await doc.reference.update({'status': 'dalam_pengantaran'});
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Pesanan $orderId diserahkan ke kurir!', style: _ms(size: 12, color: Colors.white)),
+                                backgroundColor: _selGreen,
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _selAmber,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text('Selesai Mengemas / Serahkan ke Kurir', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
+                      )
+                    else
+                      ElevatedButton(
+                        onPressed: () async {
+                          HapticFeedback.mediumImpact();
+                          await doc.reference.update({'status': 'selesai'});
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Pesanan $orderId telah diselesaikan!', style: _ms(size: 12, color: Colors.white)),
+                                backgroundColor: _selGreen,
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _selGreen,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text('Selesaikan Transaksi (Selesai)', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
