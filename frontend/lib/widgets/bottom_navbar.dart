@@ -13,11 +13,13 @@ const Color _navDark  = Color(0xFF0B3D24);
 class NemuBottomNavbar extends StatefulWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
+  final bool isSeller;
 
   const NemuBottomNavbar({
     super.key,
     required this.currentIndex,
     required this.onTap,
+    this.isSeller = false,
   });
 
   @override
@@ -34,20 +36,33 @@ class _NemuBottomNavbarState extends State<NemuBottomNavbar>
   final bool _hasActiveOrder = true;
   final int _activeOrderCount = 1;
 
-  static const _navItems = [
-    _NavItem(icon: Icons.home_rounded, label: 'Beranda'),
-    _NavItem(icon: Icons.storefront_rounded, label: 'Pasar'),
-    _NavItem(icon: Icons.search_rounded, label: 'Cari'),
-    _NavItem(icon: Icons.waving_hand_rounded, label: 'Kang!'),
-    _NavItem(icon: Icons.receipt_long_rounded, label: 'Pesanan', hasBadge: true),
-  ];
+  List<_NavItem> get _currentNavItems {
+    if (widget.isSeller) {
+      return const [
+        _NavItem(icon: Icons.dashboard_rounded, label: 'Beranda Penjual'),
+        _NavItem(icon: Icons.workspace_premium_rounded, label: 'Langganan Nemu+'),
+        _NavItem(icon: Icons.person_rounded, label: 'Akun'),
+      ];
+    }
+    return const [
+      _NavItem(icon: Icons.home_rounded, label: 'Beranda'),
+      _NavItem(icon: Icons.storefront_rounded, label: 'Pasar'),
+      _NavItem(icon: Icons.search_rounded, label: 'Cari'),
+      _NavItem(icon: Icons.waving_hand_rounded, label: 'Kang!'),
+      _NavItem(icon: Icons.receipt_long_rounded, label: 'Pesanan', hasBadge: true),
+    ];
+  }
 
   @override
   void initState() {
     super.initState();
+    _initAnimations();
+    _triggerBounce(widget.currentIndex);
+  }
 
+  void _initAnimations() {
     _bounceControllers = List.generate(
-      _navItems.length,
+      _currentNavItems.length,
       (i) => AnimationController(
         vsync: this,
         duration: const Duration(milliseconds: 300),
@@ -67,8 +82,17 @@ class _NemuBottomNavbarState extends State<NemuBottomNavbar>
         TweenSequenceItem(tween: Tween(begin: -4.0, end: 0.0), weight: 50),
       ]).animate(CurvedAnimation(parent: ctrl, curve: Curves.easeOut));
     }).toList();
+  }
 
-    _triggerBounce(widget.currentIndex);
+  @override
+  void didUpdateWidget(covariant NemuBottomNavbar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isSeller != widget.isSeller) {
+      for (final ctrl in _bounceControllers) {
+        ctrl.dispose();
+      }
+      _initAnimations();
+    }
   }
 
   void _triggerBounce(int index) {
@@ -110,10 +134,11 @@ class _NemuBottomNavbarState extends State<NemuBottomNavbar>
         child: SizedBox(
           height: 64,
           child: Row(
-            children: List.generate(_navItems.length, (i) {
-              final item = _navItems[i];
-              final isActive = widget.currentIndex == i;
-              return _buildNavItem(i, item, isActive);
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(_currentNavItems.length, (index) {
+              final isSelected = widget.currentIndex == index;
+              final item = _currentNavItems[index];
+              return _buildNavItem(index, item, isSelected);
             }),
           ),
         ),

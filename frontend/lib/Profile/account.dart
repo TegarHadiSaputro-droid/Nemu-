@@ -25,6 +25,8 @@ import 'Nemu+/nemu_plus_page.dart';
 import 'Kelola Toko/kelola_toko_page.dart';
 import 'Pusat Bantuan/pusat_bantuan_page.dart';
 import '../settings/setting_page.dart'; // TODO: sesuaikan path jika lokasi setting_page.dart berbeda
+import '../screens/home_screen.dart';
+
 
 // ---------------------------------------------------------------------------
 // Halaman Akun
@@ -187,8 +189,9 @@ class AccountPage extends StatelessWidget {
                     _MenuGroup(
                       items: [
                         _MenuItemData(
-                          icon: Icons.restart_alt,
-                          label: 'Reset jadi Pembeli (hapus data gerai)',
+                          icon: Icons.bug_report,
+                          label: 'Reset Status ke Pembeli (Debug Dev Only)',
+                          customColor: Colors.deepOrange,
                           onTap: () => _resetToBuyer(context),
                         ),
                       ],
@@ -407,12 +410,14 @@ class _MenuItemData {
   final IconData icon;
   final String label;
   final bool isDanger;
+  final Color? customColor;
   final VoidCallback? onTap;
 
   _MenuItemData({
     required this.icon,
     required this.label,
     this.isDanger = false,
+    this.customColor,
     this.onTap,
   });
 }
@@ -455,22 +460,22 @@ class _MenuGroup extends StatelessWidget {
                   Icon(
                     item.icon,
                     size: 18,
-                    color: item.isDanger
+                    color: item.customColor ?? (item.isDanger
                         ? Colors.red.shade700
-                        : kInk.withValues(alpha: 0.75),
+                        : kInk.withValues(alpha: 0.75)),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       item.label,
                       style: GoogleFonts.manrope(
-                        color: item.isDanger ? Colors.red.shade700 : kInk,
+                        color: item.customColor ?? (item.isDanger ? Colors.red.shade700 : kInk),
                         fontSize: 13.5,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
-                  if (!item.isDanger)
+                  if (!item.isDanger && item.customColor == null)
                     Icon(
                       Icons.chevron_right,
                       size: 16,
@@ -542,13 +547,14 @@ Future<void> _resetToBuyer(BuildContext context) async {
         .where('ownerId', isEqualTo: uid)
         .get();
 
-    // Satu batch buat hapus semua dokumen gerai + reset roles.seller
+    // Satu batch buat hapus semua dokumen gerai + reset roles.seller + hapus seller doc
     // sekaligus, supaya kalau salah satu gagal, semuanya di-rollback
     // (nggak ada state setengah-setengah).
     final batch = firestore.batch();
     for (final doc in geraiDocs.docs) {
       batch.delete(doc.reference);
     }
+    batch.delete(firestore.collection('seller').doc(uid));
     batch.set(
       firestore.collection('users').doc(uid),
       {
@@ -560,12 +566,18 @@ Future<void> _resetToBuyer(BuildContext context) async {
     await batch.commit();
 
     if (!context.mounted) return;
+    
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Direset ke Pembeli — ${geraiDocs.docs.length} data gerai dihapus',
-        ),
+      const SnackBar(
+        content: Text('Role berhasil di-reset ke Pembeli'),
+        duration: Duration(seconds: 2),
       ),
+    );
+
+    // Navigasikan layar pengguna secara langsung kembali ke home_screen.dart (tampilan Pembeli)
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      (route) => false,
     );
   } catch (e) {
     if (!context.mounted) return;
