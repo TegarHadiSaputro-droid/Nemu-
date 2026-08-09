@@ -18,20 +18,13 @@ import 'widgets/background_decoration.dart';
 import 'utils/page_transitions.dart';
 import 'Theme/app_theme.dart'; // berisi kInk, kCream, kGradientTop, kGradientBottom
 import 'Profile/account.dart'; // berisi AccountPage
-import 'package:provider/provider.dart';
-import 'localization/language_provider.dart'; // berisi LanguageProvider
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => LanguageProvider(),
-      child: const MyApp(),
-    ),
-  );
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
