@@ -18,6 +18,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Elektronik & Gadget',
           spesialisasi: 'Smartphone, Tablet, Smartwatch',
           icon: Icons.smartphone_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Ringan', deskripsi: 'Cek & perbaikan software/baterai', tarifMin: 50000, tarifMax: 100000),
+            TingkatKebutuhan(label: 'Sedang', deskripsi: 'Ganti layar/komponen kecil', tarifMin: 150000, tarifMax: 350000),
+            TingkatKebutuhan(label: 'Berat', deskripsi: 'Ganti mainboard/kerusakan berat', tarifMin: 400000, tarifMax: 800000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Sigit Servis Smartwatch',
@@ -26,7 +31,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 0.7,
               pesananSelesai: 158,
               lokasi: 'Balikpapan Barat, Balikpapan',
-              buka: true,
+              jamBuka: '06:00',
+              jamTutup: '14:00',
             ),
             PenyediaJasa(
               nama: 'Budi Teknisi HP',
@@ -35,7 +41,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.6,
               pesananSelesai: 297,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '07:00',
+              jamTutup: '15:00',
             ),
             PenyediaJasa(
               nama: 'Toko Klinik HP',
@@ -44,7 +51,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.3,
               pesananSelesai: 137,
               lokasi: 'Damai, Balikpapan',
-              buka: true,
+              jamBuka: '07:30',
+              jamTutup: '16:30',
             ),
           ],
         ),
@@ -52,6 +60,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Komputer & Laptop',
           spesialisasi: 'Laptop, PC Desktop, Monitor, Printer',
           icon: Icons.laptop_mac_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Ringan', deskripsi: 'Install ulang/cleaning sistem', tarifMin: 75000, tarifMax: 150000),
+            TingkatKebutuhan(label: 'Sedang', deskripsi: 'Ganti RAM/SSD/keyboard', tarifMin: 200000, tarifMax: 450000),
+            TingkatKebutuhan(label: 'Berat', deskripsi: 'Ganti motherboard/LCD laptop', tarifMin: 500000, tarifMax: 1500000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Doctor Computer Studio',
@@ -60,7 +73,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.9,
               pesananSelesai: 297,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '16:00',
             ),
             PenyediaJasa(
               nama: 'CompuFix Center',
@@ -69,7 +83,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 7.8,
               pesananSelesai: 21,
               lokasi: 'Balikpapan Timur, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '17:00',
             ),
             PenyediaJasa(
               nama: 'Mas Danang IT & PC Dokter',
@@ -78,7 +93,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.9,
               pesananSelesai: 190,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: false,
+              jamBuka: '08:00',
+              jamTutup: '20:00',
             ),
           ],
         ),
@@ -86,6 +102,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Peralatan Rumah Tangga',
           spesialisasi: 'Kulkas, Mesin Cuci, Dispenser, Kompor Gas',
           icon: Icons.kitchen_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Ringan', deskripsi: 'Cek & servis kecil', tarifMin: 50000, tarifMax: 100000),
+            TingkatKebutuhan(label: 'Sedang', deskripsi: 'Ganti spare part umum', tarifMin: 150000, tarifMax: 350000),
+            TingkatKebutuhan(label: 'Berat', deskripsi: 'Kerusakan kompresor/mesin utama', tarifMin: 400000, tarifMax: 900000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Dingin Abadi Teknik',
@@ -94,7 +115,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.1,
               pesananSelesai: 153,
               lokasi: 'Balikpapan Selatan, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '21:00',
             ),
             PenyediaJasa(
               nama: 'Elektro Rumah Presisi (Mas Hadi)',
@@ -103,7 +125,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 9.3,
               pesananSelesai: 211,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '08:30',
+              jamTutup: '17:30',
             ),
             PenyediaJasa(
               nama: 'Pak Mul Servis Kompor & Kulkas',
@@ -112,7 +135,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.1,
               pesananSelesai: 203,
               lokasi: 'Batu Ampar, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '17:00',
             ),
           ],
         ),
@@ -120,6 +144,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Pendingin Ruangan (HVAC)',
           spesialisasi: 'AC Split, AC Standing, Exhaust Fan, Kipas Angin',
           icon: Icons.ac_unit_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Ringan', deskripsi: 'Servis & cuci standar per unit', tarifMin: 60000, tarifMax: 100000),
+            TingkatKebutuhan(label: 'Sedang', deskripsi: 'Isi freon & cek kebocoran', tarifMin: 150000, tarifMax: 300000),
+            TingkatKebutuhan(label: 'Berat', deskripsi: 'Bongkar pasang/ganti kompresor', tarifMin: 400000, tarifMax: 1200000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Sejuk Jaya Teknik',
@@ -128,7 +157,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.5,
               pesananSelesai: 166,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '18:00',
             ),
             PenyediaJasa(
               nama: 'Budi Cool Service (Pak Budi)',
@@ -137,7 +167,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 3.9,
               pesananSelesai: 250,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '21:00',
             ),
             PenyediaJasa(
               nama: 'Master AC Nusantara',
@@ -146,7 +177,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.5,
               pesananSelesai: 54,
               lokasi: 'Batu Ampar, Balikpapan',
-              buka: true,
+              jamBuka: '09:30',
+              jamTutup: '18:30',
             ),
           ],
         ),
@@ -154,6 +186,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Audio & Video',
           spesialisasi: 'TV (LED/OLED), Speaker, Amplifier, Home Theater',
           icon: Icons.tv_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Ringan', deskripsi: 'Cek & perbaikan kecil', tarifMin: 75000, tarifMax: 150000),
+            TingkatKebutuhan(label: 'Sedang', deskripsi: 'Ganti komponen/panel kecil', tarifMin: 200000, tarifMax: 450000),
+            TingkatKebutuhan(label: 'Berat', deskripsi: 'Ganti panel/mesin utama', tarifMin: 500000, tarifMax: 1500000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Cahaya Elektronik TV',
@@ -162,7 +199,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.7,
               pesananSelesai: 254,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '19:00',
             ),
             PenyediaJasa(
               nama: 'Sinar Elektro TV Specialist',
@@ -171,7 +209,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.7,
               pesananSelesai: 130,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '20:00',
             ),
             PenyediaJasa(
               nama: 'Audio-Visual Master (Pak Anton)',
@@ -180,7 +219,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.6,
               pesananSelesai: 34,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '22:00',
             ),
           ],
         ),
@@ -188,6 +228,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Kelistrikan Rumah',
           spesialisasi: 'Instalasi Listrik, Saklar, Stop Kontak, MCB',
           icon: Icons.electrical_services_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Ringan', deskripsi: 'Ganti saklar/stop kontak', tarifMin: 50000, tarifMax: 100000),
+            TingkatKebutuhan(label: 'Sedang', deskripsi: 'Tambah instalasi/titik baru', tarifMin: 150000, tarifMax: 400000),
+            TingkatKebutuhan(label: 'Berat', deskripsi: 'Instalasi ulang/rewiring rumah', tarifMin: 800000, tarifMax: 3000000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Pak Hendra Listrik Expert',
@@ -196,7 +241,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.7,
               pesananSelesai: 308,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '11:00',
+              jamTutup: '21:00',
             ),
             PenyediaJasa(
               nama: 'Mas Bambang Elektro & Listrik',
@@ -205,7 +251,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.5,
               pesananSelesai: 252,
               lokasi: 'Balikpapan Timur, Balikpapan',
-              buka: true,
+              jamBuka: '12:00',
+              jamTutup: '20:00',
             ),
             PenyediaJasa(
               nama: 'Kang Asep Instalasi Listrik',
@@ -214,7 +261,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 5.6,
               pesananSelesai: 152,
               lokasi: 'Batu Ampar, Balikpapan',
-              buka: true,
+              jamBuka: '13:00',
+              jamTutup: '22:00',
             ),
           ],
         ),
@@ -222,6 +270,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Pipa & Sanitasi',
           spesialisasi: 'Pipa Air, Keran, Pompa Air, Water Heater',
           icon: Icons.plumbing_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Ringan', deskripsi: 'Perbaikan keran/kebocoran kecil', tarifMin: 50000, tarifMax: 150000),
+            TingkatKebutuhan(label: 'Sedang', deskripsi: 'Ganti pipa sebagian/water heater', tarifMin: 200000, tarifMax: 500000),
+            TingkatKebutuhan(label: 'Berat', deskripsi: 'Perbaikan pipa besar/instalasi baru', tarifMin: 600000, tarifMax: 2000000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Lancar Jaya Plumbing & Pipa',
@@ -230,7 +283,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 3.8,
               pesananSelesai: 88,
               lokasi: 'Damai, Balikpapan',
-              buka: true,
+              jamBuka: '00:00',
+              jamTutup: '00:00',
             ),
             PenyediaJasa(
               nama: 'Pak Joko Ahli Pompa Air',
@@ -239,7 +293,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.2,
               pesananSelesai: 96,
               lokasi: 'Balikpapan Timur, Balikpapan',
-              buka: true,
+              jamBuka: '20:00',
+              jamTutup: '05:00',
             ),
             PenyediaJasa(
               nama: 'Solusi Pipa Mampet Mas Rudi',
@@ -248,7 +303,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.1,
               pesananSelesai: 213,
               lokasi: 'Batu Ampar, Balikpapan',
-              buka: true,
+              jamBuka: '06:00',
+              jamTutup: '14:00',
             ),
           ],
         ),
@@ -256,6 +312,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Bangunan & Pertukangan',
           spesialisasi: 'Atap/Plafon, Pintu/Jendela, Cat, Tembok',
           icon: Icons.roofing_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Ringan', deskripsi: 'Perbaikan kecil harian', tarifMin: 100000, tarifMax: 250000),
+            TingkatKebutuhan(label: 'Sedang', deskripsi: 'Perbaikan atap/plafon sebagian', tarifMin: 300000, tarifMax: 800000),
+            TingkatKebutuhan(label: 'Berat', deskripsi: 'Renovasi/bangun ulang bagian rumah', tarifMin: 1000000, tarifMax: 5000000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Griya Tukang Sejahtera',
@@ -264,7 +325,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 9.2,
               pesananSelesai: 23,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '07:00',
+              jamTutup: '15:00',
             ),
             PenyediaJasa(
               nama: 'Pak Yanto Tukang Atap & Bocor',
@@ -273,7 +335,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.9,
               pesananSelesai: 192,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '07:30',
+              jamTutup: '16:30',
             ),
             PenyediaJasa(
               nama: 'Mas Tono Pertukangan Kayu & Besi',
@@ -282,7 +345,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 0.5,
               pesananSelesai: 152,
               lokasi: 'Damai, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '16:00',
             ),
           ],
         ),
@@ -290,6 +354,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Otomotif Mobil',
           spesialisasi: 'Mesin Mobil, Kelistrikan Mobil, AC Mobil, Rem',
           icon: Icons.directions_car_filled_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Ringan', deskripsi: 'Servis rutin & pengecekan', tarifMin: 100000, tarifMax: 250000),
+            TingkatKebutuhan(label: 'Sedang', deskripsi: 'Ganti spare part umum', tarifMin: 300000, tarifMax: 800000),
+            TingkatKebutuhan(label: 'Berat', deskripsi: 'Overhaul/perbaikan mesin besar', tarifMin: 1000000, tarifMax: 3000000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Bengkel Auto Care Fast',
@@ -298,7 +367,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.5,
               pesananSelesai: 170,
               lokasi: 'Damai, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '17:00',
             ),
             PenyediaJasa(
               nama: 'Garasi Mobil Presisi',
@@ -307,7 +377,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 7.4,
               pesananSelesai: 294,
               lokasi: 'Damai, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '20:00',
             ),
             PenyediaJasa(
               nama: 'Montir Mobil Darurat Mas Sigit',
@@ -316,7 +387,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 4.9,
               pesananSelesai: 75,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '21:00',
             ),
           ],
         ),
@@ -324,6 +396,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Otomotif Motor',
           spesialisasi: 'Mesin Motor, Ban, Aki, Rantai/CVT',
           icon: Icons.two_wheeler_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Ringan', deskripsi: 'Tambal ban/servis kecil', tarifMin: 20000, tarifMax: 75000),
+            TingkatKebutuhan(label: 'Sedang', deskripsi: 'Ganti spare part umum', tarifMin: 100000, tarifMax: 300000),
+            TingkatKebutuhan(label: 'Berat', deskripsi: 'Turun mesin/perbaikan besar', tarifMin: 400000, tarifMax: 1000000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Bengkel Motor Jaya Motor',
@@ -332,7 +409,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 3.3,
               pesananSelesai: 47,
               lokasi: 'Balikpapan Barat, Balikpapan',
-              buka: true,
+              jamBuka: '08:30',
+              jamTutup: '17:30',
             ),
             PenyediaJasa(
               nama: 'Montir Keliling Mas Agus',
@@ -341,7 +419,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.3,
               pesananSelesai: 266,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '17:00',
             ),
             PenyediaJasa(
               nama: 'Pak Eko Tambal Ban & Montir 24 Jam',
@@ -350,7 +429,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.6,
               pesananSelesai: 261,
               lokasi: 'Damai, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '18:00',
             ),
           ],
         ),
@@ -365,6 +445,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Kebersihan Rumah (Reguler)',
           spesialisasi: 'Sapu & Pel, Lap Debu, Rapikan Ruangan, Cuci Piring',
           icon: Icons.home_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Rumah Kecil', deskripsi: 'Tipe 21-36, per kunjungan', tarifMin: 75000, tarifMax: 100000),
+            TingkatKebutuhan(label: 'Rumah Sedang', deskripsi: 'Tipe 45-70, per kunjungan', tarifMin: 125000, tarifMax: 175000),
+            TingkatKebutuhan(label: 'Rumah Besar', deskripsi: 'Tipe 100 ke atas, per kunjungan', tarifMin: 200000, tarifMax: 300000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Mbak Sri Bersih Rumah',
@@ -373,7 +458,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.0,
               pesananSelesai: 126,
               lokasi: 'Damai, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '21:00',
             ),
             PenyediaJasa(
               nama: 'CleanHome Jaya',
@@ -382,7 +468,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.9,
               pesananSelesai: 222,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '09:30',
+              jamTutup: '18:30',
             ),
             PenyediaJasa(
               nama: 'Kang Deni Bersih-Bersih',
@@ -391,7 +478,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.6,
               pesananSelesai: 133,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '19:00',
             ),
           ],
         ),
@@ -399,6 +487,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Deep Cleaning Rumah',
           spesialisasi: 'Dapur, Kamar Mandi, Gudang, Pembersihan Total',
           icon: Icons.cleaning_services_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Studio/1 Kamar', deskripsi: 'Pembersihan total unit kecil', tarifMin: 200000, tarifMax: 350000),
+            TingkatKebutuhan(label: 'Rumah Sedang', deskripsi: '2-3 kamar', tarifMin: 400000, tarifMax: 700000),
+            TingkatKebutuhan(label: 'Rumah Besar', deskripsi: '4 kamar ke atas', tarifMin: 800000, tarifMax: 1500000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Deep Clean Total Care',
@@ -407,7 +500,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.6,
               pesananSelesai: 130,
               lokasi: 'Balikpapan Selatan, Balikpapan',
-              buka: false,
+              jamBuka: '10:00',
+              jamTutup: '20:00',
             ),
             PenyediaJasa(
               nama: 'Rumah Kinclong Service',
@@ -416,7 +510,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.6,
               pesananSelesai: 34,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: false,
+              jamBuka: '10:00',
+              jamTutup: '22:00',
             ),
             PenyediaJasa(
               nama: 'Mba Wati Deep Cleaning',
@@ -425,7 +520,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.5,
               pesananSelesai: 127,
               lokasi: 'Damai, Balikpapan',
-              buka: false,
+              jamBuka: '11:00',
+              jamTutup: '21:00',
             ),
           ],
         ),
@@ -433,6 +529,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Cuci Sofa, Karpet & Kasur',
           spesialisasi: 'Sofa, Karpet, Kasur, Springbed',
           icon: Icons.chair_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: '1-2 Item', deskripsi: 'Sofa/karpet/kasur satuan', tarifMin: 75000, tarifMax: 150000),
+            TingkatKebutuhan(label: '3-5 Item', deskripsi: 'Beberapa item sekaligus', tarifMin: 200000, tarifMax: 400000),
+            TingkatKebutuhan(label: 'Full Set', deskripsi: 'Seluruh ruangan/lebih dari 5 item', tarifMin: 450000, tarifMax: 800000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Sofa Kinclong Cleaning',
@@ -441,7 +542,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 5.6,
               pesananSelesai: 260,
               lokasi: 'Balikpapan Barat, Balikpapan',
-              buka: true,
+              jamBuka: '12:00',
+              jamTutup: '20:00',
             ),
             PenyediaJasa(
               nama: 'Karpet Bersih Nusantara',
@@ -450,7 +552,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.2,
               pesananSelesai: 67,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '13:00',
+              jamTutup: '22:00',
             ),
             PenyediaJasa(
               nama: 'Pak Amir Cuci Sofa & Karpet',
@@ -459,7 +562,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.3,
               pesananSelesai: 45,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: false,
+              jamBuka: '00:00',
+              jamTutup: '00:00',
             ),
           ],
         ),
@@ -467,6 +571,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Cuci Kaca & Jendela',
           spesialisasi: 'Kaca Rumah, Jendela, Kaca Gedung',
           icon: Icons.window_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Rumah Kecil', deskripsi: 'Beberapa jendela', tarifMin: 100000, tarifMax: 200000),
+            TingkatKebutuhan(label: 'Rumah Sedang', deskripsi: 'Seluruh rumah', tarifMin: 250000, tarifMax: 450000),
+            TingkatKebutuhan(label: 'Besar/Gedung', deskripsi: 'Ruko/gedung bertingkat', tarifMin: 500000, tarifMax: 1200000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Kaca Bening Jaya',
@@ -475,7 +584,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 7.7,
               pesananSelesai: 73,
               lokasi: 'Balikpapan Barat, Balikpapan',
-              buka: true,
+              jamBuka: '20:00',
+              jamTutup: '05:00',
             ),
             PenyediaJasa(
               nama: 'Window Cleaning Pro',
@@ -484,7 +594,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.8,
               pesananSelesai: 111,
               lokasi: 'Balikpapan Tengah, Balikpapan',
-              buka: true,
+              jamBuka: '06:00',
+              jamTutup: '14:00',
             ),
             PenyediaJasa(
               nama: 'Mas Rian Cuci Kaca',
@@ -493,7 +604,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.2,
               pesananSelesai: 299,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: false,
+              jamBuka: '07:00',
+              jamTutup: '15:00',
             ),
           ],
         ),
@@ -501,6 +613,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Cuci AC (Steam)',
           spesialisasi: 'AC Split, AC Standing, AC Cassette',
           icon: Icons.ac_unit_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: '1 Unit', deskripsi: 'Cuci steam standar', tarifMin: 50000, tarifMax: 75000),
+            TingkatKebutuhan(label: '2-3 Unit', deskripsi: 'Sekaligus dalam satu kunjungan', tarifMin: 120000, tarifMax: 200000),
+            TingkatKebutuhan(label: '4+ Unit/Standing', deskripsi: 'Termasuk AC standing/cassette', tarifMin: 250000, tarifMax: 500000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Fresh AC Cleaning Service',
@@ -509,7 +626,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.0,
               pesananSelesai: 65,
               lokasi: 'Balikpapan Barat, Balikpapan',
-              buka: true,
+              jamBuka: '07:30',
+              jamTutup: '16:30',
             ),
             PenyediaJasa(
               nama: 'Steam AC Sejuk Mandiri',
@@ -518,7 +636,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.4,
               pesananSelesai: 223,
               lokasi: 'Balikpapan Selatan, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '16:00',
             ),
             PenyediaJasa(
               nama: 'Pak Slamet Steam AC',
@@ -527,7 +646,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 4.0,
               pesananSelesai: 250,
               lokasi: 'Balikpapan Tengah, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '17:00',
             ),
           ],
         ),
@@ -535,6 +655,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Cuci Mobil & Motor (Detailing)',
           spesialisasi: 'Mobil, Motor, Interior, Poles Bodi',
           icon: Icons.local_car_wash_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Cuci Reguler', deskripsi: 'Cuci standar motor/mobil', tarifMin: 25000, tarifMax: 100000),
+            TingkatKebutuhan(label: 'Detailing Sedang', deskripsi: 'Poles bodi & interior', tarifMin: 150000, tarifMax: 350000),
+            TingkatKebutuhan(label: 'Detailing Premium', deskripsi: 'Coating & perawatan penuh', tarifMin: 500000, tarifMax: 1500000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'AutoShine Detailing',
@@ -543,7 +668,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 9.5,
               pesananSelesai: 302,
               lokasi: 'Gunung Bahagia, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '20:00',
             ),
             PenyediaJasa(
               nama: 'Kinclong Motor Wash',
@@ -552,7 +678,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 9.2,
               pesananSelesai: 314,
               lokasi: 'Damai, Balikpapan',
-              buka: false,
+              jamBuka: '08:00',
+              jamTutup: '21:00',
             ),
             PenyediaJasa(
               nama: 'Mas Feri Cuci Mobil Panggilan',
@@ -561,7 +688,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.0,
               pesananSelesai: 262,
               lokasi: 'Damai, Balikpapan',
-              buka: true,
+              jamBuka: '08:30',
+              jamTutup: '17:30',
             ),
           ],
         ),
@@ -569,6 +697,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Kebersihan Kantor & Komersial',
           spesialisasi: 'Kantor, Ruko, Gudang, Gedung',
           icon: Icons.apartment_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Ruko Kecil', deskripsi: 'Ruang usaha kecil', tarifMin: 150000, tarifMax: 300000),
+            TingkatKebutuhan(label: 'Kantor Sedang', deskripsi: 'Kantor/toko menengah', tarifMin: 400000, tarifMax: 800000),
+            TingkatKebutuhan(label: 'Gedung Besar', deskripsi: 'Gedung bertingkat', tarifMin: 1000000, tarifMax: 3000000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'ProClean Office Service',
@@ -577,7 +710,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.0,
               pesananSelesai: 278,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '17:00',
             ),
             PenyediaJasa(
               nama: 'Kebersihan Gedung Mandiri',
@@ -586,7 +720,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.1,
               pesananSelesai: 138,
               lokasi: 'Ring Road, Balikpapan',
-              buka: false,
+              jamBuka: '09:00',
+              jamTutup: '18:00',
             ),
             PenyediaJasa(
               nama: 'CV Bersih Sentosa',
@@ -595,7 +730,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.7,
               pesananSelesai: 38,
               lokasi: 'Batu Ampar, Balikpapan',
-              buka: false,
+              jamBuka: '09:00',
+              jamTutup: '21:00',
             ),
           ],
         ),
@@ -603,6 +739,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Pembasmian Hama (Pest Control)',
           spesialisasi: 'Rayap, Kecoa, Tikus, Nyamuk',
           icon: Icons.pest_control_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Spot Treatment', deskripsi: 'Area terbatas', tarifMin: 100000, tarifMax: 200000),
+            TingkatKebutuhan(label: 'Fumigasi Sedang', deskripsi: 'Seluruh rumah', tarifMin: 300000, tarifMax: 600000),
+            TingkatKebutuhan(label: 'Fumigasi Berat', deskripsi: 'Rayap/infestasi parah', tarifMin: 700000, tarifMax: 2000000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Anti Hama Pro',
@@ -611,7 +752,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 5.6,
               pesananSelesai: 179,
               lokasi: 'Balikpapan Tengah, Balikpapan',
-              buka: true,
+              jamBuka: '09:30',
+              jamTutup: '18:30',
             ),
             PenyediaJasa(
               nama: 'Basmi Rayap Jaya',
@@ -620,7 +762,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.6,
               pesananSelesai: 220,
               lokasi: 'Balikpapan Timur, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '19:00',
             ),
             PenyediaJasa(
               nama: 'Pak Yusuf Pest Control',
@@ -629,7 +772,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 3.3,
               pesananSelesai: 55,
               lokasi: 'Balikpapan Selatan, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '20:00',
             ),
           ],
         ),
@@ -637,6 +781,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Sedot WC & Septic Tank',
           spesialisasi: 'Toilet, Septic Tank, Saluran Mampet',
           icon: Icons.plumbing_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Standar', deskripsi: 'Kapasitas kecil, akses mudah', tarifMin: 250000, tarifMax: 400000),
+            TingkatKebutuhan(label: 'Sedang', deskripsi: 'Kapasitas menengah', tarifMin: 450000, tarifMax: 700000),
+            TingkatKebutuhan(label: 'Berat', deskripsi: 'Akses sulit/kapasitas besar', tarifMin: 800000, tarifMax: 1500000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Sedot WC Cepat 24 Jam',
@@ -645,7 +794,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 9.5,
               pesananSelesai: 55,
               lokasi: 'Damai, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '22:00',
             ),
             PenyediaJasa(
               nama: 'Lancar Jaya Sedot Tinja',
@@ -654,7 +804,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.9,
               pesananSelesai: 53,
               lokasi: 'Balikpapan Barat, Balikpapan',
-              buka: true,
+              jamBuka: '11:00',
+              jamTutup: '21:00',
             ),
             PenyediaJasa(
               nama: 'Mas Iwan Sedot Septic Tank',
@@ -663,7 +814,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.0,
               pesananSelesai: 172,
               lokasi: 'Batu Ampar, Balikpapan',
-              buka: true,
+              jamBuka: '12:00',
+              jamTutup: '20:00',
             ),
           ],
         ),
@@ -671,6 +823,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Laundry & Setrika (Antar-Jemput)',
           spesialisasi: 'Pakaian, Selimut, Gorden, Sepatu',
           icon: Icons.local_laundry_service_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Reguler', deskripsi: 'Per kg, 2-3 hari', tarifMin: 7000, tarifMax: 10000),
+            TingkatKebutuhan(label: 'Express', deskripsi: 'Per kg, selesai sehari', tarifMin: 12000, tarifMax: 18000),
+            TingkatKebutuhan(label: 'Item Khusus', deskripsi: 'Selimut/gorden/sepatu per item', tarifMin: 25000, tarifMax: 75000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Laundry Kilat Antar Jemput',
@@ -679,7 +836,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 5.3,
               pesananSelesai: 301,
               lokasi: 'Balikpapan Tengah, Balikpapan',
-              buka: true,
+              jamBuka: '13:00',
+              jamTutup: '22:00',
             ),
             PenyediaJasa(
               nama: 'Fresh & Clean Laundry',
@@ -688,7 +846,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.4,
               pesananSelesai: 153,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '00:00',
+              jamTutup: '00:00',
             ),
             PenyediaJasa(
               nama: 'Mba Nur Laundry Express',
@@ -697,7 +856,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.9,
               pesananSelesai: 162,
               lokasi: 'Batu Ampar, Balikpapan',
-              buka: true,
+              jamBuka: '20:00',
+              jamTutup: '05:00',
             ),
           ],
         ),
@@ -712,6 +872,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Perawat Panggilan (Home Care)',
           spesialisasi: 'Infus, Ganti Perban, Cek Tensi, Suntik',
           icon: Icons.medical_services_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Kunjungan Dasar', deskripsi: 'Cek tensi/ganti perban', tarifMin: 100000, tarifMax: 150000),
+            TingkatKebutuhan(label: 'Sedang', deskripsi: 'Infus/suntik', tarifMin: 150000, tarifMax: 250000),
+            TingkatKebutuhan(label: 'Intensif', deskripsi: 'Perawatan intensif di rumah', tarifMin: 300000, tarifMax: 500000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Perawat Rina Home Care',
@@ -720,7 +885,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.7,
               pesananSelesai: 153,
               lokasi: 'Damai, Balikpapan',
-              buka: true,
+              jamBuka: '06:00',
+              jamTutup: '14:00',
             ),
             PenyediaJasa(
               nama: 'CarePlus Perawat Panggilan',
@@ -729,7 +895,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.1,
               pesananSelesai: 65,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '07:00',
+              jamTutup: '15:00',
             ),
             PenyediaJasa(
               nama: 'Mas Doni Perawat Homecare',
@@ -738,7 +905,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 3.5,
               pesananSelesai: 84,
               lokasi: 'Balikpapan Tengah, Balikpapan',
-              buka: true,
+              jamBuka: '07:30',
+              jamTutup: '16:30',
             ),
           ],
         ),
@@ -746,6 +914,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Fisioterapi',
           spesialisasi: 'Stroke, Cedera Olahraga, Nyeri Sendi, Lansia',
           icon: Icons.accessibility_new_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Sesi Dasar', deskripsi: 'Terapi ringan per sesi', tarifMin: 150000, tarifMax: 250000),
+            TingkatKebutuhan(label: 'Sesi Sedang', deskripsi: 'Cedera/lansia per sesi', tarifMin: 250000, tarifMax: 400000),
+            TingkatKebutuhan(label: 'Program Intensif', deskripsi: 'Pemulihan stroke per sesi', tarifMin: 400000, tarifMax: 600000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Fisio Sehat Mandiri',
@@ -754,7 +927,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.9,
               pesananSelesai: 305,
               lokasi: 'Balikpapan Selatan, Balikpapan',
-              buka: false,
+              jamBuka: '08:00',
+              jamTutup: '16:00',
             ),
             PenyediaJasa(
               nama: 'Physio Care Home Visit',
@@ -763,7 +937,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.7,
               pesananSelesai: 94,
               lokasi: 'Damai, Balikpapan',
-              buka: false,
+              jamBuka: '08:00',
+              jamTutup: '17:00',
             ),
             PenyediaJasa(
               nama: 'Pak Agus Fisioterapis',
@@ -772,7 +947,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 5.5,
               pesananSelesai: 238,
               lokasi: 'Balikpapan Timur, Balikpapan',
-              buka: false,
+              jamBuka: '08:00',
+              jamTutup: '20:00',
             ),
           ],
         ),
@@ -780,6 +956,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Pijat & Terapi Kesehatan',
           spesialisasi: 'Pijat Tradisional, Pijat Refleksi, Bekam, Kerokan',
           icon: Icons.spa_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Pijat Standar', deskripsi: 'Tradisional/refleksi', tarifMin: 75000, tarifMax: 125000),
+            TingkatKebutuhan(label: 'Bekam/Kerokan', deskripsi: 'Terapi tambahan', tarifMin: 100000, tarifMax: 175000),
+            TingkatKebutuhan(label: 'Paket Kombinasi', deskripsi: 'Beberapa terapi sekaligus', tarifMin: 200000, tarifMax: 300000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Kang Ujang Pijat Tradisional',
@@ -788,7 +969,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.9,
               pesananSelesai: 38,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '21:00',
             ),
             PenyediaJasa(
               nama: 'Terapis Ida Refleksi & Bekam',
@@ -797,7 +979,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.4,
               pesananSelesai: 304,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '08:30',
+              jamTutup: '17:30',
             ),
             PenyediaJasa(
               nama: 'Sehat Bugar Pijat Panggilan',
@@ -806,7 +989,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.8,
               pesananSelesai: 139,
               lokasi: 'Balikpapan Timur, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '17:00',
             ),
           ],
         ),
@@ -814,6 +998,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Bidan & Perawatan Ibu-Anak',
           spesialisasi: 'Perawatan Nifas, Pijat Bayi, Baby Spa, Konsultasi Laktasi',
           icon: Icons.pregnant_woman_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Pijat Bayi/Baby Spa', deskripsi: 'Per sesi', tarifMin: 75000, tarifMax: 150000),
+            TingkatKebutuhan(label: 'Perawatan Nifas', deskripsi: 'Per kunjungan', tarifMin: 150000, tarifMax: 300000),
+            TingkatKebutuhan(label: 'Konsultasi Laktasi', deskripsi: 'Sesi lengkap', tarifMin: 200000, tarifMax: 350000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Bidan Yani Homecare',
@@ -822,7 +1011,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.4,
               pesananSelesai: 30,
               lokasi: 'Balikpapan Timur, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '18:00',
             ),
             PenyediaJasa(
               nama: 'Baby Spa Ceria (Mba Fitri)',
@@ -831,7 +1021,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.9,
               pesananSelesai: 145,
               lokasi: 'Balikpapan Tengah, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '21:00',
             ),
             PenyediaJasa(
               nama: 'Klinik Bunda Sejahtera',
@@ -840,7 +1031,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 3.9,
               pesananSelesai: 37,
               lokasi: 'Gunung Bahagia, Balikpapan',
-              buka: true,
+              jamBuka: '09:30',
+              jamTutup: '18:30',
             ),
           ],
         ),
@@ -848,6 +1040,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Pendamping & Perawat Lansia',
           spesialisasi: 'Pendampingan Harian, Bantuan Mobilitas, Pemantauan Kesehatan',
           icon: Icons.elderly_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Per Kunjungan', deskripsi: '4 jam pendampingan', tarifMin: 150000, tarifMax: 250000),
+            TingkatKebutuhan(label: 'Harian', deskripsi: '8 jam pendampingan', tarifMin: 300000, tarifMax: 450000),
+            TingkatKebutuhan(label: 'Live-in 24 Jam', deskripsi: 'Per hari', tarifMin: 700000, tarifMax: 1200000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Layanan Lansia Sejahtera',
@@ -856,7 +1053,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 4.6,
               pesananSelesai: 174,
               lokasi: 'Balikpapan Barat, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '19:00',
             ),
             PenyediaJasa(
               nama: 'Pendamping Care Mandiri',
@@ -865,7 +1063,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 4.1,
               pesananSelesai: 160,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '20:00',
             ),
             PenyediaJasa(
               nama: 'Mba Tuti Perawat Lansia',
@@ -874,7 +1073,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.3,
               pesananSelesai: 222,
               lokasi: 'Damai, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '22:00',
             ),
           ],
         ),
@@ -882,6 +1082,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Vaksinasi & Suntik Panggilan',
           spesialisasi: 'Vaksin Dewasa, Vaksin Anak, Booster',
           icon: Icons.vaccines_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Vaksin Dasar', deskripsi: '1 dosis dasar', tarifMin: 150000, tarifMax: 300000),
+            TingkatKebutuhan(label: 'Vaksin Booster', deskripsi: 'Booster dewasa', tarifMin: 300000, tarifMax: 500000),
+            TingkatKebutuhan(label: 'Paket Vaksin Anak', deskripsi: 'Paket lengkap', tarifMin: 500000, tarifMax: 900000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Vaksin Sehat Mobile',
@@ -890,7 +1095,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.4,
               pesananSelesai: 151,
               lokasi: 'Balikpapan Timur, Balikpapan',
-              buka: true,
+              jamBuka: '11:00',
+              jamTutup: '21:00',
             ),
             PenyediaJasa(
               nama: 'ImunCare Vaksinasi Panggilan',
@@ -899,7 +1105,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 0.8,
               pesananSelesai: 240,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '12:00',
+              jamTutup: '20:00',
             ),
             PenyediaJasa(
               nama: 'Klinik Sehat Vaksin Keliling',
@@ -908,7 +1115,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.0,
               pesananSelesai: 279,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '13:00',
+              jamTutup: '22:00',
             ),
           ],
         ),
@@ -916,6 +1124,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Konsultasi Dokter Umum (Home Visit)',
           spesialisasi: 'Pemeriksaan Umum, Resep Obat, Rujukan',
           icon: Icons.medical_information_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Konsultasi Dasar', deskripsi: 'Pemeriksaan umum', tarifMin: 150000, tarifMax: 250000),
+            TingkatKebutuhan(label: 'Dengan Obat', deskripsi: 'Termasuk resep & obat', tarifMin: 250000, tarifMax: 400000),
+            TingkatKebutuhan(label: 'Kunjungan Darurat', deskripsi: 'Malam/di luar jam normal', tarifMin: 400000, tarifMax: 600000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Dokter Rudi Home Visit',
@@ -924,7 +1137,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.8,
               pesananSelesai: 241,
               lokasi: 'Balikpapan Selatan, Balikpapan',
-              buka: true,
+              jamBuka: '00:00',
+              jamTutup: '00:00',
             ),
             PenyediaJasa(
               nama: 'DocGo Konsultasi Panggilan',
@@ -933,7 +1147,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.7,
               pesananSelesai: 118,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '20:00',
+              jamTutup: '05:00',
             ),
             PenyediaJasa(
               nama: 'Klinik Keluarga Sehat',
@@ -942,7 +1157,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.8,
               pesananSelesai: 178,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '06:00',
+              jamTutup: '14:00',
             ),
           ],
         ),
@@ -950,6 +1166,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Tes Laboratorium di Rumah',
           spesialisasi: 'Cek Darah, Cek Gula Darah, Cek Kolesterol',
           icon: Icons.biotech_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Cek Dasar', deskripsi: 'Gula darah/kolesterol', tarifMin: 75000, tarifMax: 150000),
+            TingkatKebutuhan(label: 'Panel Sedang', deskripsi: 'Beberapa parameter', tarifMin: 150000, tarifMax: 300000),
+            TingkatKebutuhan(label: 'Panel Lengkap', deskripsi: 'Cek darah lengkap', tarifMin: 300000, tarifMax: 600000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'LabHome Tes Darah Panggilan',
@@ -958,7 +1179,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 3.3,
               pesananSelesai: 227,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '07:00',
+              jamTutup: '15:00',
             ),
             PenyediaJasa(
               nama: 'Cek Sehat Mobile Lab',
@@ -967,7 +1189,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.6,
               pesananSelesai: 233,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '07:30',
+              jamTutup: '16:30',
             ),
             PenyediaJasa(
               nama: 'Pak Bayu Petugas Lab Panggilan',
@@ -976,7 +1199,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.0,
               pesananSelesai: 172,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '16:00',
             ),
           ],
         ),
@@ -984,6 +1208,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Perawatan Gigi Panggilan',
           spesialisasi: 'Scaling, Tambal Gigi Sementara, Konsultasi',
           icon: Icons.sentiment_satisfied_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Konsultasi/Scaling', deskripsi: 'Perawatan ringan', tarifMin: 150000, tarifMax: 250000),
+            TingkatKebutuhan(label: 'Tambal Sementara', deskripsi: 'Perawatan sedang', tarifMin: 250000, tarifMax: 400000),
+            TingkatKebutuhan(label: 'Perawatan Lanjutan', deskripsi: 'Kasus lebih kompleks', tarifMin: 400000, tarifMax: 700000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Dokter Gigi Sari Home Visit',
@@ -992,7 +1221,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 3.1,
               pesananSelesai: 238,
               lokasi: 'Batu Ampar, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '17:00',
             ),
             PenyediaJasa(
               nama: 'DentalCare Panggilan',
@@ -1001,7 +1231,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 4.5,
               pesananSelesai: 127,
               lokasi: 'Damai, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '20:00',
             ),
             PenyediaJasa(
               nama: 'Klinik Gigi Ceria Mobile',
@@ -1010,7 +1241,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 7.7,
               pesananSelesai: 104,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '21:00',
             ),
           ],
         ),
@@ -1018,6 +1250,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Ambulans & Transportasi Medis',
           spesialisasi: 'Antar Rumah Sakit, Rujukan Antar Kota, Emergency',
           icon: Icons.local_shipping_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Dalam Kota', deskripsi: 'Rujukan dalam kota', tarifMin: 200000, tarifMax: 400000),
+            TingkatKebutuhan(label: 'Antar Kota Dekat', deskripsi: 'Rujukan luar kota terdekat', tarifMin: 500000, tarifMax: 900000),
+            TingkatKebutuhan(label: 'Emergency/Jauh', deskripsi: 'Kondisi darurat/jarak jauh', tarifMin: 1000000, tarifMax: 2500000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Ambulans Cepat Sehat',
@@ -1026,7 +1263,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.1,
               pesananSelesai: 65,
               lokasi: 'Balikpapan Barat, Balikpapan',
-              buka: true,
+              jamBuka: '08:30',
+              jamTutup: '17:30',
             ),
             PenyediaJasa(
               nama: 'SigapMedis Transport',
@@ -1035,7 +1273,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.3,
               pesananSelesai: 30,
               lokasi: 'Balikpapan Selatan, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '17:00',
             ),
             PenyediaJasa(
               nama: 'Tim Medis Siaga 24 Jam',
@@ -1044,7 +1283,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.1,
               pesananSelesai: 55,
               lokasi: 'Gunung Bahagia, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '18:00',
             ),
           ],
         ),
@@ -1059,6 +1299,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Les Privat SD/SMP/SMA',
           spesialisasi: 'Matematika, IPA, Bahasa Indonesia, Semua Mapel',
           icon: Icons.edit_note_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'SD', deskripsi: 'Per sesi', tarifMin: 50000, tarifMax: 75000),
+            TingkatKebutuhan(label: 'SMP', deskripsi: 'Per sesi', tarifMin: 75000, tarifMax: 100000),
+            TingkatKebutuhan(label: 'SMA', deskripsi: 'Per sesi', tarifMin: 100000, tarifMax: 150000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Kak Dina Les Privat',
@@ -1067,7 +1312,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.2,
               pesananSelesai: 214,
               lokasi: 'Gunung Bahagia, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '21:00',
             ),
             PenyediaJasa(
               nama: 'Bimbel Pintar Jaya',
@@ -1076,7 +1322,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.7,
               pesananSelesai: 72,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '09:30',
+              jamTutup: '18:30',
             ),
             PenyediaJasa(
               nama: 'Pak Rian Guru Privat Matematika',
@@ -1085,7 +1332,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.8,
               pesananSelesai: 255,
               lokasi: 'Balikpapan Selatan, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '19:00',
             ),
           ],
         ),
@@ -1093,6 +1341,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Guru Mengaji & Agama',
           spesialisasi: 'Iqro, Al-Qur\'an, Tahsin, Hafalan',
           icon: Icons.menu_book_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Iqro', deskripsi: 'Per sesi dasar', tarifMin: 50000, tarifMax: 75000),
+            TingkatKebutuhan(label: 'Tahsin', deskripsi: 'Per sesi menengah', tarifMin: 75000, tarifMax: 125000),
+            TingkatKebutuhan(label: 'Hafalan/Privat Intensif', deskripsi: 'Per sesi', tarifMin: 125000, tarifMax: 200000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Ustadz Fauzi Guru Ngaji',
@@ -1101,7 +1354,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.6,
               pesananSelesai: 86,
               lokasi: 'Gunung Bahagia, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '20:00',
             ),
             PenyediaJasa(
               nama: 'TPA Cerdas Qur\'ani',
@@ -1110,7 +1364,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 5.9,
               pesananSelesai: 244,
               lokasi: 'Batu Ampar, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '22:00',
             ),
             PenyediaJasa(
               nama: 'Kak Aisyah Guru Tahsin',
@@ -1119,7 +1374,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 4.3,
               pesananSelesai: 298,
               lokasi: 'Gunung Bahagia, Balikpapan',
-              buka: true,
+              jamBuka: '11:00',
+              jamTutup: '21:00',
             ),
           ],
         ),
@@ -1127,6 +1383,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Kursus Bahasa Asing',
           spesialisasi: 'Bahasa Inggris, Mandarin, Jepang, Korea',
           icon: Icons.translate_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Pemula', deskripsi: 'Per sesi', tarifMin: 75000, tarifMax: 100000),
+            TingkatKebutuhan(label: 'Menengah', deskripsi: 'Per sesi', tarifMin: 100000, tarifMax: 150000),
+            TingkatKebutuhan(label: 'Persiapan Sertifikasi', deskripsi: 'Per sesi lanjutan', tarifMin: 150000, tarifMax: 250000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'English Corner Privat',
@@ -1135,7 +1396,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 4.8,
               pesananSelesai: 150,
               lokasi: 'Balikpapan Barat, Balikpapan',
-              buka: true,
+              jamBuka: '12:00',
+              jamTutup: '20:00',
             ),
             PenyediaJasa(
               nama: 'Kak Vivi Kursus Mandarin',
@@ -1144,7 +1406,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 7.5,
               pesananSelesai: 266,
               lokasi: 'Balikpapan Barat, Balikpapan',
-              buka: true,
+              jamBuka: '13:00',
+              jamTutup: '22:00',
             ),
             PenyediaJasa(
               nama: 'Bahasa Jepang Sakura Course',
@@ -1153,7 +1416,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 3.1,
               pesananSelesai: 157,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '00:00',
+              jamTutup: '00:00',
             ),
           ],
         ),
@@ -1161,6 +1425,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Kursus Musik & Vokal',
           spesialisasi: 'Piano, Gitar, Vokal, Drum',
           icon: Icons.music_note_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Dasar', deskripsi: 'Per sesi', tarifMin: 75000, tarifMax: 100000),
+            TingkatKebutuhan(label: 'Menengah', deskripsi: 'Per sesi', tarifMin: 100000, tarifMax: 150000),
+            TingkatKebutuhan(label: 'Lanjutan/Profesional', deskripsi: 'Per sesi', tarifMin: 150000, tarifMax: 250000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Studio Musik Harmoni',
@@ -1169,7 +1438,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.7,
               pesananSelesai: 136,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '20:00',
+              jamTutup: '05:00',
             ),
             PenyediaJasa(
               nama: 'Kak Bimo Guru Gitar',
@@ -1178,7 +1448,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.1,
               pesananSelesai: 226,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '06:00',
+              jamTutup: '14:00',
             ),
             PenyediaJasa(
               nama: 'Vokal Merdu Privat',
@@ -1187,7 +1458,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.4,
               pesananSelesai: 233,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '07:00',
+              jamTutup: '15:00',
             ),
           ],
         ),
@@ -1195,6 +1467,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Bimbingan Persiapan Ujian',
           spesialisasi: 'UTBK/SBMPTN, CPNS, TOEFL/IELTS',
           icon: Icons.fact_check_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Privat 1-on-1', deskripsi: 'Per sesi', tarifMin: 100000, tarifMax: 200000),
+            TingkatKebutuhan(label: 'Paket Reguler', deskripsi: 'Per bulan', tarifMin: 300000, tarifMax: 500000),
+            TingkatKebutuhan(label: 'Paket Intensif', deskripsi: 'Per bulan', tarifMin: 500000, tarifMax: 1000000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Bimbel UTBK Sukses',
@@ -1203,7 +1480,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.8,
               pesananSelesai: 312,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '07:30',
+              jamTutup: '16:30',
             ),
             PenyediaJasa(
               nama: 'CPNS Ready Privat',
@@ -1212,7 +1490,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 3.2,
               pesananSelesai: 217,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '16:00',
             ),
             PenyediaJasa(
               nama: 'Kak Tania IELTS Coach',
@@ -1221,7 +1500,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 7.7,
               pesananSelesai: 130,
               lokasi: 'Gunung Bahagia, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '17:00',
             ),
           ],
         ),
@@ -1229,6 +1509,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Bimbingan PAUD & Anak Usia Dini',
           spesialisasi: 'Calistung, Motorik, Bahasa Dasar',
           icon: Icons.child_care_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Per Sesi', deskripsi: 'Sesi harian', tarifMin: 60000, tarifMax: 90000),
+            TingkatKebutuhan(label: 'Paket Mingguan', deskripsi: 'Per minggu', tarifMin: 200000, tarifMax: 350000),
+            TingkatKebutuhan(label: 'Paket Bulanan', deskripsi: 'Per bulan', tarifMin: 700000, tarifMax: 1200000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'PAUD Ceria Privat',
@@ -1237,7 +1522,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 0.8,
               pesananSelesai: 190,
               lokasi: 'Ring Road, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '20:00',
             ),
             PenyediaJasa(
               nama: 'Kak Rina Guru Calistung',
@@ -1246,7 +1532,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 8.8,
               pesananSelesai: 291,
               lokasi: 'Balikpapan Selatan, Balikpapan',
-              buka: true,
+              jamBuka: '08:00',
+              jamTutup: '21:00',
             ),
             PenyediaJasa(
               nama: 'Tumbuh Kembang Privat',
@@ -1255,7 +1542,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.5,
               pesananSelesai: 60,
               lokasi: 'Ring Road, Balikpapan',
-              buka: false,
+              jamBuka: '08:30',
+              jamTutup: '17:30',
             ),
           ],
         ),
@@ -1263,6 +1551,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Kursus Komputer & Coding',
           spesialisasi: 'Microsoft Office, Coding Dasar, Desain Grafis',
           icon: Icons.code_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Dasar', deskripsi: 'Per sesi', tarifMin: 75000, tarifMax: 125000),
+            TingkatKebutuhan(label: 'Menengah', deskripsi: 'Per sesi', tarifMin: 125000, tarifMax: 200000),
+            TingkatKebutuhan(label: 'Coding Lanjutan', deskripsi: 'Per sesi privat', tarifMin: 200000, tarifMax: 350000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Kursus Komputer Cerdas',
@@ -1271,7 +1564,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.0,
               pesananSelesai: 212,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '17:00',
             ),
             PenyediaJasa(
               nama: 'Coding Kids Privat',
@@ -1280,7 +1574,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 7.4,
               pesananSelesai: 212,
               lokasi: 'Balikpapan Tengah, Balikpapan',
-              buka: true,
+              jamBuka: '09:00',
+              jamTutup: '18:00',
             ),
             PenyediaJasa(
               nama: 'Kak Fajar Desain Grafis',
@@ -1289,7 +1584,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.8,
               pesananSelesai: 59,
               lokasi: 'Gunung Bahagia, Balikpapan',
-              buka: false,
+              jamBuka: '09:00',
+              jamTutup: '21:00',
             ),
           ],
         ),
@@ -1297,6 +1593,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Les Olahraga & Bela Diri',
           spesialisasi: 'Renang, Bulu Tangkis, Taekwondo, Silat',
           icon: Icons.sports_martial_arts_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Per Sesi', deskripsi: 'Sesi tunggal', tarifMin: 60000, tarifMax: 100000),
+            TingkatKebutuhan(label: 'Paket Mingguan', deskripsi: '2-3x per minggu', tarifMin: 200000, tarifMax: 350000),
+            TingkatKebutuhan(label: 'Paket Bulanan', deskripsi: 'Per bulan', tarifMin: 600000, tarifMax: 1000000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Coach Renang Andi',
@@ -1305,7 +1606,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 9.5,
               pesananSelesai: 197,
               lokasi: 'Balikpapan Barat, Balikpapan',
-              buka: true,
+              jamBuka: '09:30',
+              jamTutup: '18:30',
             ),
             PenyediaJasa(
               nama: 'Bulu Tangkis Privat Jaya',
@@ -1314,7 +1616,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 6.4,
               pesananSelesai: 33,
               lokasi: 'Balikpapan Barat, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '19:00',
             ),
             PenyediaJasa(
               nama: 'Kak Doni Taekwondo Privat',
@@ -1323,7 +1626,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 1.9,
               pesananSelesai: 82,
               lokasi: 'Gunung Bahagia, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '20:00',
             ),
           ],
         ),
@@ -1331,6 +1635,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Pendamping Belajar ABK',
           spesialisasi: 'Terapi Wicara, Bimbingan Khusus, Sensory Play',
           icon: Icons.favorite_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Per Sesi', deskripsi: 'Sesi tunggal', tarifMin: 100000, tarifMax: 150000),
+            TingkatKebutuhan(label: 'Paket Mingguan', deskripsi: 'Per minggu', tarifMin: 350000, tarifMax: 550000),
+            TingkatKebutuhan(label: 'Paket Bulanan Intensif', deskripsi: 'Per bulan', tarifMin: 1200000, tarifMax: 2000000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Terapis Wicara Sinta',
@@ -1339,7 +1648,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.5,
               pesananSelesai: 149,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '10:00',
+              jamTutup: '22:00',
             ),
             PenyediaJasa(
               nama: 'Bimbingan ABK Ceria',
@@ -1348,7 +1658,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 7.2,
               pesananSelesai: 76,
               lokasi: 'Balikpapan Timur, Balikpapan',
-              buka: true,
+              jamBuka: '11:00',
+              jamTutup: '21:00',
             ),
             PenyediaJasa(
               nama: 'Kak Nadia Pendamping Khusus',
@@ -1357,7 +1668,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 0.7,
               pesananSelesai: 177,
               lokasi: 'Batu Ampar, Balikpapan',
-              buka: true,
+              jamBuka: '12:00',
+              jamTutup: '20:00',
             ),
           ],
         ),
@@ -1365,6 +1677,11 @@ List<KategoriUtama> getKategoriMitra() {
           nama: 'Kursus Seni & Kerajinan',
           spesialisasi: 'Melukis, Kerajinan Tangan, Kaligrafi',
           icon: Icons.palette_rounded,
+          tingkatKebutuhan: [
+            TingkatKebutuhan(label: 'Per Sesi', deskripsi: 'Sesi tunggal', tarifMin: 60000, tarifMax: 100000),
+            TingkatKebutuhan(label: 'Paket Mingguan', deskripsi: 'Per minggu', tarifMin: 200000, tarifMax: 350000),
+            TingkatKebutuhan(label: 'Paket Bulanan', deskripsi: 'Per bulan', tarifMin: 600000, tarifMax: 1000000),
+          ],
           penyedia: [
             PenyediaJasa(
               nama: 'Studio Lukis Kreatif',
@@ -1373,7 +1690,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 4.1,
               pesananSelesai: 119,
               lokasi: 'Balikpapan Utara, Balikpapan',
-              buka: true,
+              jamBuka: '13:00',
+              jamTutup: '22:00',
             ),
             PenyediaJasa(
               nama: 'Kak Maya Kerajinan Tangan',
@@ -1382,7 +1700,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 2.7,
               pesananSelesai: 172,
               lokasi: 'Batu Ampar, Balikpapan',
-              buka: true,
+              jamBuka: '00:00',
+              jamTutup: '00:00',
             ),
             PenyediaJasa(
               nama: 'Kaligrafi Indah Privat',
@@ -1391,7 +1710,8 @@ List<KategoriUtama> getKategoriMitra() {
               jarakKm: 5.6,
               pesananSelesai: 39,
               lokasi: 'Sepinggan, Balikpapan',
-              buka: true,
+              jamBuka: '20:00',
+              jamTutup: '05:00',
             ),
           ],
         ),

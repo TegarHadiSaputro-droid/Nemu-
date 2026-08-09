@@ -37,7 +37,7 @@ class _MitraCategoryPageState extends State<MitraCategoryPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  mitraAppBar('Kang!', titleColor: mitraTextDark, iconColor: mitraTextDark, titleSize: 22),
+                  mitraAppBar('', titleColor: mitraTextDark, iconColor: mitraTextDark, titleSize: 22),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                     child: Column(
@@ -50,7 +50,7 @@ class _MitraCategoryPageState extends State<MitraCategoryPage> {
                         const SizedBox(height: 4),
                         Text(
                           'Pilih kategori, kami carikan tukang atau toko terbaik untukmu.',
-                          style: mitraFont(size: 12.5, color: mitraTextDark.withValues(alpha: 0.75)),
+                          style: mitraFont(size: 15, color: mitraTextDark.withValues(alpha: 0.75)),
                         ),
                         const SizedBox(height: 14),
                         Container(
