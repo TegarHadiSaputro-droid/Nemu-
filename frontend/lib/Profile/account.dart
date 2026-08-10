@@ -248,14 +248,15 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
         userName: 'Nama Pengguna',
         photoUrl: null,
         isSeller: false,
+        isDriver: false,
         rating: null,
       );
     }
 
     // StreamBuilder mendengarkan perubahan dokumen user secara realtime.
-    // Begitu pendaftaran gerai di Nemu+ berhasil dan backend meng-update
-    // roles.seller jadi true, badge di sini otomatis berubah dari
-    // "Pembeli" ke "Penjual" tanpa perlu keluar-masuk halaman.
+    // Begitu roles.seller / roles.driver berubah di Firestore (pendaftaran
+    // gerai di Nemu+, atau terima undangan driver), badge di sini otomatis
+    // ikut berubah tanpa perlu keluar-masuk halaman.
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: _firestore.collection('users').doc(uid).snapshots(),
       builder: (context, snapshot) {
@@ -267,6 +268,7 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
           userName: (data?['name'] as String?) ?? 'Nama Pengguna',
           photoUrl: data?['photoUrl'] as String?,
           isSeller: (roles?['seller'] as bool?) ?? false,
+          isDriver: (roles?['driver'] as bool?) ?? false,
           rating: (data?['sellerRating'] as num?)?.toDouble(),
         );
       },
@@ -278,6 +280,7 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
     required String userName,
     required String? photoUrl,
     required bool isSeller,
+    required bool isDriver,
     required double? rating,
   }) {
     final avatarImage = _avatarImageFor(photoUrl);
@@ -312,11 +315,23 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
                 ),
               ),
               const SizedBox(height: 4),
-              Row(
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 4,
                 children: [
-                  _RoleBadge(label: isSeller ? 'Penjual' : 'Pembeli'),
+                  // Cuma satu badge yang tampil sekaligus. Prioritas:
+                  // Penjual > Driver > Pembeli (default). Jadi begitu
+                  // undangan driver di-accept, badge otomatis ganti dari
+                  // "Pembeli" jadi "Driver" — bukan ditambah di sebelahnya.
+                  _RoleBadge(
+                    label: isSeller
+                        ? 'Penjual'
+                        : isDriver
+                            ? 'Driver'
+                            : 'Pembeli',
+                  ),
                   if (isSeller) ...[
-                    const SizedBox(width: 8),
                     Icon(Icons.star, size: 14, color: kInk),
                     const SizedBox(width: 2),
                     Text(
@@ -558,7 +573,7 @@ Future<void> _resetToBuyer(BuildContext context) async {
     batch.set(
       firestore.collection('users').doc(uid),
       {
-        'roles': {'seller': false},
+        'roles': {'seller': false, 'driver': false},
         'sellerRating': FieldValue.delete(),
       },
       SetOptions(merge: true),
@@ -585,117 +600,4 @@ Future<void> _resetToBuyer(BuildContext context) async {
       SnackBar(content: Text('Gagal reset: $e')),
     );
   }
-}
-
-// ---------------------------------------------------------------------------
-// Dialog konfirmasi Keluar (card di tengah layar, bukan halaman terpisah)
-// ---------------------------------------------------------------------------
-void _showLogoutConfirmation(BuildContext context) {
-  showDialog(
-    context: context,
-    barrierColor: Colors.black.withOpacity(0.4),
-    builder: (context) {
-      return Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
-          decoration: BoxDecoration(
-            color: kCream,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.logout,
-                  size: 26,
-                  color: Colors.red.shade700,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Yakin ingin keluar?',
-                style: GoogleFonts.manrope(
-                  color: kInk,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Kamu perlu login kembali untuk mengakses akunmu.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.manrope(
-                  color: kInk.withOpacity(0.65),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: kInk,
-                        side: BorderSide(color: kInk.withOpacity(0.25)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        'Batal',
-                        style: GoogleFonts.manrope(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // TODO: proses logout & arahkan ke halaman login
-                        Navigator.pop(context);
-                        Navigator.of(context)
-                            .popUntil((route) => route.isFirst);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red.shade700,
-                        foregroundColor: kCream,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: Text(
-                        'Ya, Keluar',
-                        style: GoogleFonts.manrope(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
 }

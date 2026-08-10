@@ -9,12 +9,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'screens/registration_screen.dart';
 import 'screens/login_screen.dart';
-import 'screens/home_screen.dart'; // berisi HomeScreen
-import 'screens/home_screen2.dart'; // berisi HomeScreen2
-import 'services/auth_service.dart';
+import 'screens/home_screen.dart'; // berisi HomeScreen (Pembeli)
+import 'screens/home_screen2.dart'; // berisi HomeScreen2 (Penjual)
+import 'screens/home_screen3.dart'; // berisi HomeScreen3 (Driver)
 import 'theme/app_colors.dart';
 import 'widgets/background_decoration.dart';
 import 'utils/page_transitions.dart';
@@ -97,15 +98,35 @@ class AuthGate extends StatelessWidget {
 
         // Sudah pernah login sebelumnya (sesi tersimpan otomatis oleh
         // Firebase) -> langsung ke Beranda, tidak perlu login ulang.
+        //
+        // StreamBuilder (bukan FutureBuilder) SENGAJA dipakai di sini supaya
+        // begitu roles user berubah sambil app masih kebuka (mis. baru saja
+        // accept undangan jadi Driver di InboxScreen), routing ikut
+        // ter-update live tanpa perlu logout-login ulang.
+        //
+        // Urutan prioritas: Driver > Penjual > Pembeli (default). Driver
+        // dicek PALING DULUAN karena satu akun kadang masih kebawa
+        // roles.buyer / roles.seller lama sebelum sempat "dimatikan" --
+        // begitu roles.driver true, akun itu harus selalu masuk ke
+        // dashboard Driver, apa pun status role lainnya.
         if (user != null) {
-          return FutureBuilder<bool>(
-            future: AuthService.isSeller(),
-            builder: (context, sellerSnap) {
-              if (sellerSnap.connectionState == ConnectionState.waiting) {
+          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .snapshots(),
+            builder: (context, roleSnap) {
+              if (roleSnap.connectionState == ConnectionState.waiting) {
                 return const _SplashScreen();
               }
-              final isSeller = sellerSnap.data ?? false;
-              return isSeller ? const HomeScreen2() : const HomeScreen();
+
+              final roles = roleSnap.data?.data()?['roles'] as Map<String, dynamic>?;
+              final isDriver = (roles?['driver'] as bool?) ?? false;
+              final isSeller = (roles?['seller'] as bool?) ?? false;
+
+              if (isDriver) return const HomeScreen3();
+              if (isSeller) return const HomeScreen2();
+              return const HomeScreen();
             },
           );
         }
