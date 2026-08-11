@@ -11,6 +11,9 @@ class PasarProduk {
   final int hargaKemarin;
   final int hargaSekarang;
   final String deskripsi;
+  /// Berat dalam kg untuk 1 unit satuan (mis. 1 "kg" tomat = 1.0,
+  /// 1 "ikat" kangkung = 0.3). Dipakai untuk hitung ongkir per berat.
+  final double beratKg;
 
   const PasarProduk({
     required this.id,
@@ -20,6 +23,7 @@ class PasarProduk {
     required this.hargaKemarin,
     required this.hargaSekarang,
     required this.deskripsi,
+    this.beratKg = 1.0,
   });
 
   // Get status harga (naik = true, turun = false, stabil = null)
@@ -66,6 +70,10 @@ class PasarMarket {
   final String jamBuka;
   final String alamat;
   final List<PasarGerai> gerai;
+  /// Koordinat pasar, dipakai untuk hitung jarak asli (Haversine) ke
+  /// alamat user. Kalau null, ongkir jarak fallback ke field `jarak` di atas.
+  final double? lat;
+  final double? lng;
 
   const PasarMarket({
     required this.id,
@@ -77,7 +85,11 @@ class PasarMarket {
     required this.jamBuka,
     required this.alamat,
     required this.gerai,
+    this.lat,
+    this.lng,
   });
+
+  bool get hasCoordinates => lat != null && lng != null;
 }
 
 // ─────────────────────────────────────────────
@@ -129,6 +141,14 @@ class CartManager {
 
   int get totalQty => items.value.fold(0, (sum, i) => sum + i.qty);
   int get totalHarga => items.value.fold(0, (sum, i) => sum + i.subtotal);
+
+  /// Total berat (kg) dari semua item milik satu market tertentu.
+  /// Dipakai untuk hitung ongkir per market di checkout.
+  double totalBeratUntukMarket(String namaMarket) {
+    return items.value
+        .where((i) => i.namaMarket == namaMarket)
+        .fold<double>(0, (sum, i) => sum + i.produk.beratKg * i.qty);
+  }
 
   void tambah(
     PasarProduk produk,
@@ -227,6 +247,9 @@ final List<PasarMarket> mockDaftarPasar = [
     buka: true,
     jamBuka: '05.00 – 14.00',
     alamat: 'Jl. Marsma Iswahyudi, Sepinggan, Balikpapan',
+    // Koordinat dari Google Maps (Pasar Sayur Mayur Sepinggan Balikpapan).
+    lat: -1.256728,
+    lng: 116.905935,
     gerai: [
       PasarGerai(
         id: 'p1-g1',
@@ -244,6 +267,7 @@ final List<PasarMarket> mockDaftarPasar = [
             hargaKemarin: 14000,
             hargaSekarang: 12000,
             deskripsi: 'Tomat segar pilihan, merah merona dan kaya vitamin C.',
+            beratKg: 1.0,
           ),
           PasarProduk(
             id: 'p1-g1-2',
@@ -254,6 +278,7 @@ final List<PasarMarket> mockDaftarPasar = [
             hargaSekarang: 4000,
             deskripsi:
                 'Kangkung hidroponik bersih tanpa ulat, siap dimasak tumis.',
+            beratKg: 0.3,
           ),
           PasarProduk(
             id: 'p1-g1-3',
@@ -264,6 +289,7 @@ final List<PasarMarket> mockDaftarPasar = [
             hargaSekarang: 32000,
             deskripsi:
                 'Bawang putih pilihan dengan ukuran besar dan wangi khas.',
+            beratKg: 1.0,
           ),
           PasarProduk(
             id: 'p1-g1-4',
@@ -273,6 +299,7 @@ final List<PasarMarket> mockDaftarPasar = [
             hargaKemarin: 45000,
             hargaSekarang: 42000,
             deskripsi: 'Cabai merah keriting tingkat kepedasan sedang.',
+            beratKg: 1.0,
           ),
         ],
       ),
@@ -287,6 +314,9 @@ final List<PasarMarket> mockDaftarPasar = [
     buka: true,
     jamBuka: '04.00 – 12.00',
     alamat: 'Jl. Jend. Sudirman, Klandasan Ulu, Balikpapan',
+    // Koordinat dari Google Maps (Pasar Klandasan).
+    lat: -1.277899,
+    lng: 116.830960,
     gerai: [
       PasarGerai(
         id: 'p2-g1',
@@ -305,6 +335,7 @@ final List<PasarMarket> mockDaftarPasar = [
             hargaKemarin: 70000,
             hargaSekarang: 68000,
             deskripsi: 'Udang vaname segar kupas kulit.',
+            beratKg: 1.0,
           ),
           PasarProduk(
             id: 'p2-g1-2',
@@ -314,6 +345,7 @@ final List<PasarMarket> mockDaftarPasar = [
             hargaKemarin: 50000,
             hargaSekarang: 52000,
             deskripsi: 'Cumi cumi segar isi telur gurih.',
+            beratKg: 1.0,
           ),
         ],
       ),
@@ -328,6 +360,9 @@ final List<PasarMarket> mockDaftarPasar = [
     buka: false,
     jamBuka: '06.00 – 13.00',
     alamat: 'Jl. Pandansari, Balikpapan Utara',
+    // Koordinat dari Google Maps (Pasar Pandansari).
+    lat: -1.237763,
+    lng: 116.824515,
     gerai: [
       PasarGerai(
         id: 'p3-g1',
@@ -345,6 +380,7 @@ final List<PasarMarket> mockDaftarPasar = [
             hargaKemarin: 15000,
             hargaSekarang: 16000,
             deskripsi: 'Jagung manis pipil segar cocok untuk bakwan jagung.',
+            beratKg: 1.0,
           ),
         ],
       ),

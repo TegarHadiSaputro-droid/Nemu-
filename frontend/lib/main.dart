@@ -20,6 +20,7 @@ import 'widgets/background_decoration.dart';
 import 'utils/page_transitions.dart';
 import 'Theme/app_theme.dart'; // berisi kInk, kCream, kGradientTop, kGradientBottom
 import 'Profile/account.dart'; // berisi AccountPage
+import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
