@@ -41,6 +41,9 @@ class PasarGerai {
   final int ulasan;
   final String emoji;
   final List<PasarProduk> produk;
+  // uid Firebase Auth milik penjual gerai ini — WAJIB diisi agar pesanan
+  // yang masuk bisa muncul di dashboard seller yang benar.
+  final String? sellerId;
 
   const PasarGerai({
     required this.id,
@@ -50,6 +53,7 @@ class PasarGerai {
     required this.ulasan,
     required this.emoji,
     required this.produk,
+    this.sellerId,
   });
 }
 
@@ -107,12 +111,16 @@ class CartItem {
   int qty;
   final String namaGerai;
   final String namaMarket;
+  final String? geraiId;
+  final String? sellerId;
 
   CartItem({
     required this.produk,
     required this.qty,
     required this.namaGerai,
     required this.namaMarket,
+    this.geraiId,
+    this.sellerId,
   });
 
   int get subtotal => produk.hargaSekarang * qty;
@@ -134,8 +142,10 @@ class CartManager {
     PasarProduk produk,
     int qty,
     String namaGerai,
-    String namaMarket,
-  ) {
+    String namaMarket, {
+    String? geraiId,
+    String? sellerId,
+  }) {
     final list = List<CartItem>.from(items.value);
     final idx = list.indexWhere((c) => c.produk.id == produk.id);
     if (idx >= 0) {
@@ -147,6 +157,8 @@ class CartManager {
           qty: qty,
           namaGerai: namaGerai,
           namaMarket: namaMarket,
+          geraiId: geraiId,
+          sellerId: sellerId,
         ),
       );
     }
@@ -349,5 +361,71 @@ final List<PasarMarket> mockDaftarPasar = [
         ],
       ),
     ],
+  ),
+  PasarMarket(
+    id: 'p4',
+    nama: 'Pasar Baru',
+    kategori: 'Kebutuhan Pokok & Pakaian',
+    rating: 4.4,
+    jarak: '6.0 km',
+    buka: true,
+    jamBuka: '06.00 – 17.00',
+    alamat: 'Jl. Balcony, Klandasan Ilir, Balikpapan Selatan',
+    gerai: [],
+  ),
+  PasarMarket(
+    id: 'p5',
+    nama: 'Pasar Segar',
+    kategori: 'Pasar Modern & Kuliner',
+    rating: 4.4,
+    jarak: '7.5 km',
+    buka: true,
+    jamBuka: '06.00 – 21.00',
+    alamat: 'Jl. Sungai Ampal Ruko RD No. 08, Gunung Samarinda, Balikpapan Utara',
+    gerai: [],
+  ),
+  PasarMarket(
+    id: 'p6',
+    nama: 'Pasar Balikpapan Permai',
+    kategori: 'Kebutuhan Pokok & Kuliner',
+    rating: 4.2,
+    jarak: '5.0 km',
+    buka: true,
+    jamBuka: '06.00 – 17.00',
+    alamat: 'Balikpapan Permai, Damai, Balikpapan Kota',
+    gerai: [],
+  ),
+  PasarMarket(
+    id: 'p7',
+    nama: 'Pasar Manggar',
+    kategori: 'Hasil Laut & Kebutuhan Pokok',
+    rating: 4.2,
+    jarak: '11.0 km',
+    buka: true,
+    jamBuka: '04.00 – 14.00',
+    alamat: 'Manggar Baru, Balikpapan Timur',
+    gerai: [],
+  ),
+  PasarMarket(
+    id: 'p8',
+    nama: 'Pasar Butun',
+    kategori: 'Kebutuhan Harian',
+    rating: 4.2,
+    jarak: '8.0 km',
+    buka: true,
+    jamBuka: '06.00 – 17.00',
+    alamat: 'Jl. MT Haryono No. 16, Batu Ampar, Balikpapan Utara',
+    gerai: [],
+  ),
+  PasarMarket(
+    id: 'p9',
+    nama: 'Pasar Kebun Sayur',
+    kategori: 'Oleh-oleh & Kerajinan Khas',
+    rating: 4.4,
+    jarak: '9.0 km',
+    buka: true,
+    jamBuka: '08.00 – 18.00',
+    alamat: 'Jl. Letjen Suprapto, Marga Sari, Balikpapan Barat',
+    gerai: [],
   ),
 ];

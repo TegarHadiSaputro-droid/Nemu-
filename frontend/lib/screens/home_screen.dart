@@ -9,12 +9,14 @@ import 'package:frontend/Profile/account.dart';
 import 'package:frontend/widgets/bottom_navbar.dart';
 import 'package:frontend/widgets/address_editor_sheet.dart';
 import 'package:frontend/services/address_manager.dart';
+import 'package:frontend/services/favorite_gerai_service.dart';
 import 'package:frontend/screens/orders_screen.dart';
 import 'package:frontend/screens/pasar/pasar_screen.dart';
 import 'package:frontend/mitra/pages/mitra_category_page.dart';
 import 'package:frontend/mitra/pages/mitra_subcategory_page.dart';
 import 'package:frontend/mitra/data/mitra_data.dart';
 import 'package:frontend/mitra/models/mitra_models.dart';
+import 'package:frontend/models/orders_manager.dart';
 
 // ─────────────────────────────────────────────
 //  Warna Palette
@@ -106,15 +108,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _CommodityData(name: 'Tomat Segar', icon: '🍅', unit: '/kg', currentPrice: 12000, predictedPrice: 12000, changePercent: 0.0, isUp: false, predictionNote: 'Prediksi Besok: Stabil — pasokan cukup.', historyPrices: [11000, 11500, 12000, 11800, 12000, 12000, 12000], days: ['5 hari lalu', '4 hari lalu', '3 hari lalu', 'Lusa', 'Kemarin', 'Hari Ini', 'Prediksi']),
     _CommodityData(name: 'Daging Ayam', icon: '🍗', unit: '/kg', currentPrice: 36000, predictedPrice: 38000, changePercent: 5.5, isUp: true, predictionNote: 'Prediksi Besok: Naik mendekati akhir pekan.', historyPrices: [33000, 33500, 34000, 35000, 35500, 36000, 38000], days: ['5 hari lalu', '4 hari lalu', '3 hari lalu', 'Lusa', 'Kemarin', 'Hari Ini', 'Prediksi']),
     _CommodityData(name: 'Bawang Putih', icon: '🧄', unit: '/kg', currentPrice: 32000, predictedPrice: 31000, changePercent: 3.1, isUp: false, predictionNote: 'Prediksi Besok: Sedikit turun.', historyPrices: [34000, 33500, 33000, 32500, 32500, 32000, 31000], days: ['5 hari lalu', '4 hari lalu', '3 hari lalu', 'Lusa', 'Kemarin', 'Hari Ini', 'Prediksi']),
-  ];
-
-
-
-  List<_MarketStore> _stores = const [
-    _MarketStore(name: 'Pasar Sepinggan', category: 'Sayur, Buah & Daging', rating: 4.8, distance: '1.5 km', isOpen: true),
-    _MarketStore(name: 'Pasar Buton', category: 'Sembako & Rempah', rating: 4.6, distance: '4.8 km', isOpen: true),
-    _MarketStore(name: 'Pasar Klandasan', category: 'Ikan & Seafood Segar', rating: 4.9, distance: '9.5 km', isOpen: true),
-    _MarketStore(name: 'Pasar Pandansari', category: 'Beras & Palawija', rating: 4.7, distance: '13.0 km', isOpen: false),
   ];
 
   List<_RecipeBundle> _recipeBundles = const [
@@ -330,18 +323,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             days: (c['days'] as List).map((d) => d.toString()).toList(),
           )).toList();
         }
-
-
-
-        if (apiData['stores'] != null) {
-          _stores = (apiData['stores'] as List).map((s) => _MarketStore(
-            name: s['name'] ?? '',
-            category: s['category'] ?? '',
-            rating: (s['rating'] as num).toDouble(),
-            distance: s['distance'] ?? '',
-            isOpen: s['is_open'] ?? true,
-          )).toList();
-        }
       });
     }
   }
@@ -482,10 +463,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                           _buildRecipeBundlesScroll(),
                                           const SizedBox(height: 24),
 
-                                          // Gerai Pasar Terdekat
-                                          _buildSectionTitle('Pasar Terdekat dari Rumah', 'Rekomendasi pasar tradisional di Kota Balikpapan'),
+                                          // 🔖 Gerai Tersimpan (dulu: "Pasar Terdekat dari Rumah")
+                                          // Sekarang menampilkan gerai yang disimpan pembeli lewat
+                                          // tombol bookmark di gerai_screen.dart, realtime via
+                                          // FavoriteGeraiService & sinkron dengan halaman
+                                          // Akun > Favorit Saya.
+                                          _buildSectionTitle('Gerai Tersimpan', 'Gerai favorit yang sudah kamu simpan'),
                                           const SizedBox(height: 12),
-                                          _buildStoreList(),
+                                          _buildSavedGeraiList(),
                                           const SizedBox(height: 8),
                                         ],
                                       ),
@@ -654,84 +639,87 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   //  QUICK INFO ROW (ALAMAT & KURIR)
   // ──────────────────────────────────────────
   Widget _buildQuickInfoRow() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-
-    return Row(
-      children: [
-        // Widget Alamat Kirim (Sebelah kiri) — baca dari AddressManager,
-        // jadi selalu sinkron dengan checkout_screen.dart & orders_screen.dart.
-        Expanded(
-          child: ValueListenableBuilder<DeliveryAddress?>(
-            valueListenable: AddressManager.instance.address,
-            builder: (context, address, _) {
-              return address != null
-                  ? _quickCard(
-                      icon: Icons.location_on_rounded,
-                      iconColor: Colors.redAccent,
-                      title: 'Kirim ke Sini',
-                      sub: address.text,
-                      bgColor: Colors.white,
-                      onTap: _openAddressEditor,
-                    )
-                  : _quickCard(
-                      icon: Icons.location_on_rounded,
-                      iconColor: _greenBottom,
-                      title: 'Yuk Belanja!',
-                      sub: 'Ganti Alamat',
-                      bgColor: Colors.white,
-                      subTextColor: _greenBottom,
-                      onTap: _openAddressEditor,
-                    );
-            },
-          ),
+  return Row(
+    children: [
+      // Widget Alamat Kirim (Sebelah kiri) — tidak berubah, tetap baca
+      // dari AddressManager, jadi selalu sinkron dengan checkout_screen.dart
+      // & orders_screen.dart.
+      Expanded(
+        child: ValueListenableBuilder<DeliveryAddress?>(
+          valueListenable: AddressManager.instance.address,
+          builder: (context, address, _) {
+            return address != null
+                ? _quickCard(
+                    icon: Icons.location_on_rounded,
+                    iconColor: Colors.redAccent,
+                    title: 'Kirim ke Sini',
+                    sub: address.text,
+                    bgColor: Colors.white,
+                    onTap: _openAddressEditor,
+                  )
+                : _quickCard(
+                    icon: Icons.location_on_rounded,
+                    iconColor: _greenBottom,
+                    title: 'Yuk Belanja!',
+                    sub: 'Ganti Alamat',
+                    bgColor: Colors.white,
+                    subTextColor: _greenBottom,
+                    onTap: _openAddressEditor,
+                  );
+          },
         ),
-        const SizedBox(width: 12),
-        // Widget Status Kurir (Sebelah kanan) - Real-time Firestore Stream
-        Expanded(
-          child: StreamBuilder<DocumentSnapshot>(
-            stream: uid == null
-                ? const Stream.empty()
-                : FirebaseFirestore.instance.collection('simulated_orders').doc(uid).snapshots(),
-            builder: (context, snapshot) {
-              final data = snapshot.data?.data() as Map<String, dynamic>?;
-              final status = data?['status'] as String?;
-              final hasActiveOrder = data != null && status != 'selesai';
-
-              if (hasActiveOrder) {
-                final isPackaging = status == 'dikemas';
-                return _quickCard(
-                  icon: isPackaging ? Icons.inventory_2_rounded : Icons.two_wheeler_rounded,
-                  iconColor: Colors.white,
-                  title: isPackaging ? 'Sedang Dikemas' : 'Dalam Pengantaran',
-                  sub: isPackaging
-                      ? 'Pesanan Anda sedang dikemas oleh pedagang'
-                      : 'Pesanan Anda sedang dalam pengantaran oleh kurir',
-                  bgColor: Colors.orange.shade700,
-                  textColor: Colors.white,
-                  subTextColor: Colors.white.withValues(alpha: 0.9),
-                  gradientColors: [Colors.orange.shade800, Colors.orange.shade600],
-                  onTap: () {
-                    HomeScreen.navIndexNotifier.value = 4; // Switch to tab Pesanan
-                  },
-                );
-              }
-
+      ),
+      const SizedBox(width: 12),
+      // Widget Status Kurir (Sebelah kanan) — Realtime dari collection
+      // 'orders' asli (ditulis oleh OrdersManager.placeOrder saat checkout),
+      // BUKAN lagi dari 'simulated_orders' yang dummy.
+      Expanded(
+        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: OrdersManager.instance.activeOrdersStream(),
+          builder: (context, snapshot) {
+            final docs = snapshot.data?.docs ?? [];
+            final hasActiveOrder = docs.isNotEmpty;
+ 
+            if (hasActiveOrder) {
+              // Ambil pesanan aktif paling baru (query sudah diurutkan
+              // descending by createdAt di dalam activeOrdersStream()).
+              final data = docs.first.data();
+              final status = data['status'] as String? ?? kStatusMenungguKonfirmasi;
+              final isPackaging = status == kStatusDikemas || status == kStatusMenungguKonfirmasi;
+ 
               return _quickCard(
-                icon: Icons.local_shipping_outlined,
-                iconColor: Colors.grey.shade600,
-                title: 'Tidak Ada Pengantaran',
-                sub: 'Mulai belanja yuk!',
-                bgColor: Colors.grey.shade200,
-                textColor: Colors.grey.shade800,
-                subTextColor: Colors.grey.shade500,
-                onTap: null,
+                icon: isPackaging ? Icons.inventory_2_rounded : Icons.two_wheeler_rounded,
+                iconColor: Colors.white,
+                title: isPackaging ? 'Sedang Dikemas' : 'Dalam Pengantaran',
+                sub: isPackaging
+                    ? 'Pesanan Anda sedang dikemas oleh pedagang'
+                    : 'Pesanan Anda sedang dalam pengantaran oleh kurir',
+                bgColor: Colors.orange.shade700,
+                textColor: Colors.white,
+                subTextColor: Colors.white.withValues(alpha: 0.9),
+                gradientColors: [Colors.orange.shade800, Colors.orange.shade600],
+                onTap: () {
+                  HomeScreen.navIndexNotifier.value = 4; // Switch to tab Pesanan
+                },
               );
-            },
-          ),
+            }
+ 
+            return _quickCard(
+              icon: Icons.local_shipping_outlined,
+              iconColor: Colors.grey.shade600,
+              title: 'Tidak Ada Pengantaran',
+              sub: 'Mulai belanja yuk!',
+              bgColor: Colors.grey.shade200,
+              textColor: Colors.grey.shade800,
+              subTextColor: Colors.grey.shade500,
+              onTap: null,
+            );
+          },
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
   Widget _quickCard({
     required IconData icon,
@@ -1740,18 +1728,60 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-
-
   // ──────────────────────────────────────────
-  //  DAFTAR GERAI PASAR
+  //  🔖 GERAI TERSIMPAN (dulu: Daftar Gerai Pasar Terdekat)
+  //     Ambil data dari FavoriteGeraiService — sinkron realtime dengan
+  //     tombol bookmark di gerai_screen.dart & halaman Akun > Favorit Saya.
   // ──────────────────────────────────────────
-  Widget _buildStoreList() {
-    return Column(
-      children: _stores.map((s) => _buildStoreCard(s)).toList(),
+  Widget _buildSavedGeraiList() {
+    return StreamBuilder<List<FavoriteGerai>>(
+      stream: FavoriteGeraiService.instance.streamFavorites(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const CircularProgressIndicator(color: _greenBottom, strokeWidth: 2),
+          );
+        }
+
+        final favs = snapshot.data ?? [];
+
+        if (favs.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                const Icon(Icons.bookmark_border_rounded, color: Colors.black26, size: 32),
+                const SizedBox(height: 8),
+                Text('Belum ada gerai tersimpan', style: _m(size: 12, weight: FontWeight.w600, color: Colors.black54)),
+                const SizedBox(height: 2),
+                Text(
+                  'Ketuk ikon bookmark di gerai favoritmu supaya muncul di sini',
+                  textAlign: TextAlign.center,
+                  style: _m(size: 10.5, color: Colors.black38),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: favs.map((g) => _buildSavedGeraiCard(g)).toList(),
+        );
+      },
     );
   }
 
-  Widget _buildStoreCard(_MarketStore s) {
+  Widget _buildSavedGeraiCard(FavoriteGerai g) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -1769,65 +1799,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               color: _greenBottom.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.storefront_rounded, color: _greenBottom, size: 28),
+            child: Center(child: Text(g.emoji, style: const TextStyle(fontSize: 24))),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(s.name, style: _m(size: 13, weight: FontWeight.bold)),
+                Text(g.namaGerai, style: _m(size: 13, weight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 3),
-                Text(s.category, style: _m(size: 11, color: Colors.black54)),
+                Text(
+                  g.namaMarket ?? '',
+                  style: _m(size: 11, color: Colors.black54),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 const SizedBox(height: 6),
                 Row(
                   children: [
                     const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
                     const SizedBox(width: 3),
-                    Text('${s.rating}', style: _m(size: 11, weight: FontWeight.w600)),
-                    const SizedBox(width: 10),
-                    const Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 13),
-                    const SizedBox(width: 2),
-                    Text(s.distance, style: _m(size: 11, color: Colors.black45)),
+                    Text('${g.rating}', style: _m(size: 11, weight: FontWeight.w600)),
+                    const SizedBox(width: 6),
+                    Text('(${g.ulasan} Ulasan)', style: _m(size: 10, color: Colors.black38)),
                   ],
                 ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: s.isOpen ? Colors.green.shade50 : Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  s.isOpen ? 'Buka' : 'Tutup',
-                  style: _m(
-                    size: 10,
-                    weight: FontWeight.bold,
-                    color: s.isOpen ? Colors.green.shade700 : Colors.red.shade400,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: s.isOpen ? () {} : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _greenBottom,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade200,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  elevation: 0,
-                ),
-                child: Text('Masuk', style: _m(size: 11, weight: FontWeight.bold, color: Colors.white)),
-              ),
-            ],
+          IconButton(
+            icon: const Icon(Icons.bookmark_rounded, color: _greenBottom),
+            onPressed: () => FavoriteGeraiService.instance.remove(g.geraiId),
           ),
         ],
       ),
@@ -2168,21 +2170,6 @@ class _CommodityData {
     required this.predictionNote,
     required this.historyPrices,
     required this.days,
-  });
-}
-
-
-
-class _MarketStore {
-  final String name, category, distance;
-  final double rating;
-  final bool isOpen;
-  const _MarketStore({
-    required this.name,
-    required this.category,
-    required this.rating,
-    required this.distance,
-    required this.isOpen,
   });
 }
 

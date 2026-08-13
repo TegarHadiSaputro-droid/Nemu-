@@ -56,32 +56,8 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   Map<String, dynamic>? _geraiData;
   StreamSubscription<DocumentSnapshot>? _geraiSub;
 
-  // Mock orders yang menunggu konfirmasi
-  final List<_SellerOrder> _pendingOrders = [
-    _SellerOrder(
-      id: 'ORD-2847',
-      buyerName: 'Ibu Sari',
-      items: 'Cabai Merah 1kg, Bawang Merah 500g',
-      total: 56000,
-      eta: '± 25 mnt',
-    ),
-    _SellerOrder(
-      id: 'ORD-2851',
-      buyerName: 'Pak Rendi',
-      items: 'Tomat 2kg, Wortel 1kg',
-      total: 38000,
-      eta: '± 40 mnt',
-    ),
-  ];
-
-  // ── Produk yang dijual — akan diganti dengan data real dari backend ──
-  final List<_SellerProduct> _products = [
-    const _SellerProduct(name: 'Cabai Merah', icon: '🌶️', unit: 'per kg', price: 42000, stock: 18),
-    const _SellerProduct(name: 'Bawang Merah', icon: '🧅', unit: 'per kg', price: 28000, stock: 25),
-    const _SellerProduct(name: 'Tomat Segar', icon: '🍅', unit: 'per kg', price: 12000, stock: 30),
-    const _SellerProduct(name: 'Daging Ayam', icon: '🍗', unit: 'per kg', price: 36000, stock: 12),
-    const _SellerProduct(name: 'Wortel', icon: '🥕', unit: 'per kg', price: 10000, stock: 20),
-  ];
+  // ── Produk yang dijual — sekarang diambil real-time dari Firestore ──
+  Stream<QuerySnapshot>? _productsStream;
 
   // ── Mock driver yang sudah terdaftar di gerai ──
   final List<_SellerDriver> _assignedDrivers = [];
@@ -98,6 +74,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     _entranceCtrl.forward();
 
     _listenGerai();
+    _initProductsStream();
   }
 
   void _listenGerai() {
@@ -115,6 +92,17 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     });
   }
 
+  void _initProductsStream() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    _productsStream = FirebaseFirestore.instance
+        .collection('seller')
+        .doc(uid)
+        .collection('products')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
   @override
   void dispose() {
     _entranceCtrl.dispose();
@@ -128,6 +116,15 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   }
 
   String get _pasarName => (_geraiData?['namaPasar'] as String?) ?? 'Pasar Tradisional';
+
+  CollectionReference<Map<String, dynamic>>? get _productsCollection {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return null;
+    return FirebaseFirestore.instance
+        .collection('seller')
+        .doc(uid)
+        .collection('products');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -147,22 +144,16 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
               _buildStoreHeader(),
               const SizedBox(height: 16),
 
-              // 2. Alert Pesanan Baru
-              if (_pendingOrders.isNotEmpty) ...[
-                _buildOrderAlertSection(),
-                const SizedBox(height: 20),
-              ],
+              // 2. Alert Pesanan Baru (real-time dari Firestore)
+              _buildOrderAlertSection(),
+              const SizedBox(height: 20),
 
-              // 3. Produk yang Dijual (menggantikan Ringkasan Penjualan)
+              // 3. Produk yang Dijual (real-time dari Firestore)
               _buildProductsSection(),
-              const SizedBox(height: 14),
+              const SizedBox(height: 32),
 
               // 3b. Placeholder Tambah Driver
               _buildAddDriverSection(),
-              const SizedBox(height: 20),
-
-              // 4. Quick Action Grid
-              _buildQuickActions(),
             ],
           ),
         ),
@@ -335,13 +326,26 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   //  2. ALERT PESANAN BARU
   // ──────────────────────────────────────────
   Widget _buildOrderAlertSection() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const SizedBox.shrink();
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('simulated_orders')
-          .where('status', whereIn: ['dikemas', 'dalam_pengantaran'])
+          .collection('orders')
+          .where('sellerId', isEqualTo: uid)
+          .where('status', whereIn: ['menunggu_konfirmasi', 'dikemas', 'dalam_pengantaran'])
+          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        final docs = snapshot.data?.docs ?? [];
+        if (snapshot.hasError) {
+          return const SizedBox.shrink();
+        }
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) return const SizedBox.shrink();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,43 +366,45 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(color: Colors.red.shade500, borderRadius: BorderRadius.circular(20)),
-                  child: Text('${docs.length + _pendingOrders.length}', style: _ms(size: 10, weight: FontWeight.bold, color: Colors.white)),
+                  child: Text('${docs.length}', style: _ms(size: 10, weight: FontWeight.bold, color: Colors.white)),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            ...docs.map((doc) => _buildSimulatedOrderCard(doc)),
-            ..._pendingOrders.map((order) => _buildOrderCard(order)),
+            ...docs.map((doc) => _buildRealOrderCard(doc)),
           ],
         );
       },
     );
   }
 
-  Widget _buildSimulatedOrderCard(DocumentSnapshot doc) {
+  Widget _buildRealOrderCard(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    final orderId = data['id'] ?? 'ORD-XXXX';
-    final buyerName = data['buyerName'] ?? 'Pembeli';
-    final items = data['items'] ?? '';
+    final orderId = (data['orderCode'] as String?) ?? doc.id;
+    final buyerName = (data['buyerName'] as String?) ?? 'Pembeli';
+    final items = (data['itemsSummary'] as String?) ?? '';
     final totalPrice = (data['totalPrice'] as num?)?.toInt() ?? 0;
-    final status = data['status'] ?? 'dikemas';
-    final isPackaging = status == 'dikemas';
+    final status = (data['status'] as String?) ?? 'menunggu_konfirmasi';
+
+    final bool isWaiting = status == 'menunggu_konfirmasi';
+    final bool isPackaging = status == 'dikemas';
+
+    final Color accent = isWaiting
+        ? Colors.orange
+        : (isPackaging ? _selAmber : _selGreen);
+
+    final String badgeText = isWaiting
+        ? '⏳ Menunggu Konfirmasi'
+        : (isPackaging ? '⏳ Sedang Dikemas' : '🛵 Dalam Pengantaran');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isPackaging ? _selAmber.withValues(alpha: 0.4) : _selGreen.withValues(alpha: 0.4),
-          width: 1.5,
-        ),
+        border: Border.all(color: accent.withValues(alpha: 0.4), width: 1.5),
         boxShadow: [
-          BoxShadow(
-            color: (isPackaging ? _selAmber : _selGreen).withValues(alpha: 0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          )
+          BoxShadow(color: accent.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -406,37 +412,27 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: (isPackaging ? _selAmber : _selGreen).withValues(alpha: 0.06),
+              color: accent.withValues(alpha: 0.06),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    color: (isPackaging ? _selAmber : _selGreen).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Icon(Icons.receipt_long_rounded, size: 14, color: isPackaging ? _selAmber : _selGreen),
+                  decoration: BoxDecoration(color: accent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                  child: Icon(Icons.receipt_long_rounded, size: 14, color: accent),
                 ),
                 const SizedBox(width: 8),
-                Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: isPackaging ? _selAmber : _selGreen)),
+                Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: accent)),
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: isPackaging ? Colors.orange.shade50 : Colors.green.shade50,
+                    color: accent.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: isPackaging ? Colors.orange.shade200 : Colors.green.shade200),
+                    border: Border.all(color: accent.withValues(alpha: 0.3)),
                   ),
-                  child: Text(
-                    isPackaging ? '⏳ Sedang Dikemas' : '🛵 Dalam Pengantaran',
-                    style: _ms(
-                      size: 9,
-                      weight: FontWeight.bold,
-                      color: isPackaging ? Colors.orange.shade700 : Colors.green.shade700,
-                    ),
-                  ),
+                  child: Text(badgeText, style: _ms(size: 9, weight: FontWeight.bold, color: accent)),
                 ),
               ],
             ),
@@ -464,20 +460,40 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   children: [
                     Text('Total: Rp${_formatRupiah(totalPrice)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
                     const Spacer(),
-                    if (isPackaging)
+                    if (isWaiting) ...[
+                      OutlinedButton(
+                        onPressed: () => _handleRejectOrder(doc.reference, orderId, buyerName),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red.shade600,
+                          side: BorderSide(color: Colors.red.shade300),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text('Tolak', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.red.shade600)),
+                      ),
+                      const SizedBox(width: 8),
                       ElevatedButton(
-                        onPressed: () async {
-                          HapticFeedback.mediumImpact();
-                          await doc.reference.update({'status': 'dalam_pengantaran'});
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Pesanan $orderId diserahkan ke kurir!', style: _ms(size: 12, color: Colors.white)),
-                                backgroundColor: _selGreen,
-                              ),
-                            );
-                          }
-                        },
+                        onPressed: () => _handleAcceptOrder(doc.reference, orderId),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _selGreen,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text('Terima ✓', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
+                      ),
+                    ] else if (isPackaging)
+                      ElevatedButton(
+                        onPressed: () => _updateOrderStatus(
+                          doc.reference,
+                          'dalam_pengantaran',
+                          successMessage: 'Pesanan $orderId diserahkan ke kurir!',
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _selAmber,
                           foregroundColor: Colors.white,
@@ -491,18 +507,11 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                       )
                     else
                       ElevatedButton(
-                        onPressed: () async {
-                          HapticFeedback.mediumImpact();
-                          await doc.reference.update({'status': 'selesai'});
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Pesanan $orderId telah diselesaikan!', style: _ms(size: 12, color: Colors.white)),
-                                backgroundColor: _selGreen,
-                              ),
-                            );
-                          }
-                        },
+                        onPressed: () => _updateOrderStatus(
+                          doc.reference,
+                          'selesai',
+                          successMessage: 'Pesanan $orderId telah diselesaikan!',
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _selGreen,
                           foregroundColor: Colors.white,
@@ -524,134 +533,69 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-  Widget _buildOrderCard(_SellerOrder order) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _selAmber.withValues(alpha: 0.4), width: 1.5),
-        boxShadow: [BoxShadow(color: _selAmber.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: _selAmber.withValues(alpha: 0.06),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(color: _selAmber.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                  child: Icon(Icons.receipt_long_rounded, size: 14, color: _selAmber),
-                ),
-                const SizedBox(width: 8),
-                Text(order.id, style: _ms(size: 12, weight: FontWeight.bold, color: _selAmber)),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Text('⏳ Menunggu Konfirmasi', style: _ms(size: 9, weight: FontWeight.bold, color: Colors.orange.shade700)),
-                ),
-              ],
-            ),
+  // ── Update status pesanan langsung ke Firestore (data real) ──
+  Future<void> _updateOrderStatus(
+    DocumentReference ref,
+    String newStatus, {
+    String? successMessage,
+  }) async {
+    HapticFeedback.mediumImpact();
+    try {
+      await ref.update({
+        'status': newStatus,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted && successMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(successMessage, style: _ms(size: 12, color: Colors.white)),
+            backgroundColor: _selGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 2),
           ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.person_rounded, size: 14, color: Colors.black38),
-                    const SizedBox(width: 6),
-                    Text(order.buyerName, style: _ms(size: 12, weight: FontWeight.w600)),
-                    const Spacer(),
-                    const Icon(Icons.schedule_rounded, size: 12, color: Colors.black38),
-                    const SizedBox(width: 4),
-                    Text(order.eta, style: _ms(size: 10, color: Colors.black38)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(order.items, style: _ms(size: 11, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text('Total: Rp${_formatRupiah(order.total)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
-                    const Spacer(),
-                    OutlinedButton(
-                      onPressed: () => _handleRejectOrder(order),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red.shade600,
-                        side: BorderSide(color: Colors.red.shade300),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text('Tolak', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.red.shade600)),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () => _handleAcceptOrder(order),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _selGreen,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text('Terima ✓', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memperbarui pesanan: $e', style: _ms(size: 12, color: Colors.white)),
+            backgroundColor: Colors.red.shade500,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
-        ],
-      ),
+        );
+      }
+    }
+  }
+
+  void _handleAcceptOrder(DocumentReference ref, String orderId) {
+    _updateOrderStatus(
+      ref,
+      'dikemas',
+      successMessage: 'Pesanan $orderId diterima!',
     );
   }
 
-  void _handleAcceptOrder(_SellerOrder order) {
-    HapticFeedback.mediumImpact();
-    setState(() => _pendingOrders.remove(order));
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Row(children: [
-        const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-        const SizedBox(width: 8),
-        Text('Pesanan ${order.id} diterima!', style: _ms(size: 12, color: Colors.white)),
-      ]),
-      backgroundColor: _selGreen,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      duration: const Duration(seconds: 2),
-    ));
-  }
-
-  void _handleRejectOrder(_SellerOrder order) {
+  void _handleRejectOrder(DocumentReference ref, String orderId, String buyerName) {
     HapticFeedback.mediumImpact();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Tolak Pesanan?', style: _ms(size: 17, weight: FontWeight.bold)),
-        content: Text('${order.id} dari ${order.buyerName} akan dibatalkan.', style: _ms(size: 13, color: Colors.black54)),
+        content: Text('$orderId dari $buyerName akan dibatalkan.', style: _ms(size: 13, color: Colors.black54)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Batal', style: _ms(size: 13, color: Colors.black54))),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              setState(() => _pendingOrders.remove(order));
+              _updateOrderStatus(
+                ref,
+                'dibatalkan',
+                successMessage: 'Pesanan $orderId ditolak.',
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade500,
@@ -665,67 +609,94 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   }
 
   // ──────────────────────────────────────────
-  //  3. PRODUK YANG DIJUAL (menggantikan Ringkasan Penjualan)
+  //  3. PRODUK YANG DIJUAL (real-time dari Firestore)
   // ──────────────────────────────────────────
   Widget _buildProductsSection() {
-    final preview = _products.take(4).toList();
+    return StreamBuilder<QuerySnapshot>(
+      stream: _productsStream,
+      builder: (context, snapshot) {
+        final products = (snapshot.hasData)
+            ? snapshot.data!.docs
+                .map((d) => _SellerProduct.fromDoc(d))
+                .toList()
+            : <_SellerProduct>[];
+        final preview = products.take(4).toList();
+        final isLoading = !snapshot.hasData && !snapshot.hasError;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: _sellerSectionTitle('Produk Dijual', '${_products.length} produk aktif di geraimu'),
+            Row(
+              children: [
+                Expanded(
+                  child: _sellerSectionTitle('Produk Dijual', '${products.length} produk aktif di geraimu'),
+                ),
+                GestureDetector(
+                  onTap: _showAllProductsSheet,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Selengkapnya', style: _ms(size: 11, weight: FontWeight.bold, color: _selGreen)),
+                        const SizedBox(width: 3),
+                        Icon(Icons.arrow_forward_rounded, size: 13, color: _selGreen),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-            GestureDetector(
-              onTap: _showAllProductsSheet,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            const SizedBox(height: 12),
+            if (isLoading)
+              Container(
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 14, offset: const Offset(0, 4))],
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Selengkapnya', style: _ms(size: 11, weight: FontWeight.bold, color: _selGreen)),
-                    const SizedBox(width: 3),
-                    Icon(Icons.arrow_forward_rounded, size: 13, color: _selGreen),
-                  ],
+                child: const Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2.4, color: _selGreen),
+                  ),
                 ),
+              )
+            else if (preview.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 14, offset: const Offset(0, 4))],
+                ),
+                child: Center(
+                  child: Text('Belum ada produk. Tambahkan produk pertamamu!',
+                      style: _ms(size: 12, color: Colors.black38), textAlign: TextAlign.center),
+                ),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  mainAxisExtent: 190,
+                ),
+                itemCount: preview.length,
+                itemBuilder: (context, index) => _buildProductGridTile(preview[index]),
               ),
-            ),
           ],
-        ),
-        const SizedBox(height: 12),
-        if (preview.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 14, offset: const Offset(0, 4))],
-            ),
-            child: Center(
-              child: Text('Belum ada produk. Tambahkan produk pertamamu!',
-                  style: _ms(size: 12, color: Colors.black38), textAlign: TextAlign.center),
-            ),
-          )
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              mainAxisExtent: 190,
-            ),
-            itemCount: preview.length,
-            itemBuilder: (context, index) => _buildProductGridTile(preview[index]),
-          ),
-      ],
+        );
+      },
     );
   }
 
@@ -749,7 +720,40 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   color: _selGreen.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Center(child: Text(product.icon, style: const TextStyle(fontSize: 42))),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: product.imageUrl.trim().isEmpty
+                      ? Center(
+                          child: Icon(
+                            Icons.shopping_basket_rounded,
+                            size: 36,
+                            color: _selGreen.withValues(alpha: 0.4),
+                          ),
+                        )
+                      : Image.network(
+                          product.imageUrl,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: _selGreen.withValues(alpha: 0.5)),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) => Center(
+                            child: Icon(
+                              Icons.image_not_supported_rounded,
+                              size: 30,
+                              color: _selGreen.withValues(alpha: 0.4),
+                            ),
+                          ),
+                        ),
+                ),
               ),
               Positioned(
                 top: 6,
@@ -778,7 +782,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   }
 
   // ──────────────────────────────────────────
-  //  3c. HALAMAN KELOLA SEMUA PRODUK
+  //  3c. HALAMAN KELOLA SEMUA PRODUK (real-time, StreamBuilder)
   // ──────────────────────────────────────────
   void _showAllProductsSheet() {
     HapticFeedback.selectionClick();
@@ -793,72 +797,92 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           maxChildSize: 0.95,
           expand: false,
           builder: (context, scrollController) {
-            return StatefulBuilder(
-              builder: (context, setSheetState) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 12),
-                      Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: StreamBuilder<QuerySnapshot>(
+                            stream: _productsStream,
+                            builder: (context, snap) {
+                              final count = snap.data?.docs.length ?? 0;
+                              return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('Kelola Produk', style: _ms(size: 17, weight: FontWeight.bold)),
-                                  Text('${_products.length} produk terdaftar', style: _ms(size: 11, color: Colors.black45)),
+                                  Text('$count produk terdaftar', style: _ms(size: 11, color: Colors.black45)),
                                 ],
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () => _showAddEditProductDialog(onDone: () => setSheetState(() {})),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: _selGreen,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.add_rounded, color: Colors.white, size: 16),
-                                    const SizedBox(width: 4),
-                                    Text('Tambah', style: _ms(size: 12, weight: FontWeight.bold, color: Colors.white)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                      const Divider(height: 1, color: Color(0xFFF0F0F0)),
-                      Expanded(
-                        child: _products.isEmpty
-                            ? Center(
-                                child: Text('Belum ada produk.', style: _ms(size: 12, color: Colors.black38)),
-                              )
-                            : ListView.separated(
-                                controller: scrollController,
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                itemCount: _products.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                                itemBuilder: (context, index) {
-                                  final product = _products[index];
-                                  return _buildManageProductTile(product, onChanged: () => setSheetState(() {}));
-                                },
-                              ),
-                      ),
-                    ],
+                        GestureDetector(
+                          onTap: () => _showAddEditProductDialog(),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: _selGreen,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                                const SizedBox(width: 4),
+                                Text('Tambah', style: _ms(size: 12, weight: FontWeight.bold, color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              },
+                  const Divider(height: 1, color: Color(0xFFF0F0F0)),
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: _productsStream,
+                      builder: (context, snap) {
+                        if (snap.hasError) {
+                          return Center(
+                            child: Text('Gagal memuat produk.', style: _ms(size: 12, color: Colors.black38)),
+                          );
+                        }
+                        if (!snap.hasData) {
+                          return const Center(
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2.4, color: _selGreen),
+                            ),
+                          );
+                        }
+                        final products = snap.data!.docs.map((d) => _SellerProduct.fromDoc(d)).toList();
+                        if (products.isEmpty) {
+                          return Center(
+                            child: Text('Belum ada produk.', style: _ms(size: 12, color: Colors.black38)),
+                          );
+                        }
+                        return ListView.separated(
+                          controller: scrollController,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          itemCount: products.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          itemBuilder: (context, index) => _buildManageProductTile(products[index]),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -866,7 +890,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-  Widget _buildManageProductTile(_SellerProduct product, {required VoidCallback onChanged}) {
+  Widget _buildManageProductTile(_SellerProduct product) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -883,7 +907,40 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
               color: _selGreen.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Center(child: Text(product.icon, style: const TextStyle(fontSize: 22))),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: product.imageUrl.trim().isEmpty
+                  ? Center(
+                      child: Icon(
+                        Icons.shopping_basket_rounded,
+                        size: 20,
+                        color: _selGreen.withValues(alpha: 0.4),
+                      ),
+                    )
+                  : Image.network(
+                      product.imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return Center(
+                          child: SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: _selGreen.withValues(alpha: 0.5)),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) => Center(
+                        child: Icon(
+                          Icons.image_not_supported_rounded,
+                          size: 18,
+                          color: _selGreen.withValues(alpha: 0.4),
+                        ),
+                      ),
+                    ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -899,7 +956,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
             ),
           ),
           GestureDetector(
-            onTap: () => _showAddEditProductDialog(existing: product, onDone: onChanged),
+            onTap: () => _showAddEditProductDialog(existing: product),
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(10)),
@@ -908,7 +965,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: () => _confirmDeleteProduct(product, onChanged: onChanged),
+            onTap: () => _confirmDeleteProduct(product),
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
@@ -921,153 +978,76 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   }
 
   // ──────────────────────────────────────────
-  //  3d. TAMBAH / EDIT PRODUK (fungsional, data lokal)
+  //  3d. TAMBAH / EDIT PRODUK — sekarang disimpan ke Firestore
   // ──────────────────────────────────────────
-  void _showAddEditProductDialog({_SellerProduct? existing, VoidCallback? onDone}) {
-    final isEdit = existing != null;
-    final nameCtrl = TextEditingController(text: existing?.name ?? '');
-    final iconCtrl = TextEditingController(text: existing?.icon ?? '🛒');
-    final unitCtrl = TextEditingController(text: existing?.unit ?? 'per kg');
-    final priceCtrl = TextEditingController(text: existing != null ? existing.price.toString() : '');
-    final stockCtrl = TextEditingController(text: existing != null ? existing.stock.toString() : '');
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
+  void _showAddEditProductDialog({_SellerProduct? existing}) {
+    showGeneralDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(isEdit ? 'Edit Produk' : 'Tambah Produk', style: _ms(size: 16, weight: FontWeight.bold)),
-        content: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 64,
-                      child: TextFormField(
-                        controller: iconCtrl,
-                        textAlign: TextAlign.center,
-                        decoration: InputDecoration(
-                          labelText: 'Emoji',
-                          labelStyle: _ms(size: 11),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextFormField(
-                        controller: nameCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'Nama Produk',
-                          labelStyle: _ms(size: 12),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        ),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: unitCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Satuan (contoh: per kg)',
-                    labelStyle: _ms(size: 12),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: priceCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'Harga (Rp)',
-                          labelStyle: _ms(size: 12),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        ),
-                        validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextFormField(
-                        controller: stockCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'Stok',
-                          labelStyle: _ms(size: 12),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        ),
-                        validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (ctx, anim1, anim2) {
+        return _ProductFormDialog(
+          existing: existing,
+          selGreen: _selGreen,
+          textStyle: _ms,
+          onSave: (newProduct) => _saveProduct(existing: existing, newProduct: newProduct),
+        );
+      },
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        final curvedAnim = CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curvedAnim,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.92, end: 1.0).animate(curvedAnim),
+            child: child,
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Batal', style: _ms(size: 13, color: Colors.black54)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (!formKey.currentState!.validate()) return;
-
-              final newProduct = _SellerProduct(
-                name: nameCtrl.text.trim(),
-                icon: iconCtrl.text.trim().isEmpty ? '🛒' : iconCtrl.text.trim(),
-                unit: unitCtrl.text.trim(),
-                price: int.parse(priceCtrl.text.trim()),
-                stock: int.parse(stockCtrl.text.trim()),
-              );
-
-              setState(() {
-                if (isEdit) {
-                  final idx = _products.indexOf(existing!);
-                  if (idx != -1) _products[idx] = newProduct;
-                } else {
-                  _products.add(newProduct);
-                }
-              });
-
-              Navigator.pop(ctx);
-              onDone?.call();
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(isEdit ? 'Produk diperbarui' : 'Produk ditambahkan', style: _ms(size: 12, color: Colors.white)),
-                backgroundColor: _selGreen,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                duration: const Duration(seconds: 2),
-              ));
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _selGreen,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: Text(isEdit ? 'Simpan' : 'Tambahkan', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  void _confirmDeleteProduct(_SellerProduct product, {required VoidCallback onChanged}) {
+  Future<void> _saveProduct({
+    required _SellerProduct? existing,
+    required _SellerProduct newProduct,
+  }) async {
+    final col = _productsCollection;
+    if (col == null) return;
+
+    try {
+      if (existing != null && existing.id != null) {
+        await col.doc(existing.id).update(newProduct.toMap());
+      } else {
+        await col.add({
+          ...newProduct.toMap(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            existing != null ? 'Produk diperbarui' : 'Produk ditambahkan',
+            style: _ms(size: 12, color: Colors.white),
+          ),
+          backgroundColor: _selGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Gagal menyimpan produk: $e', style: _ms(size: 12, color: Colors.white)),
+          backgroundColor: Colors.red.shade500,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    }
+  }
+
+  void _confirmDeleteProduct(_SellerProduct product) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1077,17 +1057,9 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Batal', style: _ms(size: 13, color: Colors.black54))),
           ElevatedButton(
-            onPressed: () {
-              setState(() => _products.remove(product));
+            onPressed: () async {
               Navigator.pop(ctx);
-              onChanged();
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text('${product.name} dihapus', style: _ms(size: 12, color: Colors.white)),
-                backgroundColor: Colors.red.shade500,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                duration: const Duration(seconds: 2),
-              ));
+              await _deleteProduct(product);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade500,
@@ -1100,6 +1072,32 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
+  Future<void> _deleteProduct(_SellerProduct product) async {
+    final col = _productsCollection;
+    if (col == null || product.id == null) return;
+
+    try {
+      await col.doc(product.id).delete();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${product.name} dihapus', style: _ms(size: 12, color: Colors.white)),
+          backgroundColor: Colors.red.shade500,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Gagal menghapus produk: $e', style: _ms(size: 12, color: Colors.white)),
+          backgroundColor: Colors.red.shade500,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    }
+  }
 
   // ──────────────────────────────────────────
   //  4b. PLACEHOLDER TAMBAH DRIVER
@@ -1282,54 +1280,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-  // ──────────────────────────────────────────
-  //  5. QUICK ACTIONS
-  // ──────────────────────────────────────────
-  Widget _buildQuickActions() {
-    final actions = [
-      _QuickAction(icon: Icons.add_box_rounded, label: 'Tambah\nProduk', color: _selGreen, onTap: () => _showComingSoon('Tambah Produk')),
-      _QuickAction(icon: Icons.tune_rounded, label: 'Kelola\nStok', color: const Color(0xFF1565C0), onTap: () => _showComingSoon('Kelola Stok')),
-      _QuickAction(icon: Icons.local_shipping_rounded, label: 'Status\nPengiriman', color: _selOrange, onTap: () => _showComingSoon('Status Pengiriman')),
-      _QuickAction(icon: Icons.analytics_outlined, label: 'Laporan\nLengkap', color: Colors.deepPurple, onTap: () => _showComingSoon('Laporan Lengkap')),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sellerSectionTitle('Aksi Cepat', 'Kelola geraimu dengan mudah'),
-        const SizedBox(height: 12),
-        Row(
-          children: actions.map((a) => Expanded(
-            child: GestureDetector(
-              onTap: a.onTap,
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 3))],
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: a.color.withValues(alpha: 0.12), shape: BoxShape.circle),
-                      child: Icon(a.icon, color: a.color, size: 22),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(a.label, style: _ms(size: 9, weight: FontWeight.bold, color: _selDark), textAlign: TextAlign.center),
-                  ],
-                ),
-              ),
-            ),
-          )).toList(),
-        ),
-      ],
-    );
-  }
-
   void _showComingSoon(String fitur) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('$fitur — Segera hadir!', style: _ms(size: 12, color: Colors.white)),
@@ -1368,16 +1318,39 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
 // ─────────────────────────────────────────────
 //  Model Classes
 // ─────────────────────────────────────────────
-class _SellerOrder {
-  final String id, buyerName, items, eta;
-  final int total;
-  _SellerOrder({required this.id, required this.buyerName, required this.items, required this.total, required this.eta});
-}
-
 class _SellerProduct {
-  final String name, icon, unit;
+  final String? id; // null = belum tersimpan di Firestore
+  final String name, imageUrl, unit;
   final int price, stock;
-  const _SellerProduct({required this.name, required this.icon, required this.unit, required this.price, required this.stock});
+
+  const _SellerProduct({
+    this.id,
+    required this.name,
+    required this.imageUrl,
+    required this.unit,
+    required this.price,
+    required this.stock,
+  });
+
+  factory _SellerProduct.fromDoc(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>? ?? {};
+    return _SellerProduct(
+      id: doc.id,
+      name: (d['name'] as String?) ?? '',
+      imageUrl: (d['imageUrl'] as String?) ?? '',
+      unit: (d['unit'] as String?) ?? '',
+      price: (d['price'] as num?)?.toInt() ?? 0,
+      stock: (d['stock'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'name': name,
+        'imageUrl': imageUrl,
+        'unit': unit,
+        'price': price,
+        'stock': stock,
+      };
 }
 
 class _SellerDriver {
@@ -1385,10 +1358,285 @@ class _SellerDriver {
   const _SellerDriver({required this.name, required this.email});
 }
 
-class _QuickAction {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-  const _QuickAction({required this.icon, required this.label, required this.color, required this.onTap});
+// ─────────────────────────────────────────────
+//  Dialog Tambah/Edit Produk
+// ─────────────────────────────────────────────
+class _ProductFormDialog extends StatefulWidget {
+  final _SellerProduct? existing;
+  final Color selGreen;
+  final TextStyle Function({double size, FontWeight weight, Color color, double? height}) textStyle;
+  final void Function(_SellerProduct product) onSave;
+
+  const _ProductFormDialog({
+    required this.existing,
+    required this.selGreen,
+    required this.textStyle,
+    required this.onSave,
+  });
+
+  @override
+  State<_ProductFormDialog> createState() => _ProductFormDialogState();
+}
+
+class _ProductFormDialogState extends State<_ProductFormDialog> {
+  late final TextEditingController nameCtrl;
+  late final TextEditingController imageUrlCtrl;
+  late final TextEditingController unitCtrl;
+  late final TextEditingController priceCtrl;
+  late final TextEditingController stockCtrl;
+  final formKey = GlobalKey<FormState>();
+
+  bool _imageLoadFailed = false;
+  String _lastCheckedUrl = '';
+  bool _isSaving = false;
+
+  bool get isEdit => widget.existing != null;
+
+  bool _looksLikeDirectImageUrl(String url) {
+    if (url.isEmpty) return true;
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme || !(uri.scheme == 'http' || uri.scheme == 'https')) {
+      return false;
+    }
+    final path = uri.path.toLowerCase();
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.bmp'];
+    final hasImageExtension = imageExtensions.any((ext) => path.endsWith(ext));
+    const knownImageCdnHosts = ['images.unsplash.com', 'cdn.pixabay.com', 'images.pexels.com'];
+    final isKnownCdn = knownImageCdnHosts.any((host) => uri.host.endsWith(host));
+    return hasImageExtension || isKnownCdn;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    nameCtrl = TextEditingController(text: widget.existing?.name ?? '');
+    imageUrlCtrl = TextEditingController(text: widget.existing?.imageUrl ?? '');
+    unitCtrl = TextEditingController(text: widget.existing?.unit ?? 'per kg');
+    priceCtrl = TextEditingController(text: widget.existing != null ? widget.existing!.price.toString() : '');
+    stockCtrl = TextEditingController(text: widget.existing != null ? widget.existing!.stock.toString() : '');
+  }
+
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    imageUrlCtrl.dispose();
+    unitCtrl.dispose();
+    priceCtrl.dispose();
+    stockCtrl.dispose();
+    super.dispose();
+  }
+
+  void _safeSetState(VoidCallback fn) {
+    if (mounted) setState(fn);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selGreen = widget.selGreen;
+    final ms = widget.textStyle;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.white,
+      child: Container(
+        width: 340,
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(isEdit ? 'Edit Produk' : 'Tambah Produk', style: ms(size: 16, weight: FontWeight.bold)),
+                const SizedBox(height: 16),
+
+                // Preview foto dari URL
+                Container(
+                  width: double.infinity,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: selGreen.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: imageUrlCtrl.text.trim().isEmpty
+                        ? Center(
+                            child: Icon(Icons.image_outlined, size: 32, color: selGreen.withValues(alpha: 0.4)),
+                          )
+                        : !_looksLikeDirectImageUrl(imageUrlCtrl.text.trim())
+                            ? Center(
+                                child: Icon(Icons.image_not_supported_rounded, size: 28, color: selGreen.withValues(alpha: 0.4)),
+                              )
+                            : Image.network(
+                                imageUrlCtrl.text.trim(),
+                                key: ValueKey(imageUrlCtrl.text.trim()),
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                                loadingBuilder: (context, child, progress) {
+                                  if (progress == null) return child;
+                                  return Center(
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: selGreen.withValues(alpha: 0.5)),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  final url = imageUrlCtrl.text.trim();
+                                  if (_lastCheckedUrl != url) {
+                                    _lastCheckedUrl = url;
+                                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      _safeSetState(() => _imageLoadFailed = true);
+                                    });
+                                  }
+                                  return Center(
+                                    child: Icon(Icons.image_not_supported_rounded, size: 28, color: selGreen.withValues(alpha: 0.4)),
+                                  );
+                                },
+                              ),
+                  ),
+                ),
+                if (_imageLoadFailed) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.error_outline_rounded, size: 15, color: Colors.orange.shade700),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Link ini bukan link gambar langsung, jadi tidak bisa dimuat. Buka gambarnya, klik kanan, lalu pilih "Salin alamat gambar" (Copy image address) — bukan menyalin link halaman.',
+                            style: ms(size: 10.5, color: Colors.orange.shade800, height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: imageUrlCtrl,
+                  keyboardType: TextInputType.url,
+                  onChanged: (value) => _safeSetState(() {
+                    final trimmed = value.trim();
+                    _imageLoadFailed = trimmed.isNotEmpty && !_looksLikeDirectImageUrl(trimmed);
+                    _lastCheckedUrl = '';
+                  }),
+                  decoration: InputDecoration(
+                    labelText: 'URL Foto Produk',
+                    labelStyle: ms(size: 12),
+                    hintText: 'https://...',
+                    hintStyle: ms(size: 11, color: Colors.black26),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Nama Produk',
+                    labelStyle: ms(size: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: unitCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Satuan (contoh: per kg)',
+                    labelStyle: ms(size: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: priceCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Harga (Rp)',
+                          labelStyle: ms(size: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                        validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextFormField(
+                        controller: stockCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Stok',
+                          labelStyle: ms(size: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                        validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _isSaving ? null : () => Navigator.pop(context),
+                      child: Text('Batal', style: ms(size: 13, color: Colors.black54)),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _isSaving
+                          ? null
+                          : () {
+                              if (!formKey.currentState!.validate()) return;
+
+                              final newProduct = _SellerProduct(
+                                id: widget.existing?.id,
+                                name: nameCtrl.text.trim(),
+                                imageUrl: imageUrlCtrl.text.trim(),
+                                unit: unitCtrl.text.trim(),
+                                price: int.parse(priceCtrl.text.trim()),
+                                stock: int.parse(stockCtrl.text.trim()),
+                              );
+
+                              setState(() => _isSaving = true);
+                              Navigator.pop(context);
+                              widget.onSave(newProduct);
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: selGreen,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Text(isEdit ? 'Simpan' : 'Tambahkan', style: ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

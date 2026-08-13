@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/models/cart_model.dart';
 import 'package:frontend/screens/pasar/toko_screen.dart';
+import 'package:frontend/services/favorite_gerai_service.dart';
 
 const Color _gGreen  = Color(0xFF007C3F);
 const Color _gYellow = Color(0xFFD9DF36);
@@ -151,20 +152,61 @@ class _GeraiScreenState extends State<GeraiScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Foto gerai (Visual / Emoji)
+            // Foto gerai (Visual / Emoji) + Tombol bookmark
             Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: _gGreen.withOpacity(0.08),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                ),
-                child: Center(
-                  child: Text(
-                    gerai.emoji,
-                    style: const TextStyle(fontSize: 48),
+              child: Stack(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: _gGreen.withOpacity(0.08),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                    ),
+                    child: Center(
+                      child: Text(
+                        gerai.emoji,
+                        style: const TextStyle(fontSize: 48),
+                      ),
+                    ),
                   ),
-                ),
+                  // ── Tombol Bookmark (realtime, sinkron ke Beranda & Favorit Saya) ──
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: StreamBuilder<Set<String>>(
+                      stream: FavoriteGeraiService.instance.streamFavoriteIds(),
+                      builder: (context, snap) {
+                        final isSaved = snap.data?.contains(gerai.id) ?? false;
+                        return GestureDetector(
+                          onTap: () => FavoriteGeraiService.instance.toggle(
+                            gerai: gerai,
+                            marketId: widget.market.id,
+                            namaMarket: widget.market.nama,
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.92),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.10),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                              color: isSaved ? _gGreen : Colors.black45,
+                              size: 18,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
             // Info gerai
@@ -225,4 +267,3 @@ class _GeraiScreenState extends State<GeraiScreen> {
     );
   }
 }
-
