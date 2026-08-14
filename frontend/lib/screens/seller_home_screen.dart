@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:frontend/services/auth_service.dart';
-import 'package:frontend/services/driver_service.dart'; // sesuaikan path kalau struktur foldermu beda
+import 'package:frontend/services/driver_service.dart';
 import 'package:frontend/services/order_tracking_service.dart';
 import 'package:frontend/services/store_service.dart';
 import 'package:frontend/widgets/live_tracking_map.dart';
@@ -32,11 +30,17 @@ TextStyle _ms({
       height: height,
     );
 
-// Pilihan pasar yang tersedia untuk penjual baru
+// Pilihan pasar yang tersedia untuk penjual
 const List<String> _pasarOptions = [
-  'Pasar Sepinggan',
-  'Pasar Klandasan',
   'Pasar Pandansari',
+  'Pasar Klandasan',
+  'Pasar Sepinggan',
+  'Pasar Baru',
+  'Pasar Segar',
+  'Pasar Balikpapan Permai',
+  'Pasar Manggar',
+  'Pasar Butun',
+  'Pasar Kebun Sayur',
 ];
 
 // ─────────────────────────────────────────────
@@ -59,43 +63,16 @@ class SellerDashboardBody extends StatefulWidget {
 
 class _SellerDashboardBodyState extends State<SellerDashboardBody>
     with TickerProviderStateMixin {
-
   // ── Animasi entrance ──
   late AnimationController _entranceCtrl;
   late Animation<double> _entranceAnim;
 
-  // ── State gerai (dari Firestore subcollection 'seller/{uid}') ──
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _geraiSub;
-  Map<String, dynamic>? _geraiData;
-  // _storeId adalah UID seller itu sendiri (dokumen 'seller/{uid}')
+  // ── State gerai (dari Firestore koleksi 'stores') ──
+  StreamSubscription<QuerySnapshot>? _storeSub;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _sellerSub;
+  Map<String, dynamic>? _storeData;
   String? _storeId;
-
-  // ── Mock orders (tetap dipertahankan selama pesanan real belum aktif) ──
-  final List<_SellerOrder> _pendingOrders = [
-    _SellerOrder(
-      id: 'ORD-2847',
-      buyerName: 'Ibu Sari',
-      items: 'Cabai Merah 1kg, Bawang Merah 500g',
-      total: 56000,
-      eta: '± 25 mnt',
-    ),
-    _SellerOrder(
-      id: 'ORD-2851',
-      buyerName: 'Pak Rendi',
-      items: 'Tomat 2kg, Wortel 1kg',
-      total: 38000,
-      eta: '± 40 mnt',
-    ),
-  ];
-
-  // ── Produk yang dijual — akan diganti dengan data real dari backend ──
-  final List<_SellerProduct> _products = [
-    const _SellerProduct(name: 'Cabai Merah', icon: '🌶️', unit: 'per kg', price: 42000, stock: 18),
-    const _SellerProduct(name: 'Bawang Merah', icon: '🧅', unit: 'per kg', price: 28000, stock: 25),
-    const _SellerProduct(name: 'Tomat Segar', icon: '🍅', unit: 'per kg', price: 12000, stock: 30),
-    const _SellerProduct(name: 'Daging Ayam', icon: '🍗', unit: 'per kg', price: 36000, stock: 12),
-    const _SellerProduct(name: 'Wortel', icon: '🥕', unit: 'per kg', price: 10000, stock: 20),
-  ];
+  bool _isLoadingStore = true;
 
   // ── Driver yang sudah accept undangan dari gerai ini (realtime) ──
   List<_SellerDriver> _assignedDrivers = [];
@@ -112,41 +89,73 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     _entranceAnim = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic);
     _entranceCtrl.forward();
 
-    _listenGerai();
+    _listenMyStore();
     _listenAssignedDrivers();
   }
 
-  void _listenGerai() {
+  /// Mendengarkan data toko milik user yang sedang login dari koleksi `stores`
+  void _listenMyStore() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+    if (uid == null) {
+      setState(() => _isLoadingStore = false);
+      return;
+    }
 
-    _storeId = uid; // dokumen seller/{uid} — storeId == uid seller
-    _geraiSub = FirebaseFirestore.instance
+    _storeSub = StoreService.myStoreStream(uid).listen((snap) {
+      if (snap.docs.isNotEmpty) {
+        final doc = snap.docs.first;
+        if (mounted) {
+          setState(() {
+            _storeId = doc.id;
+            _storeData = doc.data() as Map<String, dynamic>?;
+            _isLoadingStore = false;
+          });
+        }
+      } else {
+        // Fallback jika baru terdaftar di seller/{uid}
+        _listenSellerFallback(uid);
+      }
+    }, onError: (e) {
+      debugPrint('Gagal memuat toko dari collection stores: $e');
+      _listenSellerFallback(uid);
+    });
+  }
+
+  void _listenSellerFallback(String uid) {
+    _sellerSub?.cancel();
+    _sellerSub = FirebaseFirestore.instance
         .collection('seller')
         .doc(uid)
         .snapshots()
         .listen((snap) {
       if (mounted) {
-        setState(() => _geraiData = snap.data());
+        if (snap.exists && snap.data() != null) {
+          final data = snap.data()!;
+          setState(() {
+            _storeId = (data['store_id'] as String?) ?? uid;
+            _storeData = {
+              'store_name': data['store_name'] ?? data['name'],
+              'market_type': data['market_type'] ?? data['market_section'] ?? 'Pasar Pandansari',
+              'is_open': data['isOpen'] ?? true,
+              'description': data['description'] ?? '',
+              'owner_id': uid,
+            };
+            _isLoadingStore = false;
+          });
+        } else {
+          setState(() {
+            _storeId = null;
+            _storeData = null;
+            _isLoadingStore = false;
+          });
+        }
       }
     }, onError: (e) {
-      debugPrint('Gagal memuat data gerai: $e');
+      debugPrint('Gagal memuat seller data: $e');
+      if (mounted) setState(() => _isLoadingStore = false);
     });
   }
 
-  // Undangan driver yang di-accept nggak nyimpen relasi seller<->driver
-  // di collection terpisah — cuma nyimpen 'fromUid' (uid seller) di dalam
-  // dokumen inbox si driver (users/{driverUid}/inbox/{inviteId}). Jadi
-  // buat nampilin "driver-driver gerai ini", kita collectionGroup query
-  // ke semua subcollection 'inbox' lintas user, saring type + status +
-  // fromUid == uid seller yang sedang login.
-  //
-  // CATATAN: pertama kali dijalankan, Firestore kemungkinan bakal
-  // nge-throw error "failed-precondition" berisi LINK ke Firebase Console
-  // buat bikin composite index otomatis (soalnya ini collection group
-  // query dengan beberapa filter kesetaraan sekaligus). Tinggal klik
-  // link error-nya sekali, index-nya dibuatin otomatis dalam beberapa
-  // menit, abis itu query ini jalan normal.
   void _listenAssignedDrivers() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
@@ -159,8 +168,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
         .snapshots()
         .listen((snap) async {
       final drivers = await Future.wait(snap.docs.map((doc) async {
-        // Path dokumen inbox: users/{driverUid}/inbox/{inviteId}.
-        // parent.parent adalah dokumen users/{driverUid} itu sendiri.
         final driverUid = doc.reference.parent.parent?.id;
         if (driverUid == null) return null;
 
@@ -190,25 +197,39 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   @override
   void dispose() {
     _entranceCtrl.dispose();
-    _geraiSub?.cancel();
+    _storeSub?.cancel();
+    _sellerSub?.cancel();
     _driversSub?.cancel();
     super.dispose();
   }
 
-  // ── Getters nama & pasar dari Firestore ──
+  // ── Getters info toko ──
   String get _storeName {
-    final name = _geraiData?['store_name'] as String?;
+    final name = _storeData?['store_name'] as String?;
     return (name != null && name.isNotEmpty) ? name : '${widget.userName}\'s Gerai';
   }
 
-  String get _pasarName =>
-      (_geraiData?['market_section'] as String?) ?? 'Pasar Tradisional';
+  String get _marketType =>
+      (_storeData?['market_type'] as String?) ??
+      (_storeData?['market_section'] as String?) ??
+      'Pasar Pandansari';
 
   String get _storeDescription =>
-      (_geraiData?['description'] as String?) ?? '';
+      (_storeData?['description'] as String?) ?? '';
+
+  bool get _isOpen =>
+      (_storeData?['is_open'] as bool?) ??
+      (_storeData?['isOpen'] as bool?) ??
+      (_storeData?['is_active'] as bool?) ??
+      true;
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingStore) {
+      return const Center(
+        child: CircularProgressIndicator(color: _selGreen),
+      );
+    }
 
     return RefreshIndicator(
       color: _selGreen,
@@ -216,9 +237,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
       onRefresh: _handleRefresh,
       child: FadeTransition(
         opacity: _entranceAnim,
-        // Align + LayoutBuilder di sini memaksa konten selalu menempel ke atas,
-        // bahkan kalau widget ini dibungkus Center() oleh parent (mis. saat
-        // daftar produk kosong sehingga tinggi konten jadi pendek).
         child: LayoutBuilder(
           builder: (context, constraints) {
             return Align(
@@ -230,22 +248,33 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.start,
                     children: [
-                      // 1. Header Toko
-                      _buildStoreHeader(),
+                      // 1. Header Toko / Daftarkan Toko jika belum punya
+                      if (_storeId != null)
+                        _buildStoreHeader()
+                      else
+                        _buildEmptyStoreCard(),
                       const SizedBox(height: 16),
 
                       // 2. Alert Pesanan Baru (real-time dari Firestore)
-                      _buildOrderAlertSection(),
-                      const SizedBox(height: 20),
+                      if (_storeId != null) ...[
+                        _buildOrderAlertSection(),
+                        const SizedBox(height: 20),
+                      ],
 
-              // 3. Produk yang Dijual (real-time dari Firestore)
-              _buildProductsSection(),
-              const SizedBox(height: 32),
+                      // 3. Quick Actions
+                      if (_storeId != null) ...[
+                        _buildQuickActions(),
+                        const SizedBox(height: 24),
+                      ],
 
-                      // 3b. Placeholder Tambah Driver
-                      _buildAddDriverSection(),
+                      // 4. Katalog Barang Saya (real-time dari Firestore)
+                      _buildProductsSection(),
+                      const SizedBox(height: 28),
+
+                      // 5. Driver Gerai
+                      if (_storeId != null)
+                        _buildAddDriverSection(),
                     ],
                   ),
                 ),
@@ -271,7 +300,11 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16, offset: const Offset(0, 4)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
@@ -284,7 +317,13 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: const LinearGradient(colors: [_selGreen, Color(0xFF00A852)]),
-                  boxShadow: [BoxShadow(color: _selGreen.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 3))],
+                  boxShadow: [
+                    BoxShadow(
+                      color: _selGreen.withValues(alpha: 0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    )
+                  ],
                   image: widget.photoUrl != null
                       ? DecorationImage(image: NetworkImage(widget.photoUrl!), fit: BoxFit.cover)
                       : null,
@@ -332,7 +371,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                         const SizedBox(width: 3),
                         Expanded(
                           child: Text(
-                            _pasarName,
+                            _marketType,
                             style: _ms(size: 11, color: Colors.black45),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -342,19 +381,18 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   ],
                 ),
               ),
-              // ── Tombol Edit Toko ──
-              if (_storeId != null)
-                GestureDetector(
-                  onTap: _showEditStoreSheet,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _selGreen.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.edit_rounded, color: _selGreen, size: 16),
+              // ── Tombol Edit Toko (Profil Gerai Saya) ──
+              GestureDetector(
+                onTap: _showEditStoreSheet,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _selGreen.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10),
                   ),
+                  child: const Icon(Icons.edit_rounded, color: _selGreen, size: 18),
                 ),
+              ),
             ],
           ),
 
@@ -362,79 +400,104 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           const Divider(height: 1, color: Color(0xFFF0F0F0)),
           const SizedBox(height: 14),
 
-          // Toggle Buka/Tutup
-          StreamBuilder<bool>(
-            stream: AuthService.storeOpenStatusStream(),
-            builder: (context, snapshot) {
-              final isOpen = snapshot.data ?? true;
-              return Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isOpen ? _selGreen.withValues(alpha: 0.10) : Colors.grey.shade100,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      isOpen ? Icons.store_rounded : Icons.store_mall_directory_outlined,
-                      color: isOpen ? _selGreen : Colors.grey.shade400,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isOpen ? 'Toko Sedang Buka' : 'Toko Sedang Tutup',
-                          style: _ms(size: 13, weight: FontWeight.bold, color: isOpen ? _selGreen : Colors.grey.shade600),
-                        ),
-                        Text(
-                          isOpen ? 'Pembeli dapat melihat & memesan produkmu' : 'Produkmu disembunyikan sementara',
-                          style: _ms(size: 10, color: Colors.black38),
-                        ),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      AuthService.updateStoreOpenStatus(!isOpen);
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      width: 52,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: isOpen ? _selGreen : Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [if (isOpen) BoxShadow(color: _selGreen.withValues(alpha: 0.35), blurRadius: 8)],
-                      ),
-                      child: Stack(
-                        children: [
-                          AnimatedPositioned(
-                            duration: const Duration(milliseconds: 250),
-                            curve: Curves.easeInOut,
-                            left: isOpen ? 26 : 2,
-                            top: 2,
-                            child: Container(
-                              width: 24,
-                              height: 24,
-                              decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                            ),
-                          ),
-                        ],
+          // Toggle Status Toko: Buka / Tutup
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _isOpen ? _selGreen.withValues(alpha: 0.10) : Colors.grey.shade100,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _isOpen ? Icons.store_rounded : Icons.store_mall_directory_outlined,
+                  color: _isOpen ? _selGreen : Colors.grey.shade400,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isOpen ? 'Toko Sedang Buka' : 'Toko Sedang Tutup',
+                      style: _ms(
+                        size: 13,
+                        weight: FontWeight.bold,
+                        color: _isOpen ? _selGreen : Colors.grey.shade600,
                       ),
                     ),
+                    Text(
+                      _isOpen
+                          ? 'Pembeli dapat melihat & memesan produkmu'
+                          : 'Produkmu disembunyikan sementara dari pembeli',
+                      style: _ms(size: 10, color: Colors.black38),
+                    ),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: _toggleStoreOpenStatus,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  width: 52,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: _isOpen ? _selGreen : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [if (_isOpen) BoxShadow(color: _selGreen.withValues(alpha: 0.35), blurRadius: 8)],
                   ),
-                ],
-              );
-            },
+                  child: Stack(
+                    children: [
+                      AnimatedPositioned(
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOut,
+                        left: _isOpen ? 26 : 2,
+                        top: 2,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _toggleStoreOpenStatus() async {
+    if (_storeId == null) return;
+    HapticFeedback.selectionClick();
+    final newStatus = !_isOpen;
+    try {
+      await StoreService.setStoreOpenStatus(_storeId!, newStatus);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            newStatus ? 'Toko berhasil DIBUKA ✓' : 'Toko berhasil DITUTUP sementara',
+            style: _ms(size: 12, color: Colors.white),
+          ),
+          backgroundColor: newStatus ? _selGreen : Colors.grey.shade800,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Gagal mengubah status toko: $e', style: _ms(size: 12, color: Colors.white)),
+          backgroundColor: Colors.red.shade600,
+        ));
+      }
+    }
   }
 
   // ──────────────────────────────────────────
@@ -455,10 +518,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           ])
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return const SizedBox.shrink();
-        }
-        if (!snapshot.hasData) {
+        if (snapshot.hasError || !snapshot.hasData) {
           return const SizedBox.shrink();
         }
 
@@ -601,7 +661,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text('Total: Rp${_formatRupiah(totalPrice)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
+                    Text('Total: Rp${StoreService.formatRupiah(totalPrice)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
                     const Spacer(),
                     if (isPackaging)
                       ElevatedButton(
@@ -610,16 +670,15 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                           await OrderTrackingService.markReadyForDriver(
                             orderDocId: doc.id,
                             storeName: _storeName,
-                            marketName: _pasarName,
+                            marketName: _marketType,
                           );
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Pesanan $orderId dilepas ke driver, menunggu ada yang menerima...', style: _ms(size: 12, color: Colors.white)),
-                                backgroundColor: _selGreen,
-                              ),
-                            );
-                          }
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Pesanan $orderId diserahkan ke driver...', style: _ms(size: 12, color: Colors.white)),
+                              backgroundColor: _selGreen,
+                            ),
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _selAmber,
@@ -630,7 +689,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        child: Text('Selesai Mengemas / Serahkan ke Kurir', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
+                        child: Text('Selesai Mengemas / Serahkan Kurir', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
                       )
                     else if (status == OrderStatus.menungguDriver)
                       Row(
@@ -641,12 +700,10 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                             child: CircularProgressIndicator(strokeWidth: 2, color: _selOrange),
                           ),
                           const SizedBox(width: 8),
-                          Text('Menunggu driver menerima...', style: _ms(size: 11, weight: FontWeight.w600, color: _selOrange)),
+                          Text('Menunggu driver...', style: _ms(size: 11, weight: FontWeight.w600, color: _selOrange)),
                         ],
                       )
                     else ...[
-                      // Driver sudah pegang order ini (menuju_penjual / diantar) --
-                      // Penjual cuma memantau dari sini, bukan mengontrol lagi.
                       if (driverName != null)
                         Expanded(
                           child: Text(
@@ -726,187 +783,93 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-  Widget _buildOrderCard(_SellerOrder order) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _selAmber.withValues(alpha: 0.4), width: 1.5),
-        boxShadow: [BoxShadow(color: _selAmber.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4))],
+  // ──────────────────────────────────────────
+  //  3. QUICK ACTIONS
+  // ──────────────────────────────────────────
+  Widget _buildQuickActions() {
+    final actions = [
+      _QuickAction(
+        icon: Icons.add_box_rounded,
+        label: 'Tambah\nProduk',
+        color: _selGreen,
+        onTap: () => _showAddEditProductDialog(),
       ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: _selAmber.withValues(alpha: 0.06),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(color: _selAmber.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                  child: Icon(Icons.receipt_long_rounded, size: 14, color: _selAmber),
-                ),
-                const SizedBox(width: 8),
-                Text(order.id, style: _ms(size: 12, weight: FontWeight.bold, color: _selAmber)),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Text('⏳ Menunggu Konfirmasi', style: _ms(size: 9, weight: FontWeight.bold, color: Colors.orange.shade700)),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.person_rounded, size: 14, color: Colors.black38),
-                    const SizedBox(width: 6),
-                    Text(order.buyerName, style: _ms(size: 12, weight: FontWeight.w600)),
-                    const Spacer(),
-                    const Icon(Icons.schedule_rounded, size: 12, color: Colors.black38),
-                    const SizedBox(width: 4),
-                    Text(order.eta, style: _ms(size: 10, color: Colors.black38)),
+      _QuickAction(
+        icon: Icons.inventory_2_rounded,
+        label: 'Katalog\nBarang',
+        color: const Color(0xFF1565C0),
+        onTap: () => _showAllProductsSheet(),
+      ),
+      _QuickAction(
+        icon: Icons.store_rounded,
+        label: 'Profil\nGerai',
+        color: _selOrange,
+        onTap: () => _showEditStoreSheet(),
+      ),
+      _QuickAction(
+        icon: Icons.person_add_rounded,
+        label: 'Undang\nDriver',
+        color: Colors.deepPurple,
+        onTap: () => _showAddDriverDialog(),
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sellerSectionTitle('Aksi Cepat', 'Kelola tokomu secara praktis'),
+        const SizedBox(height: 12),
+        Row(
+          children: actions.map((a) => Expanded(
+            child: GestureDetector(
+              onTap: a.onTap,
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    )
                   ],
                 ),
-                const SizedBox(height: 6),
-                Text(order.items, style: _ms(size: 11, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 8),
-                Row(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text('Total: Rp${_formatRupiah(order.total)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
-                    const Spacer(),
-                    OutlinedButton(
-                      onPressed: () => _handleRejectOrder(order),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red.shade600,
-                        side: BorderSide(color: Colors.red.shade300),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: a.color.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
                       ),
-                      child: Text('Tolak', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.red.shade600)),
+                      child: Icon(a.icon, color: a.color, size: 20),
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () => _handleAcceptOrder(order),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _selGreen,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text('Terima ✓', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
+                    const SizedBox(height: 6),
+                    Text(
+                      a.label,
+                      style: _ms(size: 10, weight: FontWeight.bold, color: _selDark),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Update status pesanan langsung ke Firestore (data real) ──
-  Future<void> _updateOrderStatus(
-    DocumentReference ref,
-    String newStatus, {
-    String? successMessage,
-  }) async {
-    HapticFeedback.mediumImpact();
-    try {
-      await ref.update({
-        'status': newStatus,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      if (mounted && successMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(successMessage, style: _ms(size: 12, color: Colors.white)),
-            backgroundColor: _selGreen,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal memperbarui pesanan: $e', style: _ms(size: 12, color: Colors.white)),
-            backgroundColor: Colors.red.shade500,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    }
-  }
-
-  void _handleAcceptOrder(_SellerOrder order) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('Pesanan ${order.id} diterima!', style: _ms(size: 12, color: Colors.white)),
-      backgroundColor: _selGreen,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
-  }
-
-  void _handleRejectOrder(_SellerOrder order) {
-    HapticFeedback.mediumImpact();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Tolak Pesanan?', style: _ms(size: 17, weight: FontWeight.bold)),
-        content: Text('${order.id} dari ${order.buyerName} akan dibatalkan.', style: _ms(size: 13, color: Colors.black54)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Batal', style: _ms(size: 13, color: Colors.black54))),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade500,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: Text('Ya, Tolak', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
-          ),
-        ],
-      ),
+          )).toList(),
+        ),
+      ],
     );
   }
 
   // ──────────────────────────────────────────
-  //  3. KATALOG PENJUALAN — StreamBuilder Firestore
+  //  4. KATALOG BARANG SAYA — StreamBuilder Firestore
   // ──────────────────────────────────────────
   Widget _buildProductsSection() {
     if (_storeId == null) {
-      // Toko belum terdaftar — ajak seller daftar dulu
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sellerSectionTitle('Katalog Penjualan Saya', 'Daftarkan toko untuk mulai berjualan'),
-          const SizedBox(height: 12),
-          _buildEmptyStoreCard(),
-        ],
-      );
+      return const SizedBox.shrink();
     }
 
     return StreamBuilder<QuerySnapshot>(
@@ -916,7 +879,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _sellerSectionTitle('Katalog Penjualan Saya', 'Memuat produk...'),
+              _sellerSectionTitle('Katalog Barang Saya', 'Memuat daftar dagangan...'),
               const SizedBox(height: 16),
               const Center(child: CircularProgressIndicator(color: _selGreen)),
             ],
@@ -932,31 +895,38 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
               children: [
                 Expanded(
                   child: _sellerSectionTitle(
-                    'Katalog Penjualan Saya',
-                    '${docs.length} produk aktif di geraimu',
+                    'Katalog Barang Saya',
+                    '${docs.length} produk aktif di ${widget.userName}',
                   ),
                 ),
-                if (kDebugMode) ...[
-                  GestureDetector(
-                    onTap: _seedDummyProducts,
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.bolt_rounded, size: 13, color: Colors.orange.shade700),
-                          const SizedBox(width: 3),
-                          Text('Seed', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.orange.shade700)),
-                        ],
-                      ),
+                // Tombol + Tambah Produk
+                GestureDetector(
+                  onTap: () => _showAddEditProductDialog(),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: _selGreen,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _selGreen.withValues(alpha: 0.3),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        )
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.add_rounded, size: 14, color: Colors.white),
+                        const SizedBox(width: 3),
+                        Text('Tambah', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
+                      ],
                     ),
                   ),
-                ],
+                ),
+                // Tombol Kelola
                 GestureDetector(
                   onTap: _showAllProductsSheet,
                   child: Container(
@@ -970,7 +940,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                       children: [
                         Text('Kelola', style: _ms(size: 11, weight: FontWeight.bold, color: _selGreen)),
                         const SizedBox(width: 3),
-                        Icon(Icons.arrow_forward_rounded, size: 13, color: _selGreen),
+                        const Icon(Icons.arrow_forward_rounded, size: 13, color: _selGreen),
                       ],
                     ),
                   ),
@@ -988,12 +958,13 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   crossAxisCount: 2,
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
-                  mainAxisExtent: 190,
+                  mainAxisExtent: 200,
                 ),
                 itemCount: docs.length > 4 ? 4 : docs.length,
                 itemBuilder: (context, index) {
-                  final data = docs[index].data() as Map<String, dynamic>;
-                  return _buildProductGridTile(data);
+                  final doc = docs[index];
+                  final data = doc.data() as Map<String, dynamic>;
+                  return _buildProductGridTile(doc.id, data);
                 },
               ),
           ],
@@ -1004,13 +975,19 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
 
   Widget _buildEmptyStoreCard() {
     return GestureDetector(
-      onTap: () => _showRegisterStoreSheet(required: false),
+      onTap: () => _showRegisterStoreSheet(),
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 14, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            )
+          ],
         ),
         child: Column(
           children: [
@@ -1024,21 +1001,35 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
               child: const Icon(Icons.add_business_rounded, color: _selGreen, size: 32),
             ),
             const SizedBox(height: 14),
-            Text('Daftarkan Toko Anda', style: _ms(size: 14, weight: FontWeight.bold)),
+            Text('Buka Gerai & Pilih Pasar', style: _ms(size: 16, weight: FontWeight.bold)),
             const SizedBox(height: 6),
             Text(
-              'Lengkapi profil toko Anda untuk mulai berjualan dan menjangkau pembeli.',
-              style: _ms(size: 11, color: Colors.black45),
+              'Daftarkan nama tokomu, pilih pasar tempatmu berjualan, dan mulai tambahkan barang dagangan.',
+              style: _ms(size: 12, color: Colors.black45),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(colors: [_selGreen, Color(0xFF00A852)]),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: _selGreen.withValues(alpha: 0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  )
+                ],
               ),
-              child: Text('+ Daftarkan Sekarang', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.storefront_rounded, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  Text('+ Buka Gerai Sekarang', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
+                ],
+              ),
             ),
           ],
         ),
@@ -1054,17 +1045,27 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 14, offset: const Offset(0, 4))],
-          border: Border.all(color: _selGreen.withValues(alpha: 0.2), style: BorderStyle.solid),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            )
+          ],
+          border: Border.all(color: _selGreen.withValues(alpha: 0.2)),
         ),
         child: Center(
           child: Column(
             children: [
-              Text('📦', style: const TextStyle(fontSize: 40)),
+              const Text('📦', style: TextStyle(fontSize: 40)),
               const SizedBox(height: 10),
-              Text('Belum ada produk.', style: _ms(size: 13, weight: FontWeight.bold)),
-              Text('Ketuk untuk menambahkan produk pertamamu!',
-                  style: _ms(size: 11, color: Colors.black38), textAlign: TextAlign.center),
+              Text('Belum ada produk dagangan.', style: _ms(size: 13, weight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(
+                'Ketuk di sini untuk menambahkan produk pertamamu!',
+                style: _ms(size: 11, color: Colors.black38),
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
@@ -1072,86 +1073,112 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-  Widget _buildProductGridTile(Map<String, dynamic> data) {
+  Widget _buildProductGridTile(String docId, Map<String, dynamic> data) {
     final name = data['product_name'] as String? ?? 'Produk';
     final icon = data['category'] as String? ?? '🛒';
     final price = (data['price'] as num?)?.toInt() ?? 0;
     final stock = (data['stock'] as num?)?.toInt() ?? 0;
+    final imageUrl = (data['image_url'] as String?) ?? (data['imageUrl'] as String?) ?? '';
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            children: [
-              Container(
-                width: double.infinity,
-                height: 84,
-                decoration: BoxDecoration(
-                  color: _selGreen.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: ((data['image_url'] as String?) ?? (data['imageUrl'] as String?) ?? '').trim().isEmpty
-                      ? Center(child: Text(icon, style: const TextStyle(fontSize: 42)))
-                      : Image.network(
-                          (data['image_url'] as String?) ?? (data['imageUrl'] as String?) ?? '',
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          errorBuilder: (_, __, ___) => Center(child: Text(icon, style: const TextStyle(fontSize: 42))),
-                        ),
-                ),
-              ),
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    return GestureDetector(
+      onTap: () => _showAddEditProductDialog(existingId: docId, existingData: data),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.07),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                Container(
+                  width: double.infinity,
+                  height: 86,
                   decoration: BoxDecoration(
-                    color: stock == 0 ? Colors.red.shade50 : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 4)],
+                    color: _selGreen.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Text(
-                    stock == 0 ? 'Habis' : 'Stok $stock',
-                    style: _ms(size: 9, weight: FontWeight.bold, color: stock == 0 ? Colors.red.shade600 : _selGreen),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: imageUrl.trim().isEmpty
+                        ? Center(child: Text(icon, style: const TextStyle(fontSize: 38)))
+                        : Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            errorBuilder: (_, _, _) => Center(child: Text(icon, style: const TextStyle(fontSize: 38))),
+                          ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(name, style: _ms(size: 13, weight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-          const Spacer(),
-          Text(StoreService.formatRupiah(price), style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
-        ],
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: stock == 0 ? Colors.red.shade50 : Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 4)],
+                    ),
+                    child: Text(
+                      stock == 0 ? 'Habis' : 'Stok $stock',
+                      style: _ms(size: 9, weight: FontWeight.bold, color: stock == 0 ? Colors.red.shade600 : _selGreen),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(name, style: _ms(size: 13, weight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 2),
+            Text(
+              data['market_type'] as String? ?? _marketType,
+              style: _ms(size: 9.5, color: Colors.black38),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const Spacer(),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    StoreService.formatRupiah(price),
+                    style: _ms(size: 13, weight: FontWeight.bold, color: _selGreen),
+                  ),
+                ),
+                Icon(Icons.edit_rounded, size: 14, color: Colors.grey.shade400),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
   // ──────────────────────────────────────────
-  //  MODAL: REGISTRASI GERAI (PERTAMA KALI)
+  //  MODAL: PROFIL GERAI SAYA (BUKA GERAI / REGISTRASI)
   // ──────────────────────────────────────────
-  void _showRegisterStoreSheet({bool required = false}) {
+  void _showRegisterStoreSheet() {
     HapticFeedback.mediumImpact();
-    final nameCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-    String selectedPasar = _pasarOptions.first;
+    final nameCtrl = TextEditingController(text: _storeData?['store_name'] ?? '');
+    final descCtrl = TextEditingController(text: _storeData?['description'] ?? '');
+    String selectedPasar = _pasarOptions.contains(_marketType) ? _marketType : _pasarOptions.first;
+    bool storeIsOpen = _isOpen;
     final formKey = GlobalKey<FormState>();
     bool isLoading = false;
 
     showModalBottomSheet(
       context: context,
-      isDismissible: !required,
-      enableDrag: !required,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
@@ -1167,12 +1194,12 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Handle bar
                   Center(
                     child: Padding(
                       padding: const EdgeInsets.only(top: 12),
                       child: Container(
-                        width: 40, height: 4,
+                        width: 40,
+                        height: 4,
                         decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
@@ -1198,8 +1225,8 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Daftarkan Toko Anda', style: _ms(size: 17, weight: FontWeight.bold)),
-                                  Text('Lengkapi info toko untuk mulai berjualan', style: _ms(size: 11, color: Colors.black45)),
+                                  Text('Profil Gerai Saya', style: _ms(size: 17, weight: FontWeight.bold)),
+                                  Text('Lengkapi info tokomu untuk mulai berjualan', style: _ms(size: 11, color: Colors.black45)),
                                 ],
                               ),
                             ),
@@ -1211,14 +1238,14 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                           key: formKey,
                           child: Column(
                             children: [
-                              // Nama Toko
+                              // store_name (Nama Gerai/Toko)
                               TextFormField(
                                 controller: nameCtrl,
                                 textCapitalization: TextCapitalization.words,
                                 decoration: InputDecoration(
-                                  labelText: 'Nama Toko / Gerai *',
+                                  labelText: 'Nama Gerai / Toko *',
                                   labelStyle: _ms(size: 13, color: Colors.black54),
-                                  hintText: 'contoh: Gerai Bu Eko',
+                                  hintText: 'contoh: Gerai Sayur Bu Eko',
                                   hintStyle: _ms(size: 13, color: Colors.black26),
                                   prefixIcon: const Icon(Icons.storefront_rounded, color: _selGreen, size: 20),
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -1232,11 +1259,11 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                               ),
                               const SizedBox(height: 14),
 
-                              // Dropdown Sektor Pasar
+                              // market_type (Pilihan Pasar)
                               DropdownButtonFormField<String>(
                                 initialValue: selectedPasar,
                                 decoration: InputDecoration(
-                                  labelText: 'Sektor Pasar *',
+                                  labelText: 'Pilihan Pasar *',
                                   labelStyle: _ms(size: 13, color: Colors.black54),
                                   prefixIcon: const Icon(Icons.location_on_rounded, color: _selGreen, size: 20),
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -1254,15 +1281,53 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                               ),
                               const SizedBox(height: 14),
 
-                              // Deskripsi
+                              // is_open (Status Buka/Tutup)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: Colors.grey.shade200),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      storeIsOpen ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
+                                      color: storeIsOpen ? _selGreen : Colors.grey,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Status Toko', style: _ms(size: 12, weight: FontWeight.bold)),
+                                          Text(
+                                            storeIsOpen ? 'Buka (dapat menerima pesanan)' : 'Tutup (sembunyikan produk)',
+                                            style: _ms(size: 10, color: Colors.black45),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Switch(
+                                      value: storeIsOpen,
+                                      activeThumbColor: _selGreen,
+                                      onChanged: (val) => setModal(() => storeIsOpen = val),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+
+                              // description (Deskripsi Toko)
                               TextFormField(
                                 controller: descCtrl,
-                                maxLines: 3,
+                                maxLines: 2,
                                 textCapitalization: TextCapitalization.sentences,
                                 decoration: InputDecoration(
                                   labelText: 'Deskripsi Toko (opsional)',
                                   labelStyle: _ms(size: 13, color: Colors.black54),
-                                  hintText: 'ceritakan tentang tokomu...',
+                                  hintText: 'Menjual aneka sayuran segar...',
                                   hintStyle: _ms(size: 13, color: Colors.black26),
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                                   focusedBorder: OutlineInputBorder(
@@ -1279,7 +1344,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                     ),
                   ),
 
-                  // Tombol Daftar
+                  // Tombol Simpan Toko
                   Padding(
                     padding: const EdgeInsets.all(24),
                     child: SizedBox(
@@ -1293,22 +1358,35 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
 
                                 try {
                                   final uid = StoreService.currentUid;
-                                  await StoreService.createStore(
+                                  final storeId = await StoreService.createStore(
                                     ownerUid: uid,
                                     storeName: nameCtrl.text.trim(),
-                                    marketSection: selectedPasar,
+                                    marketType: selectedPasar,
+                                    isOpen: storeIsOpen,
                                     description: descCtrl.text.trim(),
                                   );
 
-                                  if (ctx.mounted) {
-                                    Navigator.pop(ctx);
+                                  if (mounted) {
+                                    setState(() {
+                                      _storeId = storeId;
+                                      _storeData = {
+                                        'store_name': nameCtrl.text.trim(),
+                                        'market_type': selectedPasar,
+                                        'is_open': storeIsOpen,
+                                        'description': descCtrl.text.trim(),
+                                        'owner_id': uid,
+                                      };
+                                    });
                                   }
+
+                                  if (ctx.mounted) Navigator.pop(ctx);
                                   if (!mounted) return;
+
                                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                                     content: Row(children: [
                                       const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
                                       const SizedBox(width: 8),
-                                      Text('Toko berhasil didaftarkan! 🎉', style: _ms(size: 12, color: Colors.white)),
+                                      Text('Gerai berhasil didaftarkan! 🎉', style: _ms(size: 12, color: Colors.white)),
                                     ]),
                                     backgroundColor: _selGreen,
                                     behavior: SnackBarBehavior.floating,
@@ -1319,7 +1397,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                                   setModal(() => isLoading = false);
                                   if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text('Gagal mendaftarkan toko: $e', style: _ms(size: 12, color: Colors.white)),
+                                    content: Text('Gagal mendaftarkan gerai: $e', style: _ms(size: 12, color: Colors.white)),
                                     backgroundColor: Colors.red.shade600,
                                   ));
                                 }
@@ -1337,7 +1415,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                                 width: 20,
                                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                               )
-                            : Text('Daftarkan Toko Sekarang', style: _ms(size: 14, weight: FontWeight.bold, color: Colors.white)),
+                            : Text('Buka Gerai Sekarang', style: _ms(size: 14, weight: FontWeight.bold, color: Colors.white)),
                       ),
                     ),
                   ),
@@ -1351,12 +1429,18 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   }
 
   // ──────────────────────────────────────────
-  //  MODAL: EDIT TOKO
+  //  MODAL: EDIT PROFIL GERAI SAYA
   // ──────────────────────────────────────────
   void _showEditStoreSheet() {
+    if (_storeId == null) {
+      _showRegisterStoreSheet();
+      return;
+    }
     HapticFeedback.selectionClick();
     final nameCtrl = TextEditingController(text: _storeName);
     final descCtrl = TextEditingController(text: _storeDescription);
+    String selectedPasar = _pasarOptions.contains(_marketType) ? _marketType : _pasarOptions.first;
+    bool storeIsOpen = _isOpen;
     final formKey = GlobalKey<FormState>();
     bool isLoading = false;
 
@@ -1381,7 +1465,8 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                     child: Padding(
                       padding: const EdgeInsets.only(top: 12),
                       child: Container(
-                        width: 40, height: 4,
+                        width: 40,
+                        height: 4,
                         decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
@@ -1406,8 +1491,8 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Edit Toko Saya', style: _ms(size: 17, weight: FontWeight.bold)),
-                                Text('Perbarui nama dan deskripsi toko', style: _ms(size: 11, color: Colors.black45)),
+                                Text('Profil Gerai Saya', style: _ms(size: 17, weight: FontWeight.bold)),
+                                Text('Perbarui nama gerai, pasar, atau status', style: _ms(size: 11, color: Colors.black45)),
                               ],
                             ),
                           ],
@@ -1422,7 +1507,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                                 controller: nameCtrl,
                                 textCapitalization: TextCapitalization.words,
                                 decoration: InputDecoration(
-                                  labelText: 'Nama Toko / Gerai *',
+                                  labelText: 'Nama Gerai / Toko *',
                                   labelStyle: _ms(size: 13, color: Colors.black54),
                                   prefixIcon: const Icon(Icons.storefront_rounded, color: _selGreen, size: 20),
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -1436,9 +1521,68 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                               ),
                               const SizedBox(height: 14),
 
+                              DropdownButtonFormField<String>(
+                                initialValue: selectedPasar,
+                                decoration: InputDecoration(
+                                  labelText: 'Pilihan Pasar *',
+                                  labelStyle: _ms(size: 13, color: Colors.black54),
+                                  prefixIcon: const Icon(Icons.location_on_rounded, color: _selGreen, size: 20),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: const BorderSide(color: _selGreen, width: 1.5),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                                ),
+                                style: _ms(size: 14),
+                                items: _pasarOptions.map((p) => DropdownMenuItem(value: p, child: Text(p, style: _ms(size: 13)))).toList(),
+                                onChanged: (v) {
+                                  if (v != null) setModal(() => selectedPasar = v);
+                                },
+                              ),
+                              const SizedBox(height: 14),
+
+                              // Toggle Status Buka / Tutup
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: Colors.grey.shade200),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      storeIsOpen ? Icons.lock_open_rounded : Icons.lock_outline_rounded,
+                                      color: storeIsOpen ? _selGreen : Colors.grey,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Status Toko', style: _ms(size: 12, weight: FontWeight.bold)),
+                                          Text(
+                                            storeIsOpen ? 'Buka (Aktif menerima pesanan)' : 'Tutup (Sembunyikan produk)',
+                                            style: _ms(size: 10, color: Colors.black45),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Switch(
+                                      value: storeIsOpen,
+                                      activeThumbColor: _selGreen,
+                                      onChanged: (val) => setModal(() => storeIsOpen = val),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+
                               TextFormField(
                                 controller: descCtrl,
-                                maxLines: 3,
+                                maxLines: 2,
                                 textCapitalization: TextCapitalization.sentences,
                                 decoration: InputDecoration(
                                   labelText: 'Deskripsi Toko',
@@ -1450,21 +1594,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                                   ),
                                   contentPadding: const EdgeInsets.all(14),
                                 ),
-                              ),
-
-                              const SizedBox(height: 6),
-                              // Info: sektor pasar tidak bisa diubah sendiri
-                              Row(
-                                children: [
-                                  Icon(Icons.info_outline_rounded, size: 13, color: Colors.black38),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      'Sektor pasar: $_pasarName (tidak dapat diubah)',
-                                      style: _ms(size: 10, color: Colors.black38),
-                                    ),
-                                  ),
-                                ],
                               ),
                             ],
                           ),
@@ -1478,7 +1607,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                     child: SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: isLoading || _storeId == null
+                        onPressed: isLoading
                             ? null
                             : () async {
                                 if (!formKey.currentState!.validate()) return;
@@ -1488,18 +1617,19 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                                   await StoreService.updateStore(
                                     _storeId!,
                                     storeName: nameCtrl.text.trim(),
+                                    marketType: selectedPasar,
                                     description: descCtrl.text.trim(),
+                                    isOpen: storeIsOpen,
                                   );
 
-                                  if (ctx.mounted) {
-                                    Navigator.pop(ctx);
-                                  }
+                                  if (ctx.mounted) Navigator.pop(ctx);
                                   if (!mounted) return;
+
                                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                                     content: Row(children: [
                                       const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
                                       const SizedBox(width: 8),
-                                      Text('Profil toko berhasil diperbarui!', style: _ms(size: 12, color: Colors.white)),
+                                      Text('Profil gerai berhasil diperbarui!', style: _ms(size: 12, color: Colors.white)),
                                     ]),
                                     backgroundColor: _selGreen,
                                     behavior: SnackBarBehavior.floating,
@@ -1538,11 +1668,229 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   }
 
   // ──────────────────────────────────────────
+  //  MODAL: TAMBAH / EDIT PRODUK (Firestore collection 'products')
+  // ──────────────────────────────────────────
+  void _showAddEditProductDialog({String? existingId, Map<String, dynamic>? existingData}) {
+    if (_storeId == null) {
+      _showRegisterStoreSheet();
+      return;
+    }
+
+    final isEdit = existingId != null;
+    final nameCtrl = TextEditingController(text: existingData?['product_name'] ?? '');
+    final catCtrl = TextEditingController(text: existingData?['category'] ?? '🥬');
+    final priceCtrl = TextEditingController(text: existingData != null ? existingData['price'].toString() : '');
+    final stockCtrl = TextEditingController(text: existingData != null ? existingData['stock'].toString() : '');
+    final formKey = GlobalKey<FormState>();
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDialog) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _selGreen.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  isEdit ? Icons.edit_note_rounded : Icons.add_box_rounded,
+                  color: _selGreen,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                isEdit ? 'Edit Produk' : 'Tambah Produk Dagangan',
+                style: _ms(size: 16, weight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 64,
+                        child: TextFormField(
+                          controller: catCtrl,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 22),
+                          decoration: InputDecoration(
+                            labelText: 'Ikon',
+                            labelStyle: _ms(size: 11),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextFormField(
+                          controller: nameCtrl,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: InputDecoration(
+                            labelText: 'Nama Produk *',
+                            labelStyle: _ms(size: 12),
+                            hintText: 'mis. Sayur Segar',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          ),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: priceCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: 'Harga (Rp) *',
+                            labelStyle: _ms(size: 12),
+                            hintText: '15000',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          ),
+                          validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextFormField(
+                          controller: stockCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: 'Stok *',
+                            labelStyle: _ms(size: 12),
+                            hintText: '10',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          ),
+                          validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Info pasar otomatis
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline_rounded, size: 14, color: Colors.black45),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Pasar: $_marketType (otomatis terhubung)',
+                            style: _ms(size: 10.5, color: Colors.black54),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Batal', style: _ms(size: 13, color: Colors.black54)),
+            ),
+            ElevatedButton(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialog(() => isLoading = true);
+
+                      try {
+                        final uid = StoreService.currentUid;
+                        final emojiVal = catCtrl.text.trim().isEmpty ? '🛒' : catCtrl.text.trim();
+
+                        if (isEdit) {
+                          await StoreService.updateProduct(
+                            existingId,
+                            productName: nameCtrl.text.trim(),
+                            price: int.parse(priceCtrl.text.trim()),
+                            stock: int.parse(stockCtrl.text.trim()),
+                            category: emojiVal,
+                            marketType: _marketType,
+                          );
+                        } else {
+                          await StoreService.addProduct(
+                            storeId: _storeId!,
+                            ownerUid: uid,
+                            marketType: _marketType,
+                            productName: nameCtrl.text.trim(),
+                            price: int.parse(priceCtrl.text.trim()),
+                            stock: int.parse(stockCtrl.text.trim()),
+                            category: emojiVal,
+                          );
+                        }
+
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (!mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(
+                            isEdit ? 'Produk berhasil diperbarui ✓' : 'Produk berhasil ditambahkan ke katalog ✓',
+                            style: _ms(size: 12, color: Colors.white),
+                          ),
+                          backgroundColor: _selGreen,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          duration: const Duration(seconds: 2),
+                        ));
+                      } catch (e) {
+                        setDialog(() => isLoading = false);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Gagal menyimpan produk: $e', style: _ms(size: 12, color: Colors.white)),
+                          backgroundColor: Colors.red.shade600,
+                        ));
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _selGreen,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+              child: isLoading
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text(isEdit ? 'Simpan' : 'Tambahkan', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
+  // ──────────────────────────────────────────
   //  BOTTOM SHEET: KELOLA SEMUA PRODUK (Firestore)
   // ──────────────────────────────────────────
   void _showAllProductsSheet() {
     if (_storeId == null) {
-      _showRegisterStoreSheet(required: false);
+      _showRegisterStoreSheet();
       return;
     }
     HapticFeedback.selectionClick();
@@ -1574,8 +1922,8 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Kelola Produk', style: _ms(size: 17, weight: FontWeight.bold)),
-                              Text('Tambah, edit, atau hapus produk geraimu', style: _ms(size: 11, color: Colors.black45)),
+                              Text('Kelola Produk Dagangan', style: _ms(size: 17, weight: FontWeight.bold)),
+                              Text('Semua produk aktif di $_marketType', style: _ms(size: 11, color: Colors.black45)),
                             ],
                           ),
                         ),
@@ -1618,7 +1966,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text('📦', style: const TextStyle(fontSize: 48)),
+                                  const Text('📦', style: TextStyle(fontSize: 48)),
                                   const SizedBox(height: 12),
                                   Text('Belum ada produk', style: _ms(size: 14, weight: FontWeight.bold)),
                                   Text('Ketuk "Tambah" untuk menambahkan produk pertamamu',
@@ -1653,17 +2001,18 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   }
 
   Widget _buildManageProductTile(String docId, Map<String, dynamic> data) {
-    final name = data['product_name'] as String? ?? data['name'] as String? ?? 'Produk';
+    final name = data['product_name'] as String? ?? 'Produk';
     final icon = data['category'] as String? ?? '🛒';
     final price = (data['price'] as num?)?.toInt() ?? 0;
     final stock = (data['stock'] as num?)?.toInt() ?? 0;
     final imageUrl = (data['image_url'] as String?) ?? (data['imageUrl'] as String?) ?? '';
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
+        border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
         children: [
@@ -1683,7 +2032,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                       fit: BoxFit.cover,
                       width: double.infinity,
                       height: double.infinity,
-                      errorBuilder: (_, __, ___) => Center(child: Text(icon, style: const TextStyle(fontSize: 22))),
+                      errorBuilder: (_, _, _) => Center(child: Text(icon, style: const TextStyle(fontSize: 22))),
                     ),
             ),
           ),
@@ -1694,7 +2043,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
               children: [
                 Text(name, style: _ms(size: 13, weight: FontWeight.bold)),
                 const SizedBox(height: 2),
-                Text('Stok: $stock', style: _ms(size: 10, color: Colors.black38)),
+                Text('Stok: $stock • Pasar: ${data['market_type'] ?? _marketType}', style: _ms(size: 10, color: Colors.black38)),
                 const SizedBox(height: 2),
                 Text(StoreService.formatRupiah(price), style: _ms(size: 12, weight: FontWeight.bold, color: _selGreen)),
               ],
@@ -1724,202 +2073,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-  // ──────────────────────────────────────────
-  //  DIALOG: TAMBAH / EDIT PRODUK (Firestore)
-  // ──────────────────────────────────────────
-  void _showAddEditProductDialog({String? existingId, Map<String, dynamic>? existingData}) {
-    if (_storeId == null) {
-      _showRegisterStoreSheet(required: false);
-      return;
-    }
-
-    final isEdit = existingId != null;
-    final nameCtrl = TextEditingController(text: existingData?['product_name'] ?? '');
-    final iconCtrl = TextEditingController(text: existingData?['category'] ?? '🛒');
-    final priceCtrl = TextEditingController(text: existingData != null ? existingData['price'].toString() : '');
-    final stockCtrl = TextEditingController(text: existingData != null ? existingData['stock'].toString() : '');
-    final formKey = GlobalKey<FormState>();
-    bool isLoading = false;
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setDialog) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text(isEdit ? 'Edit Produk' : 'Tambah Produk', style: _ms(size: 16, weight: FontWeight.bold)),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 64,
-                        child: TextFormField(
-                          controller: iconCtrl,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 22),
-                          decoration: InputDecoration(
-                            labelText: 'Ikon',
-                            labelStyle: _ms(size: 11),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextFormField(
-                          controller: nameCtrl,
-                          textCapitalization: TextCapitalization.words,
-                          decoration: InputDecoration(
-                            labelText: 'Nama Produk *',
-                            labelStyle: _ms(size: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: priceCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'Harga (Rp) *',
-                            labelStyle: _ms(size: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ),
-                          validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextFormField(
-                          controller: stockCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'Stok *',
-                            labelStyle: _ms(size: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ),
-                          validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Batal', style: _ms(size: 13, color: Colors.black54)),
-            ),
-            ElevatedButton(
-              onPressed: isLoading
-                  ? null
-                  : () async {
-                      if (!formKey.currentState!.validate()) return;
-                      setDialog(() => isLoading = true);
-
-                      try {
-                        final uid = StoreService.currentUid;
-                        final emojiVal = iconCtrl.text.trim().isEmpty ? '🛒' : iconCtrl.text.trim();
-
-                        if (isEdit) {
-                          await StoreService.updateProduct(
-                            existingId,
-                            productName: nameCtrl.text.trim(),
-                            price: int.parse(priceCtrl.text.trim()),
-                            stock: int.parse(stockCtrl.text.trim()),
-                            category: emojiVal,
-                          );
-                        } else {
-                          await StoreService.addProduct(
-                            storeId: _storeId!,
-                            ownerUid: uid,
-                            productName: nameCtrl.text.trim(),
-                            price: int.parse(priceCtrl.text.trim()),
-                            stock: int.parse(stockCtrl.text.trim()),
-                            category: emojiVal,
-                          );
-                        }
-
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        if (!mounted) return;
-
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text(isEdit ? 'Produk berhasil diperbarui ✓' : 'Produk berhasil ditambahkan ✓',
-                              style: _ms(size: 12, color: Colors.white)),
-                          backgroundColor: _selGreen,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          duration: const Duration(seconds: 2),
-                        ));
-                      } catch (e) {
-                        setDialog(() => isLoading = false);
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Gagal: $e', style: _ms(size: 12, color: Colors.white)),
-                          backgroundColor: Colors.red.shade600,
-                        ));
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _selGreen,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: isLoading
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : Text(isEdit ? 'Simpan' : 'Tambahkan', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
-            ),
-          ],
-        );
-      }),
-    );
-  }
-
-  // ── DEBUG ONLY: seed produk dummy untuk testing kelola produk ──
-  Future<void> _seedDummyProducts() async {
-    if (_storeId == null) return;
-    final uid = StoreService.currentUid;
-    final dummyProducts = [
-      {'name': 'Bawang Merah', 'price': 32000, 'stock': 25, 'category': '🧅'},
-      {'name': 'Cabai Rawit Merah', 'price': 45000, 'stock': 15, 'category': '🌶️'},
-      {'name': 'Tomat Segar', 'price': 14000, 'stock': 30, 'category': '🍅'},
-      {'name': 'Wortel Brastagi', 'price': 12000, 'stock': 20, 'category': '🥕'},
-      {'name': 'Daging Ayam', 'price': 38000, 'stock': 10, 'category': '🍗'},
-    ];
-    for (final p in dummyProducts) {
-      await StoreService.addProduct(
-        storeId: _storeId!,
-        ownerUid: uid,
-        productName: p['name'] as String,
-        price: p['price'] as int,
-        stock: p['stock'] as int,
-        category: p['category'] as String,
-      );
-    }
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('5 produk dummy berhasil di-seed ✓', style: _ms(size: 12, color: Colors.white)),
-        backgroundColor: _selGreen,
-      ));
-    }
-  }
-
-
-
   void _confirmDeleteProduct(String docId, String name) {
     HapticFeedback.mediumImpact();
     showDialog(
@@ -1927,7 +2080,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Hapus Produk?', style: _ms(size: 16, weight: FontWeight.bold)),
-        content: Text('$name akan dihapus dari daftar produkmu secara permanen.', style: _ms(size: 13, color: Colors.black54)),
+        content: Text('$name akan dihapus secara permanen dari katalog tokomu.', style: _ms(size: 13, color: Colors.black54)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Batal', style: _ms(size: 13, color: Colors.black54))),
           ElevatedButton(
@@ -1962,8 +2115,9 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-
-
+  // ──────────────────────────────────────────
+  //  5. DRIVER SECTION
+  // ──────────────────────────────────────────
   Widget _buildAddDriverSection() {
     return GestureDetector(
       onTap: _showAddDriverDialog,
@@ -1973,6 +2127,9 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           color: Colors.white.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: Colors.white, width: 1.5),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 3)),
+          ],
         ),
         child: _assignedDrivers.isEmpty
             ? Row(
@@ -2005,7 +2162,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                     children: [
                       Text('Driver Gerai', style: _ms(size: 13, weight: FontWeight.bold)),
                       const Spacer(),
-                      Icon(Icons.add_circle_rounded, color: _selGreen, size: 20),
+                      const Icon(Icons.add_circle_rounded, color: _selGreen, size: 20),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -2016,11 +2173,12 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                             CircleAvatar(
                               radius: 16,
                               backgroundColor: _selGreen.withValues(alpha: 0.12),
-                              backgroundImage:
-                                  d.photoUrl != null ? NetworkImage(d.photoUrl!) : null,
+                              backgroundImage: d.photoUrl != null ? NetworkImage(d.photoUrl!) : null,
                               child: d.photoUrl == null
-                                  ? Text(d.name.isNotEmpty ? d.name[0].toUpperCase() : '?',
-                                      style: _ms(size: 12, weight: FontWeight.bold, color: _selGreen))
+                                  ? Text(
+                                      d.name.isNotEmpty ? d.name[0].toUpperCase() : '?',
+                                      style: _ms(size: 12, weight: FontWeight.bold, color: _selGreen),
+                                    )
                                   : null,
                             ),
                             const SizedBox(width: 10),
@@ -2053,63 +2211,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   }
 
   // ──────────────────────────────────────────
-  //  5. QUICK ACTIONS
-  // ──────────────────────────────────────────
-  Widget _buildQuickActions() {
-    final actions = [
-      _QuickAction(icon: Icons.add_box_rounded, label: 'Tambah\nProduk', color: _selGreen, onTap: () => _showAddEditProductDialog()),
-      _QuickAction(icon: Icons.tune_rounded, label: 'Kelola\nStok', color: const Color(0xFF1565C0), onTap: () => _showAllProductsSheet()),
-      _QuickAction(icon: Icons.local_shipping_rounded, label: 'Status\nPengiriman', color: _selOrange, onTap: () => _showComingSoon('Status Pengiriman')),
-      _QuickAction(icon: Icons.analytics_outlined, label: 'Laporan\nLengkap', color: Colors.deepPurple, onTap: () => _showComingSoon('Laporan Lengkap')),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sellerSectionTitle('Aksi Cepat', 'Kelola geraimu dengan mudah'),
-        const SizedBox(height: 12),
-        Row(
-          children: actions.map((a) => Expanded(
-            child: GestureDetector(
-              onTap: a.onTap,
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 3))],
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: a.color.withValues(alpha: 0.12), shape: BoxShape.circle),
-                      child: Icon(a.icon, color: a.color, size: 22),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(a.label, style: _ms(size: 9, weight: FontWeight.bold, color: _selDark), textAlign: TextAlign.center),
-                  ],
-                ),
-              ),
-            ),
-          )).toList(),
-        ),
-      ],
-    );
-  }
-  void _showComingSoon(String fitur) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('$fitur — Segera hadir!', style: _ms(size: 12, color: Colors.white)),
-      backgroundColor: _selGreen,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      duration: const Duration(seconds: 2),
-    ));
-  }
-
-  // ──────────────────────────────────────────
   //  HELPERS
   // ──────────────────────────────────────────
   Widget _sellerSectionTitle(String title, String sub) {
@@ -2120,17 +2221,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
         Text(sub, style: _ms(size: 11, color: Colors.white.withValues(alpha: 0.8))),
       ],
     );
-  }
-
-  String _formatRupiah(int value) {
-    if (value >= 1000000) {
-      final juta = value / 1000000;
-      return juta == juta.truncateToDouble() ? '${juta.toInt()}jt' : '${juta.toStringAsFixed(1)}jt';
-    } else if (value >= 1000) {
-      final ribu = value / 1000;
-      return ribu == ribu.truncateToDouble() ? '${ribu.toInt()}rb' : '${ribu.toStringAsFixed(0)}rb';
-    }
-    return value.toString();
   }
 }
 
@@ -2151,22 +2241,10 @@ class _QuickAction {
   });
 }
 
-class _SellerOrder {
-  final String id, buyerName, items, eta;
-  final int total;
-  _SellerOrder({required this.id, required this.buyerName, required this.items, required this.total, required this.eta});
-}
-
 class _SellerDriver {
   final String name, email;
   final String? photoUrl;
   const _SellerDriver({required this.name, required this.email, this.photoUrl});
-}
-
-class _SellerProduct {
-  final String name, icon, unit;
-  final int price, stock;
-  const _SellerProduct({required this.name, required this.icon, required this.unit, required this.price, required this.stock});
 }
 
 // ─────────────────────────────────────────────
@@ -2387,4 +2465,4 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
       },
     );
   }
-}
+}

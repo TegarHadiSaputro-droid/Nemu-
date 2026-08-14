@@ -19,27 +19,13 @@ TextStyle _fts({
   Color color = _ftDark,
 }) => GoogleFonts.manrope(fontSize: size, fontWeight: weight, color: color);
 
-String _rupiahFull(int val) {
-  final s = val.toString().split('').reversed.join();
-  final groups = <String>[];
-  for (var i = 0; i < s.length; i += 3) {
-    groups.add(s.substring(i, i + 3 > s.length ? s.length : i + 3));
-  }
-  return 'Rp ${groups.join('.').split('').reversed.join()}';
-}
-
 // ─────────────────────────────────────────────
 //  FirestoreTokoScreen
 //  Menampilkan detail toko + produk yang terdaftar di Firestore
-//  untuk sisi Pembeli. Dipanggil dari GeraiScreen saat pembeli
-//  menekan gerai yang didaftarkan oleh Penjual (Nemu+).
+//  untuk sisi Pembeli secara real-time.
 // ─────────────────────────────────────────────
 class FirestoreTokoScreen extends StatefulWidget {
-  /// ID dokumen di koleksi `stores`
   final String storeId;
-
-  /// Data awal toko (diteruskan dari GeraiScreen untuk menghindari
-  /// fetch ulang, tapi produk tetap di-load via StreamBuilder).
   final Map<String, dynamic> storeData;
 
   const FirestoreTokoScreen({
@@ -55,60 +41,137 @@ class FirestoreTokoScreen extends StatefulWidget {
 class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
   final CartManager _cart = CartManager.instance;
 
-  String get _storeName => widget.storeData['store_name'] as String? ?? 'Toko';
-  String get _description => widget.storeData['description'] as String? ?? '';
-  String get _marketSection => widget.storeData['market_section'] as String? ?? '';
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7F0),
-      body: Stack(
-        children: [
-          CustomScrollView(
-            slivers: [
-              _buildAppBar(),
-              // Header info toko (update real-time via StreamBuilder)
-              SliverToBoxAdapter(child: _buildStoreInfoBanner()),
-              // Daftar produk (real-time)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 4,
-                        height: 18,
+    return StreamBuilder<DocumentSnapshot>(
+      stream: StoreService.storeStream(widget.storeId),
+      builder: (context, storeSnapshot) {
+        final liveData = storeSnapshot.data?.data() as Map<String, dynamic>?;
+        final currentStoreData = liveData ?? widget.storeData;
+
+        final storeName = (currentStoreData['store_name'] as String?) ?? 'Gerai Nemu+';
+        final description = (currentStoreData['description'] as String?) ?? '';
+        final marketSection = (currentStoreData['market_type'] as String?) ??
+            (currentStoreData['market_section'] as String?) ??
+            'Pasar Tradisional';
+        final isOpen = (currentStoreData['is_open'] as bool?) ??
+            (currentStoreData['isOpen'] as bool?) ??
+            (currentStoreData['is_active'] as bool?) ??
+            true;
+
+        return Scaffold(
+          backgroundColor: const Color(0xFFF5F7F0),
+          body: Stack(
+            children: [
+              CustomScrollView(
+                slivers: [
+                  _buildAppBar(storeName, marketSection, isOpen),
+                  // Banner Status Toko Tutup (jika sedang tutup)
+                  if (!isOpen)
+                    SliverToBoxAdapter(
+                      child: Container(
+                        margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: _ftGreen,
-                          borderRadius: BorderRadius.circular(2),
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.lock_clock_rounded, color: Colors.red.shade700, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Toko Sedang Tutup',
+                                    style: _fts(size: 13, weight: FontWeight.bold, color: Colors.red.shade800),
+                                  ),
+                                  Text(
+                                    'Penjual sedang tidak menerima pesanan saat ini. Anda dapat melihat katalog produk di bawah.',
+                                    style: _fts(size: 10.5, color: Colors.red.shade700),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text('Produk Tersedia', style: _fts(size: 15, weight: FontWeight.bold)),
-                    ],
+                    ),
+
+                  // Header info toko
+                  if (description.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Container(
+                        margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: _ftGreen.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: _ftGreen.withValues(alpha: 0.15)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline_rounded, color: _ftGreen.withValues(alpha: 0.7), size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                description,
+                                style: _fts(size: 12, color: Colors.black54),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // Header Produk
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: _ftGreen,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text('Produk Tersedia', style: _fts(size: 15, weight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+
+                  // Daftar produk (real-time)
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                    sliver: _buildProductSliver(storeName, marketSection, isOpen),
+                  ),
+                ],
               ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                sliver: _buildProductSliver(),
+
+              // Bottom Bar Keranjang
+              Positioned(
+                bottom: 24,
+                left: 20,
+                right: 20,
+                child: _buildCartBottomBar(),
               ),
             ],
           ),
-          // ── Bottom Bar Keranjang ──
-          Positioned(
-            bottom: 24,
-            left: 20,
-            right: 20,
-            child: _buildCartBottomBar(),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildAppBar() {
+  Widget _buildAppBar(String storeName, String marketSection, bool isOpen) {
     return SliverAppBar(
       expandedHeight: 200,
       pinned: true,
@@ -131,7 +194,6 @@ class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
               padding: const EdgeInsets.fromLTRB(20, 48, 20, 16),
               child: Row(
                 children: [
-                  // Avatar toko
                   Container(
                     width: 72,
                     height: 72,
@@ -150,27 +212,46 @@ class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Badge Nemu+
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.verified_rounded, color: Colors.white, size: 11),
-                              const SizedBox(width: 4),
-                              Text('Nemu+ Terverifikasi', style: _fts(size: 10, weight: FontWeight.bold, color: Colors.white)),
-                            ],
-                          ),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.25),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.verified_rounded, color: Colors.white, size: 11),
+                                  const SizedBox(width: 4),
+                                  Text('Nemu+ Mitra', style: _fts(size: 10, weight: FontWeight.bold, color: Colors.white)),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isOpen ? Colors.white : Colors.red.shade400,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                isOpen ? '🟢 Buka' : '🔴 Tutup',
+                                style: _fts(
+                                  size: 9.5,
+                                  weight: FontWeight.bold,
+                                  color: isOpen ? _ftGreen : Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          _storeName,
-                          style: _fts(size: 20, weight: FontWeight.bold, color: Colors.white),
+                          storeName,
+                          style: _fts(size: 19, weight: FontWeight.bold, color: Colors.white),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -181,7 +262,7 @@ class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
                             const SizedBox(width: 3),
                             Expanded(
                               child: Text(
-                                _marketSection,
+                                marketSection,
                                 style: _fts(size: 11, color: Colors.white.withValues(alpha: 0.9)),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -201,33 +282,7 @@ class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
     );
   }
 
-  Widget _buildStoreInfoBanner() {
-    if (_description.isEmpty) return const SizedBox.shrink();
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _ftGreen.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _ftGreen.withValues(alpha: 0.15)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline_rounded, color: _ftGreen.withValues(alpha: 0.7), size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _description,
-              style: _fts(size: 12, color: Colors.black54),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductSliver() {
+  Widget _buildProductSliver(String storeName, String marketSection, bool isStoreOpen) {
     return StreamBuilder<QuerySnapshot>(
       stream: StoreService.storeProductsStream(widget.storeId),
       builder: (context, snapshot) {
@@ -252,7 +307,7 @@ class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
                     const Text('📦', style: TextStyle(fontSize: 48)),
                     const SizedBox(height: 12),
                     Text('Belum ada produk', style: _fts(size: 15, weight: FontWeight.bold)),
-                    Text('Penjual belum menambahkan produk.', style: _fts(size: 12, color: Colors.black45)),
+                    Text('Penjual belum menambahkan produk dagangan.', style: _fts(size: 12, color: Colors.black45)),
                   ],
                 ),
               ),
@@ -263,8 +318,9 @@ class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
         return SliverList(
           delegate: SliverChildBuilderDelegate(
             (ctx, i) {
-              final data = docs[i].data() as Map<String, dynamic>;
-              return _buildProdukRow(data);
+              final doc = docs[i];
+              final data = doc.data() as Map<String, dynamic>;
+              return _buildProdukRow(doc.id, data, storeName, marketSection, isStoreOpen);
             },
             childCount: docs.length,
           ),
@@ -273,16 +329,22 @@ class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
     );
   }
 
-  Widget _buildProdukRow(Map<String, dynamic> data) {
+  Widget _buildProdukRow(
+    String docId,
+    Map<String, dynamic> data,
+    String storeName,
+    String marketSection,
+    bool isStoreOpen,
+  ) {
     final name = data['product_name'] as String? ?? 'Produk';
     final icon = data['category'] as String? ?? '🛒';
     final price = (data['price'] as num?)?.toInt() ?? 0;
     final stock = (data['stock'] as num?)?.toInt() ?? 0;
-    final isOutOfStock = stock == 0;
+    final isOutOfStock = stock <= 0;
+    final canBuy = isStoreOpen && !isOutOfStock;
 
-    // Buat PasarProduk "sementara" agar bisa masuk ke CartManager yang sudah ada
     final tempProduk = PasarProduk(
-      id: '${widget.storeId}_${name.replaceAll(' ', '_')}',
+      id: docId,
       nama: name,
       emoji: icon,
       satuan: 'unit',
@@ -291,122 +353,104 @@ class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
       deskripsi: '',
     );
 
-    return GestureDetector(
-      onTap: isOutOfStock
-          ? null
-          : () {
-              _cart.tambah(tempProduk, 1, _storeName, _marketSection);
-              setState(() {});
-              HapticFeedback.selectionClick();
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('$name ditambahkan ke keranjang', style: _fts(size: 12, color: Colors.white)),
-                  backgroundColor: _ftGreen,
-                  duration: const Duration(seconds: 1),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                ),
-              );
-            },
-      child: Opacity(
-        opacity: isOutOfStock ? 0.5 : 1.0,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))
-            ],
-          ),
-          child: Row(
-            children: [
-              // Emoji / ikon produk
-              Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  color: _ftGreen.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(icon, style: const TextStyle(fontSize: 36)),
-                ),
+    return Opacity(
+      opacity: canBuy ? 1.0 : 0.6,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                color: _ftGreen.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(width: 14),
-              // Info produk
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name, style: _fts(size: 14, weight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(
-                      _rupiahFull(price),
-                      style: _fts(size: 13, weight: FontWeight.bold, color: _ftGreen),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: isOutOfStock ? Colors.red.shade400 : Colors.green.shade400,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          isOutOfStock ? 'Stok Habis' : 'Stok: $stock',
-                          style: _fts(size: 11, color: Colors.black45),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              child: Center(
+                child: Text(icon, style: const TextStyle(fontSize: 36)),
               ),
-              // Tombol + Tambah
-              if (!isOutOfStock)
-                GestureDetector(
-                  onTap: () {
-                    _cart.tambah(tempProduk, 1, _storeName, _marketSection);
-                    setState(() {});
-                    HapticFeedback.selectionClick();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('$name ditambahkan ke keranjang', style: _fts(size: 12, color: Colors.white)),
-                        backgroundColor: _ftGreen,
-                        duration: const Duration(seconds: 1),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        margin: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: _ftGreen,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.add, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: _fts(size: 14, weight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(
+                    StoreService.formatRupiahFull(price),
+                    style: _fts(size: 13, weight: FontWeight.bold, color: _ftGreen),
                   ),
-                )
-              else
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: isOutOfStock ? Colors.red.shade400 : Colors.green.shade400,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        isOutOfStock ? 'Stok Habis' : 'Stok: $stock',
+                        style: _fts(size: 11, color: Colors.black45),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            // Tombol + Tambah
+            if (canBuy)
+              GestureDetector(
+                onTap: () {
+                  _cart.tambah(tempProduk, 1, storeName, marketSection);
+                  setState(() {});
+                  HapticFeedback.selectionClick();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('$name ditambahkan ke keranjang', style: _fts(size: 12, color: Colors.white)),
+                      backgroundColor: _ftGreen,
+                      duration: const Duration(seconds: 1),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
+                    color: _ftGreen,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text('Habis', style: _fts(size: 10, weight: FontWeight.bold, color: Colors.grey)),
+                  child: const Icon(Icons.add, color: Colors.white, size: 20),
                 ),
-            ],
-          ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  !isStoreOpen ? 'Toko Tutup' : 'Habis',
+                  style: _fts(size: 10, weight: FontWeight.bold, color: Colors.grey.shade700),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -462,7 +506,7 @@ class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text('${_cart.totalQty} item', style: _fts(size: 11, color: Colors.white70)),
-                    Text(_rupiahFull(_cart.totalHarga), style: _fts(size: 13, weight: FontWeight.bold, color: Colors.white)),
+                    Text(StoreService.formatRupiahFull(_cart.totalHarga), style: _fts(size: 13, weight: FontWeight.bold, color: Colors.white)),
                   ],
                 ),
                 const Spacer(),

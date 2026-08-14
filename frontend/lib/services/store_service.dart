@@ -38,40 +38,113 @@ class StoreService {
         .snapshots();
   }
 
-  /// Daftarkan toko baru ke Firestore.
+  /// Stream single store document berdasarkan storeId
+  static Stream<DocumentSnapshot> storeStream(String storeId) {
+    return _stores.doc(storeId).snapshots();
+  }
+
+  /// Daftarkan toko baru ke Firestore koleksi `stores/{store_id}`.
   /// Return: store_id (document ID yang baru dibuat).
   static Future<String> createStore({
     required String ownerUid,
     required String storeName,
-    required String marketSection,
-    required String description,
+    required String marketType,
+    bool isOpen = true,
+    String description = '',
   }) async {
     final ref = await _stores.add({
       'owner_id': ownerUid,
       'store_name': storeName,
-      'market_section': marketSection,
+      'market_type': marketType,
+      'market_section': marketType, // fallback kompatibilitas
+      'is_open': isOpen,
+      'is_active': isOpen, // fallback kompatibilitas
       'description': description,
-      'is_active': true,
       'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
     });
+
+    // Simpan auto id ke dalam field 'store_id'
+    await ref.update({'store_id': ref.id});
+
+    // Sinkronkan juga ke dokumen seller/{uid}
+    try {
+      await _db.collection('seller').doc(ownerUid).set({
+        'uid': ownerUid,
+        'store_id': ref.id,
+        'store_name': storeName,
+        'market_type': marketType,
+        'market_section': marketType,
+        'isOpen': isOpen,
+        'description': description,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
+
     return ref.id;
   }
 
-  /// Update profil toko (nama toko & deskripsi).
+  /// Update profil toko (nama toko, pasar, deskripsi, status buka).
   static Future<void> updateStore(
     String storeId, {
     required String storeName,
+    String? marketType,
     required String description,
+    bool? isOpen,
+    String? ownerUid,
   }) async {
-    await _stores.doc(storeId).update({
+    final map = <String, dynamic>{
       'store_name': storeName,
       'description': description,
-    });
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (marketType != null && marketType.isNotEmpty) {
+      map['market_type'] = marketType;
+      map['market_section'] = marketType;
+    }
+    if (isOpen != null) {
+      map['is_open'] = isOpen;
+      map['is_active'] = isOpen;
+    }
+    await _stores.doc(storeId).update(map);
+
+    final uid = ownerUid ?? FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      try {
+        final sellerMap = <String, dynamic>{
+          'store_name': storeName,
+          'description': description,
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+        if (marketType != null && marketType.isNotEmpty) {
+          sellerMap['market_type'] = marketType;
+          sellerMap['market_section'] = marketType;
+        }
+        if (isOpen != null) {
+          sellerMap['isOpen'] = isOpen;
+        }
+        await _db.collection('seller').doc(uid).set(sellerMap, SetOptions(merge: true));
+      } catch (_) {}
+    }
   }
 
-  /// Toggle is_active (buka / tutup toko dari sisi produk).
-  static Future<void> setStoreActive(String storeId, bool isActive) async {
-    await _stores.doc(storeId).update({'is_active': isActive});
+  /// Toggle is_open (buka / tutup toko).
+  static Future<void> setStoreOpenStatus(String storeId, bool isOpen, {String? ownerUid}) async {
+    await _stores.doc(storeId).update({
+      'is_open': isOpen,
+      'is_active': isOpen,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    final uid = ownerUid ?? FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      try {
+        await _db.collection('seller').doc(uid).set({
+          'isOpen': isOpen,
+          'isOpenUpdatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (_) {}
+    }
   }
 
   // ════════════════════════════════════════════
@@ -82,47 +155,61 @@ class StoreService {
   static Stream<QuerySnapshot> myProductsStream(String storeId) {
     return _products
         .where('store_id', isEqualTo: storeId)
-        .orderBy('createdAt', descending: false)
         .snapshots();
   }
 
-  /// Tambah produk baru ke Firestore.
-  static Future<void> addProduct({
+  /// Tambah produk baru ke Firestore koleksi `products`.
+  static Future<String> addProduct({
     required String storeId,
     required String ownerUid,
+    required String marketType,
     required String productName,
     required int price,
     required int stock,
     required String category, // emoji / kategori
     String imageUrl = '',
   }) async {
-    await _products.add({
+    final ref = await _products.add({
       'store_id': storeId,
       'owner_id': ownerUid,
+      'market_type': marketType,
       'product_name': productName,
       'price': price,
       'stock': stock,
       'category': category,
       'image_url': imageUrl,
+      'created_at': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    await ref.update({'product_id': ref.id});
+    return ref.id;
   }
 
   /// Update produk yang sudah ada.
-  /// Penjual hanya boleh update produk miliknya sendiri (dijaga di Security Rules).
   static Future<void> updateProduct(
     String productId, {
     required String productName,
     required int price,
     required int stock,
     required String category,
+    String? marketType,
+    String? imageUrl,
   }) async {
-    await _products.doc(productId).update({
+    final map = <String, dynamic>{
       'product_name': productName,
       'price': price,
       'stock': stock,
       'category': category,
-    });
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (marketType != null && marketType.isNotEmpty) {
+      map['market_type'] = marketType;
+    }
+    if (imageUrl != null) {
+      map['image_url'] = imageUrl;
+    }
+    await _products.doc(productId).update(map);
   }
 
   /// Hapus produk dari Firestore.
@@ -136,19 +223,25 @@ class StoreService {
 
   /// Stream semua toko aktif dari Firestore, opsional difilter per pasar.
   /// Dipakai oleh GeraiScreen (sisi Pembeli) untuk menampilkan gerai real-time.
-  static Stream<QuerySnapshot> allActiveStoresStream({String? marketSection}) {
-    Query query = _stores.where('is_active', isEqualTo: true);
-    if (marketSection != null) {
-      query = query.where('market_section', isEqualTo: marketSection);
+  static Stream<QuerySnapshot> allActiveStoresStream({String? marketType}) {
+    Query query = _stores;
+    if (marketType != null && marketType.isNotEmpty) {
+      query = query.where('market_type', isEqualTo: marketType);
     }
-    return query.orderBy('createdAt', descending: false).snapshots();
+    return query.snapshots();
   }
 
   /// Stream produk satu toko untuk sisi Pembeli.
   static Stream<QuerySnapshot> storeProductsStream(String storeId) {
     return _products
         .where('store_id', isEqualTo: storeId)
-        .orderBy('createdAt', descending: false)
+        .snapshots();
+  }
+
+  /// Stream semua produk berdasarkan pasar pilihan pembeli.
+  static Stream<QuerySnapshot> productsByMarketStream(String marketType) {
+    return _products
+        .where('market_type', isEqualTo: marketType)
         .snapshots();
   }
 
@@ -163,7 +256,7 @@ class StoreService {
     return uid;
   }
 
-  /// Format angka ke Rupiah singkat (misal 12000 → "12rb").
+  /// Format angka ke Rupiah singkat (misal 12000 → "12rb" atau "Rp 12.000").
   static String formatRupiah(int value) {
     if (value >= 1000000) {
       final juta = value / 1000000;
@@ -173,5 +266,15 @@ class StoreService {
       return 'Rp${ribu == ribu.truncateToDouble() ? '${ribu.toInt()}rb' : '${ribu.toStringAsFixed(0)}rb'}';
     }
     return 'Rp$value';
+  }
+
+  /// Format angka Rupiah lengkap (contoh: Rp 15.000)
+  static String formatRupiahFull(int value) {
+    final s = value.toString().split('').reversed.join();
+    final groups = <String>[];
+    for (var i = 0; i < s.length; i += 3) {
+      groups.add(s.substring(i, i + 3 > s.length ? s.length : i + 3));
+    }
+    return 'Rp ${groups.join('.').split('').reversed.join()}';
   }
 }

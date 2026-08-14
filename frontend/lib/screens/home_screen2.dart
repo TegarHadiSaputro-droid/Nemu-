@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/Profile/account.dart';
@@ -12,20 +11,6 @@ import 'package:frontend/screens/seller_langganan_screen.dart';
 // ─────────────────────────────────────────────
 const Color _yellowTop   = Color(0xFFD9DF36);
 const Color _greenBottom = Color(0xFF007C3F);
-const Color _textDark    = Color(0xFF0F1B11);
-
-TextStyle _m({
-  double size = 14,
-  FontWeight weight = FontWeight.normal,
-  Color color = _textDark,
-  double? height,
-}) =>
-    GoogleFonts.manrope(
-      fontSize: size,
-      fontWeight: weight,
-      color: color,
-      height: height,
-    );
 
 class HomeScreen2 extends StatefulWidget {
   const HomeScreen2({super.key});
