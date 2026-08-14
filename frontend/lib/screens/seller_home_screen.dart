@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -215,28 +216,42 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
       onRefresh: _handleRefresh,
       child: FadeTransition(
         opacity: _entranceAnim,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. Header Toko
-              _buildStoreHeader(),
-              const SizedBox(height: 16),
+        // Align + LayoutBuilder di sini memaksa konten selalu menempel ke atas,
+        // bahkan kalau widget ini dibungkus Center() oleh parent (mis. saat
+        // daftar produk kosong sehingga tinggi konten jadi pendek).
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return Align(
+              alignment: Alignment.topCenter,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      // 1. Header Toko
+                      _buildStoreHeader(),
+                      const SizedBox(height: 16),
 
-              // 2. Alert Pesanan Baru (real-time dari Firestore)
-              _buildOrderAlertSection(),
-              const SizedBox(height: 20),
+                      // 2. Alert Pesanan Baru (real-time dari Firestore)
+                      _buildOrderAlertSection(),
+                      const SizedBox(height: 20),
 
-              // 3. Katalog Produk (Firestore real-time)
+              // 3. Produk yang Dijual (real-time dari Firestore)
               _buildProductsSection(),
               const SizedBox(height: 32),
 
-              // 3b. Placeholder Tambah Driver
-              _buildAddDriverSection(),
-            ],
-          ),
+                      // 3b. Placeholder Tambah Driver
+                      _buildAddDriverSection(),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -921,6 +936,27 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                     '${docs.length} produk aktif di geraimu',
                   ),
                 ),
+                if (kDebugMode) ...[
+                  GestureDetector(
+                    onTap: _seedDummyProducts,
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.bolt_rounded, size: 13, color: Colors.orange.shade700),
+                          const SizedBox(width: 3),
+                          Text('Seed', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.orange.shade700)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 GestureDetector(
                   onTap: _showAllProductsSheet,
                   child: Container(
@@ -1704,7 +1740,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     final stockCtrl = TextEditingController(text: existingData != null ? existingData['stock'].toString() : '');
     final formKey = GlobalKey<FormState>();
     bool isLoading = false;
-
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setDialog) {
@@ -1852,6 +1887,35 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
         );
       }),
     );
+  }
+
+  // ── DEBUG ONLY: seed produk dummy untuk testing kelola produk ──
+  Future<void> _seedDummyProducts() async {
+    if (_storeId == null) return;
+    final uid = StoreService.currentUid;
+    final dummyProducts = [
+      {'name': 'Bawang Merah', 'price': 32000, 'stock': 25, 'category': '🧅'},
+      {'name': 'Cabai Rawit Merah', 'price': 45000, 'stock': 15, 'category': '🌶️'},
+      {'name': 'Tomat Segar', 'price': 14000, 'stock': 30, 'category': '🍅'},
+      {'name': 'Wortel Brastagi', 'price': 12000, 'stock': 20, 'category': '🥕'},
+      {'name': 'Daging Ayam', 'price': 38000, 'stock': 10, 'category': '🍗'},
+    ];
+    for (final p in dummyProducts) {
+      await StoreService.addProduct(
+        storeId: _storeId!,
+        ownerUid: uid,
+        productName: p['name'] as String,
+        price: p['price'] as int,
+        stock: p['stock'] as int,
+        category: p['category'] as String,
+      );
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('5 produk dummy berhasil di-seed ✓', style: _ms(size: 12, color: Colors.white)),
+        backgroundColor: _selGreen,
+      ));
+    }
   }
 
 
@@ -2323,324 +2387,4 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
       },
     );
   }
-}
-
-// ─────────────────────────────────────────────
-//  Data class untuk produk Firestore (beda dari _SellerProduct lokal)
-// ─────────────────────────────────────────────
-class _FirestoreProduct {
-  final String? id;
-  final String name, imageUrl, unit;
-  final int price, stock;
-  const _FirestoreProduct({
-    this.id,
-    required this.name,
-    required this.imageUrl,
-    required this.unit,
-    required this.price,
-    required this.stock,
-  });
-
-  factory _FirestoreProduct.fromDoc(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>? ?? {};
-    return _FirestoreProduct(
-      id: doc.id,
-      name: (d['name'] as String?) ?? (d['product_name'] as String?) ?? '',
-      imageUrl: (d['imageUrl'] as String?) ?? (d['image_url'] as String?) ?? '',
-      unit: (d['unit'] as String?) ?? 'kg',
-      price: (d['price'] as num?)?.toInt() ?? 0,
-      stock: (d['stock'] as num?)?.toInt() ?? 0,
-    );
-  }
-
-  Map<String, dynamic> toMap() => {
-        'product_name': name,
-        'image_url': imageUrl,
-        'unit': unit,
-        'price': price,
-        'stock': stock,
-      };
-}
-
-// ─────────────────────────────────────────────
-//  Dialog Tambah/Edit Produk
-// ─────────────────────────────────────────────
-class _ProductFormDialog extends StatefulWidget {
-  final _FirestoreProduct? existing;
-  final Color selGreen;
-  final TextStyle Function({double size, FontWeight weight, Color color, double? height}) textStyle;
-  final void Function(_FirestoreProduct product) onSave;
-
-  const _ProductFormDialog({
-    required this.existing,
-    required this.selGreen,
-    required this.textStyle,
-    required this.onSave,
-  });
-
-  @override
-  State<_ProductFormDialog> createState() => _ProductFormDialogState();
-}
-
-class _ProductFormDialogState extends State<_ProductFormDialog> {
-  late final TextEditingController nameCtrl;
-  late final TextEditingController imageUrlCtrl;
-  late final TextEditingController unitCtrl;
-  late final TextEditingController priceCtrl;
-  late final TextEditingController stockCtrl;
-  final formKey = GlobalKey<FormState>();
-
-  bool _imageLoadFailed = false;
-  String _lastCheckedUrl = '';
-  bool _isSaving = false;
-
-  bool get isEdit => widget.existing != null;
-
-  bool _looksLikeDirectImageUrl(String url) {
-    if (url.isEmpty) return true;
-    final uri = Uri.tryParse(url);
-    if (uri == null || !uri.hasScheme || !(uri.scheme == 'http' || uri.scheme == 'https')) {
-      return false;
-    }
-    final path = uri.path.toLowerCase();
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.bmp'];
-    final hasImageExtension = imageExtensions.any((ext) => path.endsWith(ext));
-    const knownImageCdnHosts = ['images.unsplash.com', 'cdn.pixabay.com', 'images.pexels.com'];
-    final isKnownCdn = knownImageCdnHosts.any((host) => uri.host.endsWith(host));
-    return hasImageExtension || isKnownCdn;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    nameCtrl = TextEditingController(text: widget.existing?.name ?? '');
-    imageUrlCtrl = TextEditingController(text: widget.existing?.imageUrl ?? '');
-    unitCtrl = TextEditingController(text: widget.existing?.unit ?? 'per kg');
-    priceCtrl = TextEditingController(text: widget.existing != null ? widget.existing!.price.toString() : '');
-    stockCtrl = TextEditingController(text: widget.existing != null ? widget.existing!.stock.toString() : '');
-  }
-
-  @override
-  void dispose() {
-    nameCtrl.dispose();
-    imageUrlCtrl.dispose();
-    unitCtrl.dispose();
-    priceCtrl.dispose();
-    stockCtrl.dispose();
-    super.dispose();
-  }
-
-  void _safeSetState(VoidCallback fn) {
-    if (mounted) setState(fn);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final selGreen = widget.selGreen;
-    final ms = widget.textStyle;
-
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      backgroundColor: Colors.white,
-      child: Container(
-        width: 340,
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(isEdit ? 'Edit Produk' : 'Tambah Produk', style: ms(size: 16, weight: FontWeight.bold)),
-                const SizedBox(height: 16),
-
-                // Preview foto dari URL
-                Container(
-                  width: double.infinity,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: selGreen.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: imageUrlCtrl.text.trim().isEmpty
-                        ? Center(
-                            child: Icon(Icons.image_outlined, size: 32, color: selGreen.withValues(alpha: 0.4)),
-                          )
-                        : !_looksLikeDirectImageUrl(imageUrlCtrl.text.trim())
-                            ? Center(
-                                child: Icon(Icons.image_not_supported_rounded, size: 28, color: selGreen.withValues(alpha: 0.4)),
-                              )
-                            : Image.network(
-                                imageUrlCtrl.text.trim(),
-                                key: ValueKey(imageUrlCtrl.text.trim()),
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                height: double.infinity,
-                                loadingBuilder: (context, child, progress) {
-                                  if (progress == null) return child;
-                                  return Center(
-                                    child: SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: selGreen.withValues(alpha: 0.5)),
-                                    ),
-                                  );
-                                },
-                                errorBuilder: (context, error, stackTrace) {
-                                  final url = imageUrlCtrl.text.trim();
-                                  if (_lastCheckedUrl != url) {
-                                    _lastCheckedUrl = url;
-                                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                                      _safeSetState(() => _imageLoadFailed = true);
-                                    });
-                                  }
-                                  return Center(
-                                    child: Icon(Icons.image_not_supported_rounded, size: 28, color: selGreen.withValues(alpha: 0.4)),
-                                  );
-                                },
-                              ),
-                  ),
-                ),
-                if (_imageLoadFailed) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.orange.shade200),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.error_outline_rounded, size: 15, color: Colors.orange.shade700),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Link ini bukan link gambar langsung, jadi tidak bisa dimuat. Buka gambarnya, klik kanan, lalu pilih "Salin alamat gambar" (Copy image address) — bukan menyalin link halaman.',
-                            style: ms(size: 10.5, color: Colors.orange.shade800, height: 1.4),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: imageUrlCtrl,
-                  keyboardType: TextInputType.url,
-                  onChanged: (value) => _safeSetState(() {
-                    final trimmed = value.trim();
-                    _imageLoadFailed = trimmed.isNotEmpty && !_looksLikeDirectImageUrl(trimmed);
-                    _lastCheckedUrl = '';
-                  }),
-                  decoration: InputDecoration(
-                    labelText: 'URL Foto Produk',
-                    labelStyle: ms(size: 12),
-                    hintText: 'https://...',
-                    hintStyle: ms(size: 11, color: Colors.black26),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: nameCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Nama Produk',
-                    labelStyle: ms(size: 12),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: unitCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Satuan (contoh: per kg)',
-                    labelStyle: ms(size: 12),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  ),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: priceCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'Harga (Rp)',
-                          labelStyle: ms(size: 12),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        ),
-                        validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextFormField(
-                        controller: stockCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'Stok',
-                          labelStyle: ms(size: 12),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        ),
-                        validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: _isSaving ? null : () => Navigator.pop(context),
-                      child: Text('Batal', style: ms(size: 13, color: Colors.black54)),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _isSaving
-                          ? null
-                          : () {
-                              if (!formKey.currentState!.validate()) return;
-
-                              final newProduct = _FirestoreProduct(
-                                id: widget.existing?.id,
-                                name: nameCtrl.text.trim(),
-                                imageUrl: imageUrlCtrl.text.trim(),
-                                unit: unitCtrl.text.trim(),
-                                price: int.parse(priceCtrl.text.trim()),
-                                stock: int.parse(stockCtrl.text.trim()),
-                              );
-
-                              setState(() => _isSaving = true);
-                              Navigator.pop(context);
-                              widget.onSave(newProduct);
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: selGreen,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: Text(isEdit ? 'Simpan' : 'Tambahkan', style: ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+}

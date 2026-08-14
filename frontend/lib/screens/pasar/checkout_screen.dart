@@ -2,22 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/models/cart_model.dart';
+import 'package:frontend/utils/ongkir.dart';
 import 'package:frontend/models/orders_manager.dart';
+import 'package:frontend/services/address_manager.dart';
 import 'package:frontend/screens/orders_screen.dart';
 
 // ─────────────────────────────────────────────
 //  Warna (konsisten dengan pasar_screen.dart & home_screen.dart)
 // ─────────────────────────────────────────────
-const Color _green = Color(0xFF007C3F);
-const Color _dark = Color(0xFF0F1B11);
+const Color _cGreen = Color(0xFF007C3F);
+const Color _cDark = Color(0xFF0F1B11);
+const Color _cSurf = Color(0xFFF7F8F7);
 
-TextStyle _ms({
+TextStyle _cs({
   double size = 14,
   FontWeight weight = FontWeight.normal,
-  Color color = _dark,
+  Color color = _cDark,
 }) => GoogleFonts.manrope(fontSize: size, fontWeight: weight, color: color);
 
-const int _ongkirPerGerai = 2000;
+String _cRupiah(int value) {
+  final s = value.toString();
+  final buffer = StringBuffer();
+  for (int i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 == 0) buffer.write('.');
+    buffer.write(s[i]);
+  }
+  return 'Rp${buffer.toString()}';
+}
+
+class _PaymentMethod {
+  final IconData icon;
+  final String label;
+  final String desc;
+  const _PaymentMethod({required this.icon, required this.label, required this.desc});
+}
 
 // ─────────────────────────────────────────────
 //  CheckoutScreen
@@ -30,8 +48,87 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
-  final _catatanCtrl = TextEditingController();
+  final CartManager _cart = CartManager.instance;
+  final TextEditingController _catatanCtrl = TextEditingController();
+  int _selectedPayment = 0;
+  String? _selectedDriverId;
   bool _isPlacingOrder = false;
+
+  // Ongkir dihitung dari 2 komponen: berat pesanan (per market) dan jarak
+  // pengantaran (per market). Aturan lengkap ada di lib/utils/ongkir.dart.
+  // Kalau keranjang isinya dari beberapa pasar sekaligus, ongkir tiap
+  // pasar dijumlah (asumsi: tiap pasar diantar terpisah).
+
+  /// Ambil jarak (km) ke sebuah pasar. Prioritas:
+  /// 1. Kalau alamat user & pasar sama-sama punya koordinat -> hitung
+  ///    jarak asli pakai Haversine.
+  /// 2. Kalau tidak, fallback ke field `jarak` di PasarMarket (mis. "1.5 km").
+  double _jarakUntukMarket(String marketName) {
+    final market = mockDaftarPasar.firstWhere(
+      (m) => m.nama == marketName,
+      orElse: () => mockDaftarPasar.first,
+    );
+
+    final address = AddressManager.instance.address.value;
+    if (address != null && address.hasCoordinates && market.hasCoordinates) {
+      return hitungJarakKm(
+        address.lat!,
+        address.lng!,
+        market.lat!,
+        market.lng!,
+      );
+    }
+
+    final match = RegExp(r'[\d.]+').firstMatch(market.jarak);
+    return match != null ? double.parse(match.group(0)!) : 0;
+  }
+
+  int _ongkirForMarket(String marketName) {
+    final beratKg = _cart.totalBeratUntukMarket(marketName);
+    final jarakKm = _jarakUntukMarket(marketName);
+    return hitungTotalOngkir(beratKg: beratKg, jarakKm: jarakKm).totalOngkir;
+  }
+
+  // Dipecah per komponen (berat vs jarak) supaya bisa ditampilkan
+  // detailnya di Ringkasan Biaya -- jadi kelihatan jelas komponen mana
+  // yang kena biaya dan mana yang gratis.
+  int _ongkirBeratForMarket(String marketName) {
+    final beratKg = _cart.totalBeratUntukMarket(marketName);
+    return hitungOngkirBerat(beratKg);
+  }
+
+  int _ongkirJarakForMarket(String marketName) {
+    final jarakKm = _jarakUntukMarket(marketName);
+    return hitungOngkirJarak(jarakKm);
+  }
+
+  static const _paymentMethods = [
+    _PaymentMethod(icon: Icons.money_rounded, label: 'Bayar di Tempat (COD)', desc: 'Bayar saat barang tiba'),
+    _PaymentMethod(icon: Icons.account_balance_rounded, label: 'Transfer Bank', desc: 'BRI / BNI / Mandiri'),
+    _PaymentMethod(icon: Icons.wallet_rounded, label: 'E-Wallet', desc: 'GoPay / OVO / Dana'),
+  ];
+
+  int get _subtotal => _cart.totalHarga;
+
+  int get _ongkir {
+    final marketNames = _cart.items.value.map((i) => i.namaMarket).toSet();
+    if (marketNames.isEmpty) return 0;
+    return marketNames.fold<int>(0, (sum, m) => sum + _ongkirForMarket(m));
+  }
+
+  int get _ongkirBerat {
+    final marketNames = _cart.items.value.map((i) => i.namaMarket).toSet();
+    if (marketNames.isEmpty) return 0;
+    return marketNames.fold<int>(0, (sum, m) => sum + _ongkirBeratForMarket(m));
+  }
+
+  int get _ongkirJarak {
+    final marketNames = _cart.items.value.map((i) => i.namaMarket).toSet();
+    if (marketNames.isEmpty) return 0;
+    return marketNames.fold<int>(0, (sum, m) => sum + _ongkirJarakForMarket(m));
+  }
+
+  int get _total => _subtotal + _ongkir;
 
   @override
   void dispose() {
@@ -39,221 +136,323 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     super.dispose();
   }
 
-  // Kelompokkan item keranjang per gerai, supaya biaya ongkir
-  // dan ringkasan ditampilkan per-gerai (karena tiap gerai jadi
-  // 1 dokumen order terpisah di Firestore saat checkout).
-  Map<String, List<CartItem>> _groupByGerai(List<CartItem> items) {
-    final Map<String, List<CartItem>> grouped = {};
-    for (final item in items) {
-      final key = item.sellerId ?? item.geraiId ?? item.namaGerai;
-      grouped.putIfAbsent(key, () => []).add(item);
-    }
-    return grouped;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<List<CartItem>>(
-      valueListenable: CartManager.instance.items,
-      builder: (context, items, _) {
-        final grouped = _groupByGerai(items);
-        final subtotalProduk = items.fold<int>(0, (s, c) => s + c.subtotal);
-        final totalOngkir = grouped.length * _ongkirPerGerai;
-        final totalBayar = subtotalProduk + totalOngkir;
+    return Scaffold(
+      backgroundColor: _cSurf,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _cDark, size: 20),
+        ),
+        title: Text('Checkout', style: _cs(size: 18, weight: FontWeight.bold)),
+        centerTitle: true,
+      ),
+      body: ValueListenableBuilder<List<CartItem>>(
+        valueListenable: _cart.items,
+        builder: (_, items, __) {
+          if (items.isEmpty) {
+            return _buildEmpty();
+          }
+          // Listener kedua khusus alamat -- supaya Ringkasan Biaya &
+          // tombol total ikut rebuild begitu alamat (koordinat) berubah,
+          // bukan cuma nunggu keranjang berubah.
+          return ValueListenableBuilder<DeliveryAddress?>(
+            valueListenable: AddressManager.instance.address,
+            builder: (_, address, __) {
+              return Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSectionTitle('Pesanan Kamu'),
+                          const SizedBox(height: 10),
+                          ...items.map((item) => _buildCartItem(item)),
 
-        return Scaffold(
-          backgroundColor: const Color(0xFFF7F8FA),
-          appBar: AppBar(
-            backgroundColor: Colors.white,
-            elevation: 0,
-            foregroundColor: _dark,
-            title: Text('Checkout', style: _ms(size: 16, weight: FontWeight.bold)),
-          ),
-          body: items.isEmpty
-              ? _buildEmptyCart()
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
-                  children: [
-                    ...grouped.entries.map((e) => _buildGeraiGroup(e.key, e.value)),
-                    const SizedBox(height: 8),
-                    _buildCatatanField(),
-                    const SizedBox(height: 8),
-                    _buildRingkasanBayar(subtotalProduk, totalOngkir, totalBayar),
-                  ],
-                ),
-          bottomNavigationBar: items.isEmpty
-              ? null
-              : _buildBottomBar(totalBayar, items),
-        );
-      },
+                          const SizedBox(height: 16),
+                          _buildSectionTitle('Alamat Pengiriman'),
+                          const SizedBox(height: 10),
+                          _buildAddressCard(),
+
+                          const SizedBox(height: 18),
+                          _buildSectionTitle('Pilih Driver Pengantar'),
+                          Text('Geser untuk memilih driver yang tersedia',
+                              style: _cs(size: 11.5, color: Colors.black45)),
+                          const SizedBox(height: 10),
+                          _buildDriverSelectionList(),
+
+                          const SizedBox(height: 18),
+                          _buildSectionTitle('Metode Pembayaran'),
+                          const SizedBox(height: 10),
+                          ..._paymentMethods.asMap().entries.map(
+                                (e) => _buildPaymentTile(e.key, e.value),
+                              ),
+
+                          const SizedBox(height: 18),
+                          _buildSectionTitle('Ringkasan Biaya'),
+                          const SizedBox(height: 10),
+                          _buildSummaryCard(),
+
+                          const SizedBox(height: 40),
+                        ],
+                      ),
+                    ),
+                  ),
+                  _buildBottomBar(_total, items),
+                ],
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildEmptyCart() {
+  Widget _buildEmpty() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Text('🛒', style: TextStyle(fontSize: 48)),
           const SizedBox(height: 12),
-          Text('Keranjang kosong', style: _ms(size: 16, weight: FontWeight.bold)),
+          Text('Keranjang kosong', style: _cs(size: 16, weight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text('Yuk belanja dulu di pasar favoritmu', style: _ms(size: 13, color: Colors.black45)),
+          Text('Yuk belanja dulu di pasar favoritmu', style: _cs(size: 13, color: Colors.black45)),
         ],
       ),
     );
   }
 
-  Widget _buildGeraiGroup(String key, List<CartItem> groupItems) {
-    final first = groupItems.first;
-    final subtotal = groupItems.fold<int>(0, (s, c) => s + c.subtotal);
+  Widget _buildSectionTitle(String title) {
+    return Text(title, style: _cs(size: 14, weight: FontWeight.bold));
+  }
 
+  Widget _buildCartItem(CartItem item) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.storefront_rounded, size: 16, color: _green),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(first.namaGerai, style: _ms(size: 13, weight: FontWeight.bold)),
-              ),
-              Text(first.namaMarket, style: _ms(size: 10, color: Colors.black38)),
-            ],
-          ),
-          if (first.sellerId == null || first.sellerId!.isEmpty) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'sellerId gerai ini belum diatur — pesanan tidak akan muncul di dashboard seller.',
-                style: _ms(size: 9, color: Colors.red.shade700),
-              ),
-            ),
-          ],
-          const Divider(height: 18, color: Color(0xFFF0F0F0)),
-          ...groupItems.map((c) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Text(c.produk.emoji, style: const TextStyle(fontSize: 20)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(c.produk.nama, style: _ms(size: 12, weight: FontWeight.w600)),
-                          Text('${c.qty} x Rp${_formatRupiah(c.produk.hargaSekarang)}/${c.produk.satuan}',
-                              style: _ms(size: 10, color: Colors.black45)),
-                        ],
-                      ),
-                    ),
-                    Text('Rp${_formatRupiah(c.subtotal)}', style: _ms(size: 12, weight: FontWeight.bold)),
-                  ],
-                ),
-              )),
-          const Divider(height: 10, color: Color(0xFFF0F0F0)),
-          Row(
-            children: [
-              Text('Ongkir', style: _ms(size: 11, color: Colors.black54)),
-              const Spacer(),
-              Text('Rp${_formatRupiah(_ongkirPerGerai)}', style: _ms(size: 11, color: Colors.black54)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Text('Subtotal Gerai', style: _ms(size: 12, weight: FontWeight.bold)),
-              const Spacer(),
-              Text('Rp${_formatRupiah(subtotal + _ongkirPerGerai)}', style: _ms(size: 12, weight: FontWeight.bold, color: _green)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCatatanField() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Catatan untuk penjual (opsional)', style: _ms(size: 12, weight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _catatanCtrl,
-            maxLines: 2,
-            style: _ms(size: 12),
-            decoration: InputDecoration(
-              hintText: 'Contoh: tolong pilihkan yang matang',
-              hintStyle: _ms(size: 12, color: Colors.black38),
-              filled: true,
-              fillColor: Colors.grey.shade50,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.all(10),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRingkasanBayar(int subtotalProduk, int totalOngkir, int totalBayar) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Ringkasan Pembayaran', style: _ms(size: 12, weight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          _summaryRow('Subtotal Produk', subtotalProduk),
-          _summaryRow('Total Ongkir', totalOngkir),
-          const Divider(height: 18, color: Color(0xFFF0F0F0)),
-          Row(
-            children: [
-              Text('Total Bayar', style: _ms(size: 13, weight: FontWeight.bold)),
-              const Spacer(),
-              Text('Rp${_formatRupiah(totalBayar)}', style: _ms(size: 15, weight: FontWeight.bold, color: _green)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _summaryRow(String label, int value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: [
-          Text(label, style: _ms(size: 12, color: Colors.black54)),
-          const Spacer(),
-          Text('Rp${_formatRupiah(value)}', style: _ms(size: 12, color: Colors.black54)),
+          Text(item.produk.emoji, style: const TextStyle(fontSize: 22)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.produk.nama, style: _cs(size: 13, weight: FontWeight.w600)),
+                Text('${item.namaGerai} • ${item.namaMarket}', style: _cs(size: 10.5, color: Colors.black38)),
+                Text('${item.qty} x ${_cRupiah(item.produk.hargaSekarang)}/${item.produk.satuan}',
+                    style: _cs(size: 10.5, color: Colors.black45)),
+              ],
+            ),
+          ),
+          Text(_cRupiah(item.subtotal), style: _cs(size: 13, weight: FontWeight.bold)),
         ],
       ),
+    );
+  }
+
+  Widget _buildAddressCard() {
+    final address = AddressManager.instance.address.value;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))],
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.location_on_rounded, size: 18, color: _cGreen),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              address?.text ?? 'Belum ada alamat dipilih',
+              style: _cs(size: 12.5, color: Colors.black87),
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, size: 18, color: Colors.black38),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDriverSelectionList() {
+    // TODO: hubungkan ke sumber data driver yang sesungguhnya.
+    return SizedBox(
+      height: 80,
+      child: Center(
+        child: Text('Belum ada driver tersedia', style: _cs(size: 12, color: Colors.black38)),
+      ),
+    );
+  }
+
+  Widget _buildPaymentTile(int index, _PaymentMethod method) {
+    final selected = _selectedPayment == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedPayment = index),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: selected ? _cGreen : Colors.transparent, width: 1.5),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))],
+        ),
+        child: Row(
+          children: [
+            Icon(method.icon, size: 20, color: selected ? _cGreen : Colors.black45),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(method.label, style: _cs(size: 12.5, weight: FontWeight.w600)),
+                  Text(method.desc, style: _cs(size: 10.5, color: Colors.black45)),
+                ],
+              ),
+            ),
+            Icon(
+              selected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
+              size: 20,
+              color: selected ? _cGreen : Colors.black26,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryCard() {
+    final items = _cart.items.value;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (items.isNotEmpty) ...[
+            Text('Rincian Pesanan', style: _cs(size: 11.5, weight: FontWeight.bold, color: Colors.black38)),
+            const SizedBox(height: 10),
+            ...items.map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _itemSummaryRow(item),
+                )),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Divider(height: 1),
+            ),
+          ],
+          _summaryRow('Subtotal', _subtotal),
+          const SizedBox(height: 12),
+          _summaryRowWithNote(
+            icon: Icons.scale_rounded,
+            label: 'Ongkir Berat',
+            amount: _ongkirBerat,
+            note: 'Kelebihan 1 kg dari pembelian di atas 3 kg dikenakan Rp4.000/kg',
+          ),
+          const SizedBox(height: 10),
+          _summaryRowWithNote(
+            icon: Icons.route_rounded,
+            label: 'Ongkir Jarak',
+            amount: _ongkirJarak,
+            note: 'Kelebihan 1 km dari jarak toko di atas 3 km dikenakan Rp3.000/km',
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Divider(height: 1),
+          ),
+          Row(
+            children: [
+              Text('Total Pembayaran', style: _cs(size: 14, weight: FontWeight.bold)),
+              const Spacer(),
+              Text(_cRupiah(_total), style: _cs(size: 18, weight: FontWeight.bold, color: _cGreen)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, int amount) {
+    return Row(
+      children: [
+        Text(label, style: _cs(size: 13, color: Colors.black54)),
+        const Spacer(),
+        Text(_cRupiah(amount), style: _cs(size: 13, weight: FontWeight.w600)),
+      ],
+    );
+  }
+
+  // Baris per item pesanan (nama produk x qty -> harga), ditampilkan di
+  // paling atas Ringkasan Biaya supaya user bisa cross-check pesanannya
+  // sebelum bayar.
+  Widget _itemSummaryRow(CartItem item) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            '${item.produk.nama} x${item.qty}',
+            style: _cs(size: 12.5, color: Colors.black54),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          _cRupiah(item.produk.hargaSekarang * item.qty),
+          style: _cs(size: 12.5, weight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+
+  // Baris ongkir (berat / jarak) + keterangan singkat nempel di bawahnya,
+  // biar user langsung ngerti kenapa angkanya segitu tanpa harus lihat
+  // box info terpisah.
+  Widget _summaryRowWithNote({
+    required IconData icon,
+    required String label,
+    required int amount,
+    required String note,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 14, color: Colors.black38),
+            const SizedBox(width: 6),
+            Text(label, style: _cs(size: 13, color: Colors.black54)),
+            const Spacer(),
+            Text(_cRupiah(amount), style: _cs(size: 13, weight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.only(left: 20),
+          child: Text(
+            note,
+            style: _cs(size: 10.5, color: Colors.black38, weight: FontWeight.w500),
+          ),
+        ),
+      ],
     );
   }
 
@@ -272,8 +471,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Total Bayar', style: _ms(size: 10, color: Colors.black45)),
-                  Text('Rp${_formatRupiah(totalBayar)}', style: _ms(size: 16, weight: FontWeight.bold, color: _green)),
+                  Text('Total Bayar', style: _cs(size: 10, color: Colors.black45)),
+                  Text(_cRupiah(totalBayar), style: _cs(size: 16, weight: FontWeight.bold, color: _cGreen)),
                 ],
               ),
             ),
@@ -281,7 +480,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ElevatedButton(
               onPressed: _isPlacingOrder ? null : () => _handlePlaceOrder(items),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _green,
+                backgroundColor: _cGreen,
                 foregroundColor: Colors.white,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
@@ -293,7 +492,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : Text('Buat Pesanan', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
+                  : Text('Buat Pesanan', style: _cs(size: 13, weight: FontWeight.bold, color: Colors.white)),
             ),
           ],
         ),
@@ -309,7 +508,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       final orderCodes = await OrdersManager.instance.placeOrder(
         items: items,
         catatan: _catatanCtrl.text.trim(),
-        ongkirPerGerai: _ongkirPerGerai,
+        ongkirPerGerai: _ongkir,
       );
 
       CartManager.instance.kosongkan();
@@ -322,9 +521,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             orderCodes.length > 1
                 ? '${orderCodes.length} pesanan berhasil dibuat!'
                 : 'Pesanan ${orderCodes.first} berhasil dibuat!',
-            style: _ms(size: 12, color: Colors.white),
+            style: _cs(size: 12, color: Colors.white),
           ),
-          backgroundColor: _green,
+          backgroundColor: _cGreen,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -340,22 +539,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       setState(() => _isPlacingOrder = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal membuat pesanan: $e', style: _ms(size: 12, color: Colors.white)),
+          content: Text('Gagal membuat pesanan: $e', style: _cs(size: 12, color: Colors.white)),
           backgroundColor: Colors.red.shade500,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     }
-  }
-
-  String _formatRupiah(int value) {
-    final s = value.toString();
-    final buffer = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buffer.write('.');
-      buffer.write(s[i]);
-    }
-    return buffer.toString();
   }
 }
