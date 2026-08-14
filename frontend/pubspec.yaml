@@ -49,6 +49,7 @@ dependencies:
   geocoding: ^3.0.0           # ubah koordinat GPS jadi alamat teks
   flutter_map: ^7.0.2         # peta drop-pin manual (tile OpenStreetMap, gratis)
   latlong2: ^0.9.1            # tipe LatLng yang dipakai flutter_map
+  url_launcher: ^6.3.1        # buka Google Maps eksternal buat petunjuk arah Driver (home_screen3.dart)
 
 dev_dependencies:
   flutter_test:

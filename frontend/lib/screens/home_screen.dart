@@ -11,6 +11,7 @@ import 'package:frontend/widgets/address_editor_sheet.dart';
 import 'package:frontend/services/address_manager.dart';
 import 'package:frontend/services/favorite_gerai_service.dart';
 import 'package:frontend/screens/orders_screen.dart';
+import 'package:frontend/screens/inbox_screen.dart';
 import 'package:frontend/screens/pasar/pasar_screen.dart';
 import 'package:frontend/mitra/pages/mitra_category_page.dart';
 import 'package:frontend/mitra/pages/mitra_subcategory_page.dart';
@@ -531,6 +532,56 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ],
             ),
           ),
+
+          // Tombol Pesan (undangan driver, dll)
+          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseAuth.instance.currentUser == null
+                ? null
+                : FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(FirebaseAuth.instance.currentUser!.uid)
+                    .collection('inbox')
+                    .where('read', isEqualTo: false)
+                    .snapshots(),
+            builder: (context, snapshot) {
+              final unreadCount = snapshot.data?.docs.length ?? 0;
+              return GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const InboxScreen()),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(9),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.35),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Icon(Icons.mail_outline_rounded, color: _textDark, size: 22),
+                      if (unreadCount > 0)
+                        Positioned(
+                          right: -3,
+                          top: -3,
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
+                            decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                            child: Text(
+                              unreadCount > 9 ? '9+' : '$unreadCount',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 10),
 
           // Tombol Notifikasi
           GestureDetector(

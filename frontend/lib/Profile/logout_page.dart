@@ -4,9 +4,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../Theme/app_theme.dart';
-import '../Theme/decor_background.dart';
-import '../services/auth_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '/Theme/app_theme.dart';
+import '/Theme/decor_background.dart';
+import '/main.dart'; // untuk AuthGate — sesuaikan path kalau struktur foldermu beda
 
 class LogoutPage extends StatefulWidget {
   const LogoutPage({super.key});
@@ -16,28 +17,28 @@ class LogoutPage extends StatefulWidget {
 }
 
 class _LogoutPageState extends State<LogoutPage> {
-  bool _isLoggingOut = false;
+  bool _loggingOut = false;
 
-  Future<void> _confirmLogout() async {
-    setState(() => _isLoggingOut = true);
+  Future<void> _logout() async {
+    if (_loggingOut) return;
+    setState(() => _loggingOut = true);
+
     try {
-      // Await ini penting — sebelum sign-out beneran selesai, currentUser
-      // masih belum null. Kalau kita pop ke AuthGate duluan (tanpa nunggu),
-      // AuthGate bisa saja masih lihat currentUser lama dan malah nampilin
-      // HomeScreen lagi alih-alih LandingPage.
-      await AuthService.logout();
+      await FirebaseAuth.instance.signOut();
+
       if (!mounted) return;
-      // Balik ke root (AuthGate di main.dart), bukan push LoginScreen baru.
-      // AuthGate reaktif lewat authStateChanges(), jadi begitu user == null
-      // dia otomatis nampilin LandingPage sendiri.
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      // Balik ke root aplikasi. AuthGate otomatis nampilin LandingPage/
+      // LoginScreen karena authStateChanges() bakal ngeluarin user null.
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+        (route) => false,
+      );
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoggingOut = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal keluar: $e')),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _loggingOut = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal keluar: $e')),
+      );
     }
   }
 
@@ -70,7 +71,7 @@ class _LogoutPageState extends State<LogoutPage> {
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
+                            color: Colors.black.withOpacity(0.2),
                             blurRadius: 15,
                             offset: const Offset(0, 5),
                           ),
@@ -98,7 +99,7 @@ class _LogoutPageState extends State<LogoutPage> {
                             'Apakah Anda yakin ingin keluar dari akun ini?',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.manrope(
-                              color: kInk.withValues(alpha: 0.7),
+                              color: kInk.withOpacity(0.7),
                               fontSize: 13,
                             ),
                           ),
@@ -107,9 +108,9 @@ class _LogoutPageState extends State<LogoutPage> {
                             children: [
                               Expanded(
                                 child: OutlinedButton(
-                                  onPressed: () => Navigator.pop(context),
+                                  onPressed: _loggingOut ? null : () => Navigator.pop(context),
                                   style: OutlinedButton.styleFrom(
-                                    side: BorderSide(color: kInk.withValues(alpha: 0.3)),
+                                    side: BorderSide(color: kInk.withOpacity(0.3)),
                                     padding: const EdgeInsets.symmetric(vertical: 12),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
@@ -127,7 +128,7 @@ class _LogoutPageState extends State<LogoutPage> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: ElevatedButton(
-                                  onPressed: _isLoggingOut ? null : _confirmLogout,
+                                  onPressed: _loggingOut ? null : _logout,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.red.shade700,
                                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -135,10 +136,10 @@ class _LogoutPageState extends State<LogoutPage> {
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                   ),
-                                  child: _isLoggingOut
+                                  child: _loggingOut
                                       ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
+                                          width: 16,
+                                          height: 16,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
                                             color: Colors.white,

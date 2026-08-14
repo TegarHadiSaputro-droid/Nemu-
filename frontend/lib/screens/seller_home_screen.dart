@@ -5,7 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:frontend/services/auth_service.dart';
-import 'package:frontend/services/store_service.dart';
+import 'package:frontend/services/driver_service.dart'; // sesuaikan path kalau struktur foldermu beda
+import 'package:frontend/services/order_tracking_service.dart';
+import 'package:frontend/widgets/live_tracking_map.dart';
 
 // ─────────────────────────────────────────────
 //  Warna Palette (konsisten dengan home_screen.dart)
@@ -86,8 +88,18 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     ),
   ];
 
-  // ── Mock driver yang sudah terdaftar di gerai ──
-  final List<_SellerDriver> _assignedDrivers = [];
+  // ── Produk yang dijual — akan diganti dengan data real dari backend ──
+  final List<_SellerProduct> _products = [
+    const _SellerProduct(name: 'Cabai Merah', icon: '🌶️', unit: 'per kg', price: 42000, stock: 18),
+    const _SellerProduct(name: 'Bawang Merah', icon: '🧅', unit: 'per kg', price: 28000, stock: 25),
+    const _SellerProduct(name: 'Tomat Segar', icon: '🍅', unit: 'per kg', price: 12000, stock: 30),
+    const _SellerProduct(name: 'Daging Ayam', icon: '🍗', unit: 'per kg', price: 36000, stock: 12),
+    const _SellerProduct(name: 'Wortel', icon: '🥕', unit: 'per kg', price: 10000, stock: 20),
+  ];
+
+  // ── Driver yang sudah accept undangan dari gerai ini (realtime) ──
+  List<_SellerDriver> _assignedDrivers = [];
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _driversSub;
 
   @override
   void initState() {
@@ -100,50 +112,85 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     _entranceAnim = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic);
     _entranceCtrl.forward();
 
-    _listenMyStore();
+    _listenGerai();
+    _listenAssignedDrivers();
   }
 
-  /// Subscribe ke stream toko milik user ini.
-  /// - Jika tidak ada dokumen → tampilkan form registrasi gerai.
-  /// - Jika ada → simpan _storeId & _storeData.
-  void _listenMyStore() {
+  void _listenGerai() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      setState(() => _checkingStore = false);
-      return;
-    }
+    if (uid == null) return;
 
-    _storeSub = StoreService.myStoreStream(uid).listen((snapshot) {
-      if (!mounted) return;
+    _geraiSub = FirebaseFirestore.instance
+        .collection('seller')
+        .doc(uid)
+        .snapshots()
+        .listen((snap) {
+      if (mounted) {
+        setState(() => _geraiData = snap.data());
+      }
+    }, onError: (e) {
+      debugPrint('Gagal memuat daftar driver: $e');
+    });
+  }
 
-      if (snapshot.docs.isEmpty) {
-        // Belum punya toko — tampilkan form registrasi (hanya sekali)
+  // Undangan driver yang di-accept nggak nyimpen relasi seller<->driver
+  // di collection terpisah — cuma nyimpen 'fromUid' (uid seller) di dalam
+  // dokumen inbox si driver (users/{driverUid}/inbox/{inviteId}). Jadi
+  // buat nampilin "driver-driver gerai ini", kita collectionGroup query
+  // ke semua subcollection 'inbox' lintas user, saring type + status +
+  // fromUid == uid seller yang sedang login.
+  //
+  // CATATAN: pertama kali dijalankan, Firestore kemungkinan bakal
+  // nge-throw error "failed-precondition" berisi LINK ke Firebase Console
+  // buat bikin composite index otomatis (soalnya ini collection group
+  // query dengan beberapa filter kesetaraan sekaligus). Tinggal klik
+  // link error-nya sekali, index-nya dibuatin otomatis dalam beberapa
+  // menit, abis itu query ini jalan normal.
+  void _listenAssignedDrivers() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    _driversSub = FirebaseFirestore.instance
+        .collectionGroup('inbox')
+        .where('type', isEqualTo: 'driver_invite')
+        .where('status', isEqualTo: 'accepted')
+        .where('fromUid', isEqualTo: uid)
+        .snapshots()
+        .listen((snap) async {
+      final drivers = await Future.wait(snap.docs.map((doc) async {
+        // Path dokumen inbox: users/{driverUid}/inbox/{inviteId}.
+        // parent.parent adalah dokumen users/{driverUid} itu sendiri.
+        final driverUid = doc.reference.parent.parent?.id;
+        if (driverUid == null) return null;
+
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(driverUid)
+            .get();
+        final data = userDoc.data();
+
+        return _SellerDriver(
+          name: (data?['name'] as String?) ?? 'Driver',
+          email: (data?['email'] as String?) ?? '-',
+          photoUrl: data?['photoUrl'] as String?,
+        );
+      }));
+
+      if (mounted) {
         setState(() {
-          _storeId = null;
-          _storeData = null;
-          _checkingStore = false;
-        });
-        // Tunda sedikit agar widget sudah terbuild, baru tampilkan modal
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _storeId == null) {
-            _showRegisterStoreSheet(required: true);
-          }
-        });
-      } else {
-        final doc = snapshot.docs.first;
-        setState(() {
-          _storeId = doc.id;
-          _storeData = doc.data() as Map<String, dynamic>?;
-          _checkingStore = false;
+          _assignedDrivers = drivers.whereType<_SellerDriver>().toList();
         });
       }
+    }, onError: (e) {
+      debugPrint('Gagal memuat daftar driver: $e');
     });
   }
 
   @override
   void dispose() {
     _entranceCtrl.dispose();
-    _storeSub?.cancel();
+    _geraiSub?.cancel();
+    _driversSub?.cancel();
     super.dispose();
   }
 
@@ -389,10 +436,13 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('orders')
-          .where('sellerId', isEqualTo: uid)
-          .where('status', whereIn: ['menunggu_konfirmasi', 'dikemas', 'dalam_pengantaran'])
-          .orderBy('createdAt', descending: true)
+          .collection('simulated_orders')
+          .where('status', whereIn: [
+            OrderStatus.dikemas,
+            OrderStatus.menungguDriver,
+            OrderStatus.menujuPenjual,
+            OrderStatus.diantar,
+          ])
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -442,27 +492,42 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     final buyerName = (data['buyerName'] as String?) ?? 'Pembeli';
     final items = (data['itemsSummary'] as String?) ?? '';
     final totalPrice = (data['totalPrice'] as num?)?.toInt() ?? 0;
-    final status = (data['status'] as String?) ?? 'menunggu_konfirmasi';
+    final status = (data['status'] as String?) ?? OrderStatus.dikemas;
+    final isPackaging = status == OrderStatus.dikemas;
+    final driverName = data['driverName'] as String?;
+    final driverLoc = LiveLatLng.fromMap(data['driverLocation'] as Map<String, dynamic>?);
+    final sellerLoc = LiveLatLng.fromMap(data['sellerLocation'] as Map<String, dynamic>?);
 
-    final bool isWaiting = status == 'menunggu_konfirmasi';
-    final bool isPackaging = status == 'dikemas';
-
-    final Color accent = isWaiting
-        ? Colors.orange
-        : (isPackaging ? _selAmber : _selGreen);
-
-    final String badgeText = isWaiting
-        ? '⏳ Menunggu Konfirmasi'
-        : (isPackaging ? '⏳ Sedang Dikemas' : '🛵 Dalam Pengantaran');
+    const badgeColors = {
+      OrderStatus.dikemas: _selAmber,
+      OrderStatus.menungguDriver: _selOrange,
+      OrderStatus.menujuPenjual: Colors.blue,
+      OrderStatus.diantar: _selGreen,
+    };
+    final badgeColor = badgeColors[status] ?? _selAmber;
+    const badgeLabels = {
+      OrderStatus.dikemas: '⏳ Sedang Dikemas',
+      OrderStatus.menungguDriver: '📡 Mencari Driver',
+      OrderStatus.menujuPenjual: '🛵 Driver Menuju Toko',
+      OrderStatus.diantar: '🚚 Diantar ke Pembeli',
+    };
+    final badgeLabel = badgeLabels[status] ?? '⏳ Sedang Dikemas';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: accent.withValues(alpha: 0.4), width: 1.5),
+        border: Border.all(
+          color: badgeColor.withValues(alpha: 0.4),
+          width: 1.5,
+        ),
         boxShadow: [
-          BoxShadow(color: accent.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4)),
+          BoxShadow(
+            color: badgeColor.withValues(alpha: 0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          )
         ],
       ),
       child: Column(
@@ -470,27 +535,37 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.06),
+              color: badgeColor.withValues(alpha: 0.06),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(color: accent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                  child: Icon(Icons.receipt_long_rounded, size: 14, color: accent),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(Icons.receipt_long_rounded, size: 14, color: badgeColor),
                 ),
                 const SizedBox(width: 8),
-                Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: accent)),
+                Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: badgeColor)),
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.08),
+                    color: badgeColor.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: accent.withValues(alpha: 0.3)),
+                    border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
                   ),
-                  child: Text(badgeText, style: _ms(size: 9, weight: FontWeight.bold, color: accent)),
+                  child: Text(
+                    badgeLabel,
+                    style: _ms(
+                      size: 9,
+                      weight: FontWeight.bold,
+                      color: badgeColor,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -518,69 +593,217 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   children: [
                     Text('Total: Rp${_formatRupiah(totalPrice)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
                     const Spacer(),
-                    if (isWaiting) ...[
-                      OutlinedButton(
-                        onPressed: () => _handleRejectOrder(doc.reference, orderId, buyerName),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red.shade600,
-                          side: BorderSide(color: Colors.red.shade300),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text('Tolak', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.red.shade600)),
-                      ),
-                      const SizedBox(width: 8),
+                    if (isPackaging)
                       ElevatedButton(
-                        onPressed: () => _handleAcceptOrder(doc.reference, orderId),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _selGreen,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text('Terima ✓', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
-                      ),
-                    ] else if (isPackaging)
-                      ElevatedButton(
-                        onPressed: () => _updateOrderStatus(
-                          doc.reference,
-                          'dalam_pengantaran',
-                          successMessage: 'Pesanan $orderId diserahkan ke kurir!',
-                        ),
+                        onPressed: () async {
+                          HapticFeedback.mediumImpact();
+                          await OrderTrackingService.markReadyForDriver(
+                            orderDocId: doc.id,
+                            storeName: _storeName,
+                            marketName: _pasarName,
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Pesanan $orderId dilepas ke driver, menunggu ada yang menerima...', style: _ms(size: 12, color: Colors.white)),
+                                backgroundColor: _selGreen,
+                              ),
+                            );
+                          }
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _selAmber,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         child: Text('Selesai Mengemas / Serahkan ke Kurir', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
                       )
-                    else
-                      ElevatedButton(
-                        onPressed: () => _updateOrderStatus(
-                          doc.reference,
-                          'selesai',
-                          successMessage: 'Pesanan $orderId telah diselesaikan!',
+                    else if (status == OrderStatus.menungguDriver)
+                      Row(
+                        children: [
+                          const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: _selOrange),
+                          ),
+                          const SizedBox(width: 8),
+                          Text('Menunggu driver menerima...', style: _ms(size: 11, weight: FontWeight.w600, color: _selOrange)),
+                        ],
+                      )
+                    else ...[
+                      // Driver sudah pegang order ini (menuju_penjual / diantar) --
+                      // Penjual cuma memantau dari sini, bukan mengontrol lagi.
+                      if (driverName != null)
+                        Expanded(
+                          child: Text(
+                            'Driver: $driverName',
+                            style: _ms(size: 11, weight: FontWeight.w600, color: Colors.black54),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _selGreen,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      if (driverLoc != null)
+                        OutlinedButton.icon(
+                          onPressed: () => _showTrackDriverSheet(
+                            driverLoc: driverLoc,
+                            destination: sellerLoc,
+                            destinationLabel: 'Toko Kamu',
+                          ),
+                          icon: const Icon(Icons.map_rounded, size: 15),
+                          label: Text('Lacak Driver', style: _ms(size: 11, weight: FontWeight.bold)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _selGreen,
+                            side: BorderSide(color: _selGreen.withValues(alpha: 0.4)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                         ),
-                        child: Text('Selesaikan Transaksi', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTrackDriverSheet({
+    required LiveLatLng driverLoc,
+    required LiveLatLng? destination,
+    required String destinationLabel,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Posisi Driver Saat Ini', style: _ms(size: 15, weight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            LiveTrackingMap(
+              from: driverLoc,
+              fromLabel: 'Driver',
+              to: destination ?? driverLoc,
+              toLabel: destinationLabel,
+              height: 260,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrderCard(_SellerOrder order) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _selAmber.withValues(alpha: 0.4), width: 1.5),
+        boxShadow: [BoxShadow(color: _selAmber.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: _selAmber.withValues(alpha: 0.06),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(color: _selAmber.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                  child: Icon(Icons.receipt_long_rounded, size: 14, color: _selAmber),
+                ),
+                const SizedBox(width: 8),
+                Text(order.id, style: _ms(size: 12, weight: FontWeight.bold, color: _selAmber)),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Text('⏳ Menunggu Konfirmasi', style: _ms(size: 9, weight: FontWeight.bold, color: Colors.orange.shade700)),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.person_rounded, size: 14, color: Colors.black38),
+                    const SizedBox(width: 6),
+                    Text(order.buyerName, style: _ms(size: 12, weight: FontWeight.w600)),
+                    const Spacer(),
+                    const Icon(Icons.schedule_rounded, size: 12, color: Colors.black38),
+                    const SizedBox(width: 4),
+                    Text(order.eta, style: _ms(size: 10, color: Colors.black38)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(order.items, style: _ms(size: 11, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text('Total: Rp${_formatRupiah(order.total)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
+                    const Spacer(),
+                    OutlinedButton(
+                      onPressed: () => _handleRejectOrder(order),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red.shade600,
+                        side: BorderSide(color: Colors.red.shade300),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
+                      child: Text('Tolak', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.red.shade600)),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () => _handleAcceptOrder(order),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _selGreen,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text('Terima ✓', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
+                    ),
                   ],
                 ),
               ],
@@ -1740,8 +1963,12 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                             CircleAvatar(
                               radius: 16,
                               backgroundColor: _selGreen.withValues(alpha: 0.12),
-                              child: Text(d.name.isNotEmpty ? d.name[0].toUpperCase() : '?',
-                                  style: _ms(size: 12, weight: FontWeight.bold, color: _selGreen)),
+                              backgroundImage:
+                                  d.photoUrl != null ? NetworkImage(d.photoUrl!) : null,
+                              child: d.photoUrl == null
+                                  ? Text(d.name.isNotEmpty ? d.name[0].toUpperCase() : '?',
+                                      style: _ms(size: 12, weight: FontWeight.bold, color: _selGreen))
+                                  : null,
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -1768,97 +1995,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (context, scrollController) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 12),
-                  Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Tambah Driver', style: _ms(size: 17, weight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        Text('Cari driver berdasarkan nama atau email untuk ditambahkan ke geraimu',
-                            style: _ms(size: 11, color: Colors.black45)),
-                        const SizedBox(height: 16),
-                        TextField(
-                          decoration: InputDecoration(
-                            hintText: 'Nama atau email driver...',
-                            hintStyle: _ms(size: 13, color: Colors.black38),
-                            prefixIcon: const Icon(Icons.search_rounded, color: Colors.black38),
-                            filled: true,
-                            fillColor: Colors.grey.shade100,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          onSubmitted: (_) => _showComingSoon('Cari Driver'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView(
-                      controller: scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      children: [
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 32),
-                            child: Column(
-                              children: [
-                                Icon(Icons.local_shipping_outlined, size: 40, color: Colors.grey.shade300),
-                                const SizedBox(height: 10),
-                                Text('Hasil pencarian driver akan\nmuncul di sini',
-                                    textAlign: TextAlign.center, style: _ms(size: 11, color: Colors.black38)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _showComingSoon('Tambah Driver');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _selGreen,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
-                        ),
-                        child: Text('Cari & Tambahkan', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      builder: (ctx) => _AddDriverSheet(storeName: _storeName),
     );
   }
 
@@ -1976,55 +2113,233 @@ class _SellerProduct {
   final String? id;
   final String name, imageUrl, unit;
   final int price, stock;
+  const _SellerProduct({required this.name, required this.icon, required this.unit, required this.price, required this.stock});
+}
 
-  const _SellerProduct({
-    this.id,
-    required this.name,
-    required this.imageUrl,
-    required this.unit,
-    required this.price,
-    required this.stock,
-  });
-
-  factory _SellerProduct.fromDoc(DocumentSnapshot doc) {
-    final d = doc.data() as Map<String, dynamic>? ?? {};
-    return _SellerProduct(
-      id: doc.id,
-      name: (d['name'] as String?) ?? (d['product_name'] as String?) ?? '',
-      imageUrl: (d['imageUrl'] as String?) ?? (d['image_url'] as String?) ?? '',
-      unit: (d['unit'] as String?) ?? 'kg',
-      price: (d['price'] as num?)?.toInt() ?? 0,
-      stock: (d['stock'] as num?)?.toInt() ?? 0,
-    );
-  }
-
-  Map<String, dynamic> toMap() => {
-        'product_name': name,
-        'image_url': imageUrl,
-        'unit': unit,
-        'price': price,
-        'stock': stock,
-      };
+class _SellerDriver {
+  final String name, email;
+  final String? photoUrl;
+  const _SellerDriver({required this.name, required this.email, this.photoUrl});
 }
 
 // ─────────────────────────────────────────────
-//  Dialog Tambah/Edit Produk
+//  _AddDriverSheet — cari user A-Z, kirim undangan jadi driver
 // ─────────────────────────────────────────────
-class _ProductFormDialog extends StatefulWidget {
-  final _SellerProduct? existing;
-  final Color selGreen;
-  final TextStyle Function({double size, FontWeight weight, Color color, double? height}) textStyle;
-  final void Function(_SellerProduct product) onSave;
-
-  const _ProductFormDialog({
-    required this.existing,
-    required this.selGreen,
-    required this.textStyle,
-    required this.onSave,
-  });
+class _AddDriverSheet extends StatefulWidget {
+  final String storeName;
+  const _AddDriverSheet({required this.storeName});
 
   @override
-  State<_ProductFormDialog> createState() => _ProductFormDialogState();
+  State<_AddDriverSheet> createState() => _AddDriverSheetState();
+}
+
+class _AddDriverSheetState extends State<_AddDriverSheet> {
+  final _searchCtrl = TextEditingController();
+  Timer? _debounce;
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> _results = [];
+  bool _loading = true;
+  final Set<String> _invitedThisSession = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsers();
+    _searchCtrl.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(
+      const Duration(milliseconds: 400),
+      () => _loadUsers(query: _searchCtrl.text),
+    );
+  }
+
+  Future<void> _loadUsers({String? query}) async {
+    setState(() => _loading = true);
+    try {
+      final results = await DriverService.fetchUsersAZ(searchQuery: query);
+      if (mounted) setState(() { _results = results; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _confirmInvite(QueryDocumentSnapshot<Map<String, dynamic>> user) async {
+    final name = (user.data()['name'] as String?) ?? 'Pengguna';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Tambahkan Driver?', style: _ms(size: 16, weight: FontWeight.bold)),
+        content: Text(
+          'Ingin menambahkan akun ini sebagai driver?\n\n$name',
+          style: _ms(size: 13, color: Colors.black54),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Batal', style: _ms(size: 13, color: Colors.black54)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _selGreen,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text('Ya, Tambahkan', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await DriverService.sendDriverInvite(targetUid: user.id, storeName: widget.storeName);
+      if (!mounted) return;
+      setState(() => _invitedThisSession.add(user.id));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Undangan terkirim ke $name', style: _ms(size: 12, color: Colors.white)),
+        backgroundColor: _selGreen,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('$e', style: _ms(size: 12, color: Colors.white)),
+        backgroundColor: Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.5,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Tambah Driver', style: _ms(size: 17, weight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text('Cari akun berdasarkan nama atau email untuk diundang jadi driver',
+                        style: _ms(size: 11, color: Colors.black45)),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _searchCtrl,
+                      decoration: InputDecoration(
+                        hintText: 'Nama atau email...',
+                        hintStyle: _ms(size: 13, color: Colors.black38),
+                        prefixIcon: const Icon(Icons.search_rounded, color: Colors.black38),
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator(color: _selGreen))
+                    : _results.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 32),
+                              child: Column(
+                                children: [
+                                  Icon(Icons.person_search_rounded, size: 40, color: Colors.grey.shade300),
+                                  const SizedBox(height: 10),
+                                  Text('Tidak ada akun yang cocok', style: _ms(size: 11, color: Colors.black38)),
+                                ],
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            controller: scrollController,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            itemCount: _results.length,
+                            itemBuilder: (context, i) {
+                              final doc = _results[i];
+                              final data = doc.data();
+                              final name = (data['name'] as String?) ?? 'Pengguna';
+                              final email = (data['email'] as String?) ?? '-';
+                              final alreadyInvited = _invitedThisSession.contains(doc.id);
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: _selGreen.withValues(alpha: 0.12),
+                                      child: Text(
+                                        name.isNotEmpty ? name[0].toUpperCase() : '?',
+                                        style: _ms(size: 13, weight: FontWeight.bold, color: _selGreen),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(name, style: _ms(size: 13, weight: FontWeight.w600)),
+                                          Text(email, style: _ms(size: 10.5, color: Colors.black38)),
+                                        ],
+                                      ),
+                                    ),
+                                    alreadyInvited
+                                        ? Text('Terkirim', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.black38))
+                                        : TextButton(
+                                            onPressed: () => _confirmInvite(doc),
+                                            style: TextButton.styleFrom(
+                                              backgroundColor: _selGreen.withValues(alpha: 0.1),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            ),
+                                            child: Text('Tambahkan', style: _ms(size: 11.5, weight: FontWeight.bold, color: _selGreen)),
+                                          ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _ProductFormDialogState extends State<_ProductFormDialog> {
