@@ -5,21 +5,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:frontend/services/auth_service.dart';
-<<<<<<< HEAD
-import 'package:frontend/services/driver_service.dart'; // sesuaikan path kalau struktur foldermu beda
-import 'package:frontend/services/order_tracking_service.dart';
-import 'package:frontend/widgets/live_tracking_map.dart';
-=======
-import 'package:frontend/services/store_service.dart';
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
 
 // ─────────────────────────────────────────────
 //  Warna Palette (konsisten dengan home_screen.dart)
 // ─────────────────────────────────────────────
-const Color _selGreen  = Color(0xFF007C3F);
-const Color _selDark   = Color(0xFF0F1B11);
-const Color _selAmber  = Color(0xFFF59E0B);
-const Color _selOrange = Color(0xFFEA580C);
+const Color _selGreen   = Color(0xFF007C3F);
+const Color _selDark    = Color(0xFF0F1B11);
+const Color _selAmber   = Color(0xFFF59E0B);
+const Color _selOrange  = Color(0xFFEA580C);
 
 TextStyle _ms({
   double size = 14,
@@ -34,16 +27,9 @@ TextStyle _ms({
       height: height,
     );
 
-// Pilihan pasar yang tersedia untuk penjual baru
-const List<String> _pasarOptions = [
-  'Pasar Sepinggan',
-  'Pasar Klandasan',
-  'Pasar Pandansari',
-];
-
 // ─────────────────────────────────────────────
 //  SellerDashboardBody
-//  Dipanggil dari HomeScreen2 saat seller sudah login
+//  Dipanggil dari HomeScreen saat _isSeller == true
 // ─────────────────────────────────────────────
 class SellerDashboardBody extends StatefulWidget {
   final String userName;
@@ -62,53 +48,19 @@ class SellerDashboardBody extends StatefulWidget {
 class _SellerDashboardBodyState extends State<SellerDashboardBody>
     with TickerProviderStateMixin {
 
-  // ── Animasi entrance ──
+  // ── Animasi controller untuk metric cards entrance ──
   late AnimationController _entranceCtrl;
   late Animation<double> _entranceAnim;
 
-  // ── State toko ──
-  String? _storeId;
-  Map<String, dynamic>? _storeData;
-  bool _checkingStore = true; // sedang cek Firestore saat pertama buka
+  // ── Data Gerai dari Firestore (stream) ──
+  Map<String, dynamic>? _geraiData;
+  StreamSubscription<DocumentSnapshot>? _geraiSub;
 
-  // ── Stream subscription ──
-  StreamSubscription<QuerySnapshot>? _storeSub;
+  // ── Produk yang dijual — sekarang diambil real-time dari Firestore ──
+  Stream<QuerySnapshot>? _productsStream;
 
-  // ── Mock orders (tetap dipertahankan selama pesanan real belum aktif) ──
-  final List<_SellerOrder> _pendingOrders = [
-    _SellerOrder(
-      id: 'ORD-2847',
-      buyerName: 'Ibu Sari',
-      items: 'Cabai Merah 1kg, Bawang Merah 500g',
-      total: 56000,
-      eta: '± 25 mnt',
-    ),
-    _SellerOrder(
-      id: 'ORD-2851',
-      buyerName: 'Pak Rendi',
-      items: 'Tomat 2kg, Wortel 1kg',
-      total: 38000,
-      eta: '± 40 mnt',
-    ),
-  ];
-
-<<<<<<< HEAD
-  // ── Produk yang dijual — akan diganti dengan data real dari backend ──
-  final List<_SellerProduct> _products = [
-    const _SellerProduct(name: 'Cabai Merah', icon: '🌶️', unit: 'per kg', price: 42000, stock: 18),
-    const _SellerProduct(name: 'Bawang Merah', icon: '🧅', unit: 'per kg', price: 28000, stock: 25),
-    const _SellerProduct(name: 'Tomat Segar', icon: '🍅', unit: 'per kg', price: 12000, stock: 30),
-    const _SellerProduct(name: 'Daging Ayam', icon: '🍗', unit: 'per kg', price: 36000, stock: 12),
-    const _SellerProduct(name: 'Wortel', icon: '🥕', unit: 'per kg', price: 10000, stock: 20),
-  ];
-
-  // ── Driver yang sudah accept undangan dari gerai ini (realtime) ──
-  List<_SellerDriver> _assignedDrivers = [];
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _driversSub;
-=======
   // ── Mock driver yang sudah terdaftar di gerai ──
   final List<_SellerDriver> _assignedDrivers = [];
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
 
   @override
   void initState() {
@@ -121,136 +73,61 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     _entranceAnim = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic);
     _entranceCtrl.forward();
 
-<<<<<<< HEAD
     _listenGerai();
-    _listenAssignedDrivers();
-=======
-    _listenMyStore();
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
+    _initProductsStream();
   }
 
-  /// Subscribe ke stream toko milik user ini.
-  /// - Jika tidak ada dokumen → tampilkan form registrasi gerai.
-  /// - Jika ada → simpan _storeId & _storeData.
-  void _listenMyStore() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) {
-      setState(() => _checkingStore = false);
-      return;
-    }
-
-    _storeSub = StoreService.myStoreStream(uid).listen((snapshot) {
-      if (!mounted) return;
-
-      if (snapshot.docs.isEmpty) {
-        // Belum punya toko — tampilkan form registrasi (hanya sekali)
-        setState(() {
-          _storeId = null;
-          _storeData = null;
-          _checkingStore = false;
-        });
-        // Tunda sedikit agar widget sudah terbuild, baru tampilkan modal
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _storeId == null) {
-            _showRegisterStoreSheet(required: true);
-          }
-        });
-      } else {
-        final doc = snapshot.docs.first;
-        setState(() {
-          _storeId = doc.id;
-          _storeData = doc.data() as Map<String, dynamic>?;
-          _checkingStore = false;
-        });
-      }
-    });
-  }
-
-  // Undangan driver yang di-accept nggak nyimpen relasi seller<->driver
-  // di collection terpisah — cuma nyimpen 'fromUid' (uid seller) di dalam
-  // dokumen inbox si driver (users/{driverUid}/inbox/{inviteId}). Jadi
-  // buat nampilin "driver-driver gerai ini", kita collectionGroup query
-  // ke semua subcollection 'inbox' lintas user, saring type + status +
-  // fromUid == uid seller yang sedang login.
-  //
-  // CATATAN: pertama kali dijalankan, Firestore kemungkinan bakal
-  // nge-throw error "failed-precondition" berisi LINK ke Firebase Console
-  // buat bikin composite index otomatis (soalnya ini collection group
-  // query dengan beberapa filter kesetaraan sekaligus). Tinggal klik
-  // link error-nya sekali, index-nya dibuatin otomatis dalam beberapa
-  // menit, abis itu query ini jalan normal.
-  void _listenAssignedDrivers() {
+  void _listenGerai() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    _driversSub = FirebaseFirestore.instance
-        .collectionGroup('inbox')
-        .where('type', isEqualTo: 'driver_invite')
-        .where('status', isEqualTo: 'accepted')
-        .where('fromUid', isEqualTo: uid)
+    _geraiSub = FirebaseFirestore.instance
+        .collection('seller')
+        .doc(uid)
         .snapshots()
-        .listen((snap) async {
-      final drivers = await Future.wait(snap.docs.map((doc) async {
-        // Path dokumen inbox: users/{driverUid}/inbox/{inviteId}.
-        // parent.parent adalah dokumen users/{driverUid} itu sendiri.
-        final driverUid = doc.reference.parent.parent?.id;
-        if (driverUid == null) return null;
-
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(driverUid)
-            .get();
-        final data = userDoc.data();
-
-        return _SellerDriver(
-          name: (data?['name'] as String?) ?? 'Driver',
-          email: (data?['email'] as String?) ?? '-',
-          photoUrl: data?['photoUrl'] as String?,
-        );
-      }));
-
+        .listen((snap) {
       if (mounted) {
-        setState(() {
-          _assignedDrivers = drivers.whereType<_SellerDriver>().toList();
-        });
+        setState(() => _geraiData = snap.data());
       }
-    }, onError: (e) {
-      debugPrint('Gagal memuat daftar driver: $e');
     });
+  }
+
+  void _initProductsStream() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    _productsStream = FirebaseFirestore.instance
+        .collection('seller')
+        .doc(uid)
+        .collection('products')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
   }
 
   @override
   void dispose() {
     _entranceCtrl.dispose();
-<<<<<<< HEAD
     _geraiSub?.cancel();
-    _driversSub?.cancel();
-=======
-    _storeSub?.cancel();
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
     super.dispose();
   }
 
-  // ── Getters nama & pasar dari Firestore ──
   String get _storeName {
-    final name = _storeData?['store_name'] as String?;
+    final name = _geraiData?['namaToko'] as String?;
     return (name != null && name.isNotEmpty) ? name : '${widget.userName}\'s Gerai';
   }
 
-  String get _pasarName =>
-      (_storeData?['market_section'] as String?) ?? 'Pasar Tradisional';
+  String get _pasarName => (_geraiData?['namaPasar'] as String?) ?? 'Pasar Tradisional';
 
-  String get _storeDescription =>
-      (_storeData?['description'] as String?) ?? '';
+  CollectionReference<Map<String, dynamic>>? get _productsCollection {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return null;
+    return FirebaseFirestore.instance
+        .collection('seller')
+        .doc(uid)
+        .collection('products');
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (_checkingStore) {
-      return const Center(
-        child: CircularProgressIndicator(color: _selGreen),
-      );
-    }
-
     return RefreshIndicator(
       color: _selGreen,
       backgroundColor: Colors.white,
@@ -271,7 +148,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
               _buildOrderAlertSection(),
               const SizedBox(height: 20),
 
-              // 3. Katalog Produk (Firestore real-time)
+              // 3. Produk yang Dijual (real-time dari Firestore)
               _buildProductsSection(),
               const SizedBox(height: 32),
 
@@ -357,31 +234,12 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                       children: [
                         const Icon(Icons.location_on_rounded, size: 12, color: Colors.black38),
                         const SizedBox(width: 3),
-                        Expanded(
-                          child: Text(
-                            _pasarName,
-                            style: _ms(size: 11, color: Colors.black45),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+                        Text(_pasarName, style: _ms(size: 11, color: Colors.black45)),
                       ],
                     ),
                   ],
                 ),
               ),
-              // ── Tombol Edit Toko ──
-              if (_storeId != null)
-                GestureDetector(
-                  onTap: _showEditStoreSheet,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _selGreen.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.edit_rounded, color: _selGreen, size: 16),
-                  ),
-                ),
             ],
           ),
 
@@ -473,20 +331,10 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-<<<<<<< HEAD
-          .collection('simulated_orders')
-          .where('status', whereIn: [
-            OrderStatus.dikemas,
-            OrderStatus.menungguDriver,
-            OrderStatus.menujuPenjual,
-            OrderStatus.diantar,
-          ])
-=======
           .collection('orders')
           .where('sellerId', isEqualTo: uid)
           .where('status', whereIn: ['menunggu_konfirmasi', 'dikemas', 'dalam_pengantaran'])
           .orderBy('createdAt', descending: true)
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -536,28 +384,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     final buyerName = (data['buyerName'] as String?) ?? 'Pembeli';
     final items = (data['itemsSummary'] as String?) ?? '';
     final totalPrice = (data['totalPrice'] as num?)?.toInt() ?? 0;
-<<<<<<< HEAD
-    final status = (data['status'] as String?) ?? OrderStatus.dikemas;
-    final isPackaging = status == OrderStatus.dikemas;
-    final driverName = data['driverName'] as String?;
-    final driverLoc = LiveLatLng.fromMap(data['driverLocation'] as Map<String, dynamic>?);
-    final sellerLoc = LiveLatLng.fromMap(data['sellerLocation'] as Map<String, dynamic>?);
-
-    const badgeColors = {
-      OrderStatus.dikemas: _selAmber,
-      OrderStatus.menungguDriver: _selOrange,
-      OrderStatus.menujuPenjual: Colors.blue,
-      OrderStatus.diantar: _selGreen,
-    };
-    final badgeColor = badgeColors[status] ?? _selAmber;
-    const badgeLabels = {
-      OrderStatus.dikemas: '⏳ Sedang Dikemas',
-      OrderStatus.menungguDriver: '📡 Mencari Driver',
-      OrderStatus.menujuPenjual: '🛵 Driver Menuju Toko',
-      OrderStatus.diantar: '🚚 Diantar ke Pembeli',
-    };
-    final badgeLabel = badgeLabels[status] ?? '⏳ Sedang Dikemas';
-=======
     final status = (data['status'] as String?) ?? 'menunggu_konfirmasi';
 
     final bool isWaiting = status == 'menunggu_konfirmasi';
@@ -570,29 +396,15 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     final String badgeText = isWaiting
         ? '⏳ Menunggu Konfirmasi'
         : (isPackaging ? '⏳ Sedang Dikemas' : '🛵 Dalam Pengantaran');
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-<<<<<<< HEAD
-        border: Border.all(
-          color: badgeColor.withValues(alpha: 0.4),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: badgeColor.withValues(alpha: 0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          )
-=======
         border: Border.all(color: accent.withValues(alpha: 0.4), width: 1.5),
         boxShadow: [
           BoxShadow(color: accent.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4)),
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
         ],
       ),
       child: Column(
@@ -600,54 +412,25 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-<<<<<<< HEAD
-              color: badgeColor.withValues(alpha: 0.06),
-=======
               color: accent.withValues(alpha: 0.06),
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
               borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(5),
-<<<<<<< HEAD
-                  decoration: BoxDecoration(
-                    color: badgeColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Icon(Icons.receipt_long_rounded, size: 14, color: badgeColor),
-                ),
-                const SizedBox(width: 8),
-                Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: badgeColor)),
-=======
                   decoration: BoxDecoration(color: accent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
                   child: Icon(Icons.receipt_long_rounded, size: 14, color: accent),
                 ),
                 const SizedBox(width: 8),
                 Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: accent)),
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-<<<<<<< HEAD
-                    color: badgeColor.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
-                  ),
-                  child: Text(
-                    badgeLabel,
-                    style: _ms(
-                      size: 9,
-                      weight: FontWeight.bold,
-                      color: badgeColor,
-                    ),
-=======
                     color: accent.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: accent.withValues(alpha: 0.3)),
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
                   ),
                   child: Text(badgeText, style: _ms(size: 9, weight: FontWeight.bold, color: accent)),
                 ),
@@ -692,24 +475,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton(
-<<<<<<< HEAD
-                        onPressed: () async {
-                          HapticFeedback.mediumImpact();
-                          await OrderTrackingService.markReadyForDriver(
-                            orderDocId: doc.id,
-                            storeName: _storeName,
-                            marketName: _pasarName,
-                          );
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Pesanan $orderId dilepas ke driver, menunggu ada yang menerima...', style: _ms(size: 12, color: Colors.white)),
-                                backgroundColor: _selGreen,
-                              ),
-                            );
-                          }
-                        },
-=======
                         onPressed: () => _handleAcceptOrder(doc.reference, orderId),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _selGreen,
@@ -729,7 +494,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                           'dalam_pengantaran',
                           successMessage: 'Pesanan $orderId diserahkan ke kurir!',
                         ),
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _selAmber,
                           foregroundColor: Colors.white,
@@ -741,51 +505,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                         ),
                         child: Text('Selesai Mengemas / Serahkan ke Kurir', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
                       )
-<<<<<<< HEAD
-                    else if (status == OrderStatus.menungguDriver)
-                      Row(
-                        children: [
-                          const SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: _selOrange),
-                          ),
-                          const SizedBox(width: 8),
-                          Text('Menunggu driver menerima...', style: _ms(size: 11, weight: FontWeight.w600, color: _selOrange)),
-                        ],
-                      )
-                    else ...[
-                      // Driver sudah pegang order ini (menuju_penjual / diantar) --
-                      // Penjual cuma memantau dari sini, bukan mengontrol lagi.
-                      if (driverName != null)
-                        Expanded(
-                          child: Text(
-                            'Driver: $driverName',
-                            style: _ms(size: 11, weight: FontWeight.w600, color: Colors.black54),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      if (driverLoc != null)
-                        OutlinedButton.icon(
-                          onPressed: () => _showTrackDriverSheet(
-                            driverLoc: driverLoc,
-                            destination: sellerLoc,
-                            destinationLabel: 'Toko Kamu',
-                          ),
-                          icon: const Icon(Icons.map_rounded, size: 15),
-                          label: Text('Lacak Driver', style: _ms(size: 11, weight: FontWeight.bold)),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: _selGreen,
-                            side: BorderSide(color: _selGreen.withValues(alpha: 0.4)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ),
-                    ],
-=======
                     else
                       ElevatedButton(
                         onPressed: () => _updateOrderStatus(
@@ -802,9 +521,8 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        child: Text('Selesaikan Transaksi', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
+                        child: Text('Selesaikan Transaksi (Selesai)', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
                       ),
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
                   ],
                 ),
               ],
@@ -815,155 +533,12 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-<<<<<<< HEAD
-  void _showTrackDriverSheet({
-    required LiveLatLng driverLoc,
-    required LiveLatLng? destination,
-    required String destinationLabel,
-  }) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('Posisi Driver Saat Ini', style: _ms(size: 15, weight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            LiveTrackingMap(
-              from: driverLoc,
-              fromLabel: 'Driver',
-              to: destination ?? driverLoc,
-              toLabel: destinationLabel,
-              height: 260,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOrderCard(_SellerOrder order) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _selAmber.withValues(alpha: 0.4), width: 1.5),
-        boxShadow: [BoxShadow(color: _selAmber.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: _selAmber.withValues(alpha: 0.06),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(color: _selAmber.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                  child: Icon(Icons.receipt_long_rounded, size: 14, color: _selAmber),
-                ),
-                const SizedBox(width: 8),
-                Text(order.id, style: _ms(size: 12, weight: FontWeight.bold, color: _selAmber)),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Text('⏳ Menunggu Konfirmasi', style: _ms(size: 9, weight: FontWeight.bold, color: Colors.orange.shade700)),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.person_rounded, size: 14, color: Colors.black38),
-                    const SizedBox(width: 6),
-                    Text(order.buyerName, style: _ms(size: 12, weight: FontWeight.w600)),
-                    const Spacer(),
-                    const Icon(Icons.schedule_rounded, size: 12, color: Colors.black38),
-                    const SizedBox(width: 4),
-                    Text(order.eta, style: _ms(size: 10, color: Colors.black38)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(order.items, style: _ms(size: 11, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text('Total: Rp${_formatRupiah(order.total)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
-                    const Spacer(),
-                    OutlinedButton(
-                      onPressed: () => _handleRejectOrder(order),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red.shade600,
-                        side: BorderSide(color: Colors.red.shade300),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text('Tolak', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.red.shade600)),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () => _handleAcceptOrder(order),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _selGreen,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text('Terima ✓', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _handleAcceptOrder(_SellerOrder order) {
-=======
   // ── Update status pesanan langsung ke Firestore (data real) ──
   Future<void> _updateOrderStatus(
     DocumentReference ref,
     String newStatus, {
     String? successMessage,
   }) async {
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
     HapticFeedback.mediumImpact();
     try {
       await ref.update({
@@ -1034,36 +609,19 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   }
 
   // ──────────────────────────────────────────
-  //  3. KATALOG PENJUALAN — StreamBuilder Firestore
+  //  3. PRODUK YANG DIJUAL (real-time dari Firestore)
   // ──────────────────────────────────────────
   Widget _buildProductsSection() {
-    if (_storeId == null) {
-      // Toko belum terdaftar — ajak seller daftar dulu
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sellerSectionTitle('Katalog Penjualan Saya', 'Daftarkan toko untuk mulai berjualan'),
-          const SizedBox(height: 12),
-          _buildEmptyStoreCard(),
-        ],
-      );
-    }
-
     return StreamBuilder<QuerySnapshot>(
-      stream: StoreService.myProductsStream(_storeId!),
+      stream: _productsStream,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sellerSectionTitle('Katalog Penjualan Saya', 'Memuat produk...'),
-              const SizedBox(height: 16),
-              const Center(child: CircularProgressIndicator(color: _selGreen)),
-            ],
-          );
-        }
-
-        final docs = snapshot.data?.docs ?? [];
+        final products = (snapshot.hasData)
+            ? snapshot.data!.docs
+                .map((d) => _SellerProduct.fromDoc(d))
+                .toList()
+            : <_SellerProduct>[];
+        final preview = products.take(4).toList();
+        final isLoading = !snapshot.hasData && !snapshot.hasError;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1071,10 +629,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
             Row(
               children: [
                 Expanded(
-                  child: _sellerSectionTitle(
-                    'Katalog Penjualan Saya',
-                    '${docs.length} produk aktif di geraimu',
-                  ),
+                  child: _sellerSectionTitle('Produk Dijual', '${products.length} produk aktif di geraimu'),
                 ),
                 GestureDetector(
                   onTap: _showAllProductsSheet,
@@ -1087,7 +642,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Kelola', style: _ms(size: 11, weight: FontWeight.bold, color: _selGreen)),
+                        Text('Selengkapnya', style: _ms(size: 11, weight: FontWeight.bold, color: _selGreen)),
                         const SizedBox(width: 3),
                         Icon(Icons.arrow_forward_rounded, size: 13, color: _selGreen),
                       ],
@@ -1097,8 +652,35 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
               ],
             ),
             const SizedBox(height: 12),
-            if (docs.isEmpty)
-              _buildEmptyProductCard()
+            if (isLoading)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 14, offset: const Offset(0, 4))],
+                ),
+                child: const Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2.4, color: _selGreen),
+                  ),
+                ),
+              )
+            else if (preview.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 14, offset: const Offset(0, 4))],
+                ),
+                child: Center(
+                  child: Text('Belum ada produk. Tambahkan produk pertamamu!',
+                      style: _ms(size: 12, color: Colors.black38), textAlign: TextAlign.center),
+                ),
+              )
             else
               GridView.builder(
                 shrinkWrap: true,
@@ -1109,11 +691,8 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   crossAxisSpacing: 10,
                   mainAxisExtent: 190,
                 ),
-                itemCount: docs.length > 4 ? 4 : docs.length,
-                itemBuilder: (context, index) {
-                  final data = docs[index].data() as Map<String, dynamic>;
-                  return _buildProductGridTile(data);
-                },
+                itemCount: preview.length,
+                itemBuilder: (context, index) => _buildProductGridTile(preview[index]),
               ),
           ],
         );
@@ -1121,82 +700,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-  Widget _buildEmptyStoreCard() {
-    return GestureDetector(
-      onTap: () => _showRegisterStoreSheet(required: false),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 14, offset: const Offset(0, 4))],
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: _selGreen.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.add_business_rounded, color: _selGreen, size: 32),
-            ),
-            const SizedBox(height: 14),
-            Text('Daftarkan Toko Anda', style: _ms(size: 14, weight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            Text(
-              'Lengkapi profil toko Anda untuk mulai berjualan dan menjangkau pembeli.',
-              style: _ms(size: 11, color: Colors.black45),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [_selGreen, Color(0xFF00A852)]),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text('+ Daftarkan Sekarang', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyProductCard() {
-    return GestureDetector(
-      onTap: () => _showAddEditProductDialog(),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 14, offset: const Offset(0, 4))],
-          border: Border.all(color: _selGreen.withValues(alpha: 0.2), style: BorderStyle.solid),
-        ),
-        child: Center(
-          child: Column(
-            children: [
-              Text('📦', style: const TextStyle(fontSize: 40)),
-              const SizedBox(height: 10),
-              Text('Belum ada produk.', style: _ms(size: 13, weight: FontWeight.bold)),
-              Text('Ketuk untuk menambahkan produk pertamamu!',
-                  style: _ms(size: 11, color: Colors.black38), textAlign: TextAlign.center),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProductGridTile(Map<String, dynamic> data) {
-    final name = data['product_name'] as String? ?? 'Produk';
-    final icon = data['category'] as String? ?? '🛒';
-    final price = (data['price'] as num?)?.toInt() ?? 0;
-    final stock = (data['stock'] as num?)?.toInt() ?? 0;
-
+  Widget _buildProductGridTile(_SellerProduct product) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1218,14 +722,36 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                  child: ((data['image_url'] as String?) ?? (data['imageUrl'] as String?) ?? '').trim().isEmpty
-                      ? Center(child: Text(icon, style: const TextStyle(fontSize: 42)))
+                  child: product.imageUrl.trim().isEmpty
+                      ? Center(
+                          child: Icon(
+                            Icons.shopping_basket_rounded,
+                            size: 36,
+                            color: _selGreen.withValues(alpha: 0.4),
+                          ),
+                        )
                       : Image.network(
-                          (data['image_url'] as String?) ?? (data['imageUrl'] as String?) ?? '',
+                          product.imageUrl,
                           fit: BoxFit.cover,
                           width: double.infinity,
                           height: double.infinity,
-                          errorBuilder: (_, __, ___) => Center(child: Text(icon, style: const TextStyle(fontSize: 42))),
+                          loadingBuilder: (context, child, progress) {
+                            if (progress == null) return child;
+                            return Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: _selGreen.withValues(alpha: 0.5)),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) => Center(
+                            child: Icon(
+                              Icons.image_not_supported_rounded,
+                              size: 30,
+                              color: _selGreen.withValues(alpha: 0.4),
+                            ),
+                          ),
                         ),
                 ),
               ),
@@ -1235,435 +761,30 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: stock == 0 ? Colors.red.shade50 : Colors.white,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 4)],
                   ),
-                  child: Text(
-                    stock == 0 ? 'Habis' : 'Stok $stock',
-                    style: _ms(size: 9, weight: FontWeight.bold, color: stock == 0 ? Colors.red.shade600 : _selGreen),
-                  ),
+                  child: Text('Stok ${product.stock}', style: _ms(size: 9, weight: FontWeight.bold, color: _selGreen)),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Text(name, style: _ms(size: 13, weight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-          const Spacer(),
-          Text(StoreService.formatRupiah(price), style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
+          Text(product.name, style: _ms(size: 13, weight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 2),
+          Text(product.unit, style: _ms(size: 10, color: Colors.black38)),
+          const SizedBox(height: 6),
+          Text('Rp${_formatRupiah(product.price)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
         ],
       ),
     );
   }
 
   // ──────────────────────────────────────────
-  //  MODAL: REGISTRASI GERAI (PERTAMA KALI)
-  // ──────────────────────────────────────────
-  void _showRegisterStoreSheet({bool required = false}) {
-    HapticFeedback.mediumImpact();
-    final nameCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-    String selectedPasar = _pasarOptions.first;
-    final formKey = GlobalKey<FormState>();
-    bool isLoading = false;
-
-    showModalBottomSheet(
-      context: context,
-      isDismissible: !required,
-      enableDrag: !required,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(builder: (ctx, setModal) {
-          return Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Handle bar
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Container(
-                        width: 40, height: 4,
-                        decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
-                  ),
-
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: _selGreen.withValues(alpha: 0.10),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.add_business_rounded, color: _selGreen, size: 22),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Daftarkan Toko Anda', style: _ms(size: 17, weight: FontWeight.bold)),
-                                  Text('Lengkapi info toko untuk mulai berjualan', style: _ms(size: 11, color: Colors.black45)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-
-                        Form(
-                          key: formKey,
-                          child: Column(
-                            children: [
-                              // Nama Toko
-                              TextFormField(
-                                controller: nameCtrl,
-                                textCapitalization: TextCapitalization.words,
-                                decoration: InputDecoration(
-                                  labelText: 'Nama Toko / Gerai *',
-                                  labelStyle: _ms(size: 13, color: Colors.black54),
-                                  hintText: 'contoh: Gerai Bu Eko',
-                                  hintStyle: _ms(size: 13, color: Colors.black26),
-                                  prefixIcon: const Icon(Icons.storefront_rounded, color: _selGreen, size: 20),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(color: _selGreen, width: 1.5),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                                ),
-                                validator: (v) => (v == null || v.trim().isEmpty) ? 'Nama toko wajib diisi' : null,
-                              ),
-                              const SizedBox(height: 14),
-
-                              // Dropdown Sektor Pasar
-                              DropdownButtonFormField<String>(
-                                initialValue: selectedPasar,
-                                decoration: InputDecoration(
-                                  labelText: 'Sektor Pasar *',
-                                  labelStyle: _ms(size: 13, color: Colors.black54),
-                                  prefixIcon: const Icon(Icons.location_on_rounded, color: _selGreen, size: 20),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(color: _selGreen, width: 1.5),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                                ),
-                                style: _ms(size: 14),
-                                items: _pasarOptions.map((p) => DropdownMenuItem(value: p, child: Text(p, style: _ms(size: 13)))).toList(),
-                                onChanged: (v) {
-                                  if (v != null) setModal(() => selectedPasar = v);
-                                },
-                              ),
-                              const SizedBox(height: 14),
-
-                              // Deskripsi
-                              TextFormField(
-                                controller: descCtrl,
-                                maxLines: 3,
-                                textCapitalization: TextCapitalization.sentences,
-                                decoration: InputDecoration(
-                                  labelText: 'Deskripsi Toko (opsional)',
-                                  labelStyle: _ms(size: 13, color: Colors.black54),
-                                  hintText: 'ceritakan tentang tokomu...',
-                                  hintStyle: _ms(size: 13, color: Colors.black26),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(color: _selGreen, width: 1.5),
-                                  ),
-                                  contentPadding: const EdgeInsets.all(14),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Tombol Daftar
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: isLoading
-                            ? null
-                            : () async {
-                                if (!formKey.currentState!.validate()) return;
-                                setModal(() => isLoading = true);
-
-                                try {
-                                  final uid = StoreService.currentUid;
-                                  await StoreService.createStore(
-                                    ownerUid: uid,
-                                    storeName: nameCtrl.text.trim(),
-                                    marketSection: selectedPasar,
-                                    description: descCtrl.text.trim(),
-                                  );
-
-                                  if (ctx.mounted) {
-                                    Navigator.pop(ctx);
-                                  }
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Row(children: [
-                                      const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-                                      const SizedBox(width: 8),
-                                      Text('Toko berhasil didaftarkan! 🎉', style: _ms(size: 12, color: Colors.white)),
-                                    ]),
-                                    backgroundColor: _selGreen,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                    duration: const Duration(seconds: 3),
-                                  ));
-                                } catch (e) {
-                                  setModal(() => isLoading = false);
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text('Gagal mendaftarkan toko: $e', style: _ms(size: 12, color: Colors.white)),
-                                    backgroundColor: Colors.red.shade600,
-                                  ));
-                                }
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _selGreen,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
-                        ),
-                        child: isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                              )
-                            : Text('Daftarkan Toko Sekarang', style: _ms(size: 14, weight: FontWeight.bold, color: Colors.white)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        });
-      },
-    );
-  }
-
-  // ──────────────────────────────────────────
-  //  MODAL: EDIT TOKO
-  // ──────────────────────────────────────────
-  void _showEditStoreSheet() {
-    HapticFeedback.selectionClick();
-    final nameCtrl = TextEditingController(text: _storeName);
-    final descCtrl = TextEditingController(text: _storeDescription);
-    final formKey = GlobalKey<FormState>();
-    bool isLoading = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(builder: (ctx, setModal) {
-          return Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Container(
-                        width: 40, height: 4,
-                        decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
-                  ),
-
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.shade50,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(Icons.edit_rounded, color: Colors.blue.shade600, size: 22),
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Edit Toko Saya', style: _ms(size: 17, weight: FontWeight.bold)),
-                                Text('Perbarui nama dan deskripsi toko', style: _ms(size: 11, color: Colors.black45)),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-
-                        Form(
-                          key: formKey,
-                          child: Column(
-                            children: [
-                              TextFormField(
-                                controller: nameCtrl,
-                                textCapitalization: TextCapitalization.words,
-                                decoration: InputDecoration(
-                                  labelText: 'Nama Toko / Gerai *',
-                                  labelStyle: _ms(size: 13, color: Colors.black54),
-                                  prefixIcon: const Icon(Icons.storefront_rounded, color: _selGreen, size: 20),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(color: _selGreen, width: 1.5),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                                ),
-                                validator: (v) => (v == null || v.trim().isEmpty) ? 'Nama toko wajib diisi' : null,
-                              ),
-                              const SizedBox(height: 14),
-
-                              TextFormField(
-                                controller: descCtrl,
-                                maxLines: 3,
-                                textCapitalization: TextCapitalization.sentences,
-                                decoration: InputDecoration(
-                                  labelText: 'Deskripsi Toko',
-                                  labelStyle: _ms(size: 13, color: Colors.black54),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(color: _selGreen, width: 1.5),
-                                  ),
-                                  contentPadding: const EdgeInsets.all(14),
-                                ),
-                              ),
-
-                              const SizedBox(height: 6),
-                              // Info: sektor pasar tidak bisa diubah sendiri
-                              Row(
-                                children: [
-                                  Icon(Icons.info_outline_rounded, size: 13, color: Colors.black38),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      'Sektor pasar: $_pasarName (tidak dapat diubah)',
-                                      style: _ms(size: 10, color: Colors.black38),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: isLoading || _storeId == null
-                            ? null
-                            : () async {
-                                if (!formKey.currentState!.validate()) return;
-                                setModal(() => isLoading = true);
-
-                                try {
-                                  await StoreService.updateStore(
-                                    _storeId!,
-                                    storeName: nameCtrl.text.trim(),
-                                    description: descCtrl.text.trim(),
-                                  );
-
-                                  if (ctx.mounted) {
-                                    Navigator.pop(ctx);
-                                  }
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Row(children: [
-                                      const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-                                      const SizedBox(width: 8),
-                                      Text('Profil toko berhasil diperbarui!', style: _ms(size: 12, color: Colors.white)),
-                                    ]),
-                                    backgroundColor: _selGreen,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                    duration: const Duration(seconds: 2),
-                                  ));
-                                } catch (e) {
-                                  setModal(() => isLoading = false);
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text('Gagal memperbarui: $e', style: _ms(size: 12, color: Colors.white)),
-                                    backgroundColor: Colors.red.shade600,
-                                  ));
-                                }
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _selGreen,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
-                        ),
-                        child: isLoading
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : Text('Simpan Perubahan', style: _ms(size: 14, weight: FontWeight.bold, color: Colors.white)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        });
-      },
-    );
-  }
-
-  // ──────────────────────────────────────────
-  //  BOTTOM SHEET: KELOLA SEMUA PRODUK (Firestore)
+  //  3c. HALAMAN KELOLA SEMUA PRODUK (real-time, StreamBuilder)
   // ──────────────────────────────────────────
   void _showAllProductsSheet() {
-    if (_storeId == null) {
-      _showRegisterStoreSheet(required: false);
-      return;
-    }
     HapticFeedback.selectionClick();
     showModalBottomSheet(
       context: context,
@@ -1675,7 +796,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           minChildSize: 0.5,
           maxChildSize: 0.95,
           expand: false,
-          builder: (ctx2, scrollController) {
+          builder: (context, scrollController) {
             return Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -1690,12 +811,18 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                     child: Row(
                       children: [
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Kelola Produk', style: _ms(size: 17, weight: FontWeight.bold)),
-                              Text('Tambah, edit, atau hapus produk geraimu', style: _ms(size: 11, color: Colors.black45)),
-                            ],
+                          child: StreamBuilder<QuerySnapshot>(
+                            stream: _productsStream,
+                            builder: (context, snap) {
+                              final count = snap.data?.docs.length ?? 0;
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Kelola Produk', style: _ms(size: 17, weight: FontWeight.bold)),
+                                  Text('$count produk terdaftar', style: _ms(size: 11, color: Colors.black45)),
+                                ],
+                              );
+                            },
                           ),
                         ),
                         GestureDetector(
@@ -1722,42 +849,34 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   const Divider(height: 1, color: Color(0xFFF0F0F0)),
                   Expanded(
                     child: StreamBuilder<QuerySnapshot>(
-                      stream: StoreService.myProductsStream(_storeId!),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator(color: _selGreen));
-                        }
-
-                        final docs = snapshot.data?.docs ?? [];
-
-                        if (docs.isEmpty) {
+                      stream: _productsStream,
+                      builder: (context, snap) {
+                        if (snap.hasError) {
                           return Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(32),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text('📦', style: const TextStyle(fontSize: 48)),
-                                  const SizedBox(height: 12),
-                                  Text('Belum ada produk', style: _ms(size: 14, weight: FontWeight.bold)),
-                                  Text('Ketuk "Tambah" untuk menambahkan produk pertamamu',
-                                      style: _ms(size: 11, color: Colors.black38), textAlign: TextAlign.center),
-                                ],
-                              ),
+                            child: Text('Gagal memuat produk.', style: _ms(size: 12, color: Colors.black38)),
+                          );
+                        }
+                        if (!snap.hasData) {
+                          return const Center(
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2.4, color: _selGreen),
                             ),
                           );
                         }
-
+                        final products = snap.data!.docs.map((d) => _SellerProduct.fromDoc(d)).toList();
+                        if (products.isEmpty) {
+                          return Center(
+                            child: Text('Belum ada produk.', style: _ms(size: 12, color: Colors.black38)),
+                          );
+                        }
                         return ListView.separated(
                           controller: scrollController,
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                          itemCount: docs.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 10),
-                          itemBuilder: (context, index) {
-                            final doc = docs[index];
-                            final data = doc.data() as Map<String, dynamic>;
-                            return _buildManageProductTile(doc.id, data);
-                          },
+                          itemCount: products.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          itemBuilder: (context, index) => _buildManageProductTile(products[index]),
                         );
                       },
                     ),
@@ -1771,12 +890,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-  Widget _buildManageProductTile(String docId, Map<String, dynamic> data) {
-    final name = data['product_name'] as String? ?? data['name'] as String? ?? 'Produk';
-    final icon = data['category'] as String? ?? '🛒';
-    final price = (data['price'] as num?)?.toInt() ?? 0;
-    final stock = (data['stock'] as num?)?.toInt() ?? 0;
-    final imageUrl = (data['image_url'] as String?) ?? (data['imageUrl'] as String?) ?? '';
+  Widget _buildManageProductTile(_SellerProduct product) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1795,14 +909,36 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: imageUrl.trim().isEmpty
-                  ? Center(child: Text(icon, style: const TextStyle(fontSize: 22)))
+              child: product.imageUrl.trim().isEmpty
+                  ? Center(
+                      child: Icon(
+                        Icons.shopping_basket_rounded,
+                        size: 20,
+                        color: _selGreen.withValues(alpha: 0.4),
+                      ),
+                    )
                   : Image.network(
-                      imageUrl,
+                      product.imageUrl,
                       fit: BoxFit.cover,
                       width: double.infinity,
                       height: double.infinity,
-                      errorBuilder: (_, __, ___) => Center(child: Text(icon, style: const TextStyle(fontSize: 22))),
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return Center(
+                          child: SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: _selGreen.withValues(alpha: 0.5)),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) => Center(
+                        child: Icon(
+                          Icons.image_not_supported_rounded,
+                          size: 18,
+                          color: _selGreen.withValues(alpha: 0.4),
+                        ),
+                      ),
                     ),
             ),
           ),
@@ -1811,17 +947,16 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name, style: _ms(size: 13, weight: FontWeight.bold)),
+                Text(product.name, style: _ms(size: 13, weight: FontWeight.bold)),
                 const SizedBox(height: 2),
-                Text('Stok: $stock', style: _ms(size: 10, color: Colors.black38)),
+                Text('Stok: ${product.stock} • ${product.unit}', style: _ms(size: 10, color: Colors.black38)),
                 const SizedBox(height: 2),
-                Text(StoreService.formatRupiah(price), style: _ms(size: 12, weight: FontWeight.bold, color: _selGreen)),
+                Text('Rp${_formatRupiah(product.price)}', style: _ms(size: 12, weight: FontWeight.bold, color: _selGreen)),
               ],
             ),
           ),
-          // Edit
           GestureDetector(
-            onTap: () => _showAddEditProductDialog(existingId: docId, existingData: data),
+            onTap: () => _showAddEditProductDialog(existing: product),
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(10)),
@@ -1829,9 +964,8 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
             ),
           ),
           const SizedBox(width: 8),
-          // Hapus
           GestureDetector(
-            onTap: () => _confirmDeleteProduct(docId, name),
+            onTap: () => _confirmDeleteProduct(product),
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
@@ -1844,203 +978,88 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   }
 
   // ──────────────────────────────────────────
-  //  DIALOG: TAMBAH / EDIT PRODUK (Firestore)
+  //  3d. TAMBAH / EDIT PRODUK — sekarang disimpan ke Firestore
   // ──────────────────────────────────────────
-  void _showAddEditProductDialog({String? existingId, Map<String, dynamic>? existingData}) {
-    if (_storeId == null) {
-      _showRegisterStoreSheet(required: false);
-      return;
-    }
-
-    final isEdit = existingId != null;
-    final nameCtrl = TextEditingController(text: existingData?['product_name'] ?? '');
-    final iconCtrl = TextEditingController(text: existingData?['category'] ?? '🛒');
-    final priceCtrl = TextEditingController(text: existingData != null ? existingData['price'].toString() : '');
-    final stockCtrl = TextEditingController(text: existingData != null ? existingData['stock'].toString() : '');
-    final formKey = GlobalKey<FormState>();
-    bool isLoading = false;
-
-    showDialog(
+  void _showAddEditProductDialog({_SellerProduct? existing}) {
+    showGeneralDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setDialog) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text(isEdit ? 'Edit Produk' : 'Tambah Produk', style: _ms(size: 16, weight: FontWeight.bold)),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 64,
-                        child: TextFormField(
-                          controller: iconCtrl,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontSize: 22),
-                          decoration: InputDecoration(
-                            labelText: 'Ikon',
-                            labelStyle: _ms(size: 11),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextFormField(
-                          controller: nameCtrl,
-                          textCapitalization: TextCapitalization.words,
-                          decoration: InputDecoration(
-                            labelText: 'Nama Produk *',
-                            labelStyle: _ms(size: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: priceCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'Harga (Rp) *',
-                            labelStyle: _ms(size: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ),
-                          validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextFormField(
-                          controller: stockCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'Stok *',
-                            labelStyle: _ms(size: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          ),
-                          validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Batal', style: _ms(size: 13, color: Colors.black54)),
-            ),
-            ElevatedButton(
-              onPressed: isLoading
-                  ? null
-                  : () async {
-                      if (!formKey.currentState!.validate()) return;
-                      setDialog(() => isLoading = true);
-
-                      try {
-                        final uid = StoreService.currentUid;
-                        final emojiVal = iconCtrl.text.trim().isEmpty ? '🛒' : iconCtrl.text.trim();
-
-                        if (isEdit) {
-                          await StoreService.updateProduct(
-                            existingId,
-                            productName: nameCtrl.text.trim(),
-                            price: int.parse(priceCtrl.text.trim()),
-                            stock: int.parse(stockCtrl.text.trim()),
-                            category: emojiVal,
-                          );
-                        } else {
-                          await StoreService.addProduct(
-                            storeId: _storeId!,
-                            ownerUid: uid,
-                            productName: nameCtrl.text.trim(),
-                            price: int.parse(priceCtrl.text.trim()),
-                            stock: int.parse(stockCtrl.text.trim()),
-                            category: emojiVal,
-                          );
-                        }
-
-                        if (ctx.mounted) Navigator.pop(ctx);
-                        if (!mounted) return;
-
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text(isEdit ? 'Produk berhasil diperbarui ✓' : 'Produk berhasil ditambahkan ✓',
-                              style: _ms(size: 12, color: Colors.white)),
-                          backgroundColor: _selGreen,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          duration: const Duration(seconds: 2),
-                        ));
-                      } catch (e) {
-                        setDialog(() => isLoading = false);
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Gagal: $e', style: _ms(size: 12, color: Colors.white)),
-                          backgroundColor: Colors.red.shade600,
-                        ));
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _selGreen,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: isLoading
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : Text(isEdit ? 'Simpan' : 'Tambahkan', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
-            ),
-          ],
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      transitionDuration: const Duration(milliseconds: 250),
+      pageBuilder: (ctx, anim1, anim2) {
+        return _ProductFormDialog(
+          existing: existing,
+          selGreen: _selGreen,
+          textStyle: _ms,
+          onSave: (newProduct) => _saveProduct(existing: existing, newProduct: newProduct),
         );
-      }),
+      },
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        final curvedAnim = CurvedAnimation(parent: anim1, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curvedAnim,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.92, end: 1.0).animate(curvedAnim),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
+  Future<void> _saveProduct({
+    required _SellerProduct? existing,
+    required _SellerProduct newProduct,
+  }) async {
+    final col = _productsCollection;
+    if (col == null) return;
 
+    try {
+      if (existing != null && existing.id != null) {
+        await col.doc(existing.id).update(newProduct.toMap());
+      } else {
+        await col.add({
+          ...newProduct.toMap(),
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            existing != null ? 'Produk diperbarui' : 'Produk ditambahkan',
+            style: _ms(size: 12, color: Colors.white),
+          ),
+          backgroundColor: _selGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Gagal menyimpan produk: $e', style: _ms(size: 12, color: Colors.white)),
+          backgroundColor: Colors.red.shade500,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    }
+  }
 
-  void _confirmDeleteProduct(String docId, String name) {
-    HapticFeedback.mediumImpact();
+  void _confirmDeleteProduct(_SellerProduct product) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Hapus Produk?', style: _ms(size: 16, weight: FontWeight.bold)),
-        content: Text('$name akan dihapus dari daftar produkmu secara permanen.', style: _ms(size: 13, color: Colors.black54)),
+        content: Text('${product.name} akan dihapus dari daftar produkmu.', style: _ms(size: 13, color: Colors.black54)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Batal', style: _ms(size: 13, color: Colors.black54))),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              try {
-                await StoreService.deleteProduct(docId);
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('$name berhasil dihapus', style: _ms(size: 12, color: Colors.white)),
-                  backgroundColor: Colors.red.shade500,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  duration: const Duration(seconds: 2),
-                ));
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('Gagal menghapus: $e', style: _ms(size: 12, color: Colors.white)),
-                  backgroundColor: Colors.red.shade600,
-                ));
-              }
+              await _deleteProduct(product);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade500,
@@ -2053,8 +1072,36 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
+  Future<void> _deleteProduct(_SellerProduct product) async {
+    final col = _productsCollection;
+    if (col == null || product.id == null) return;
 
+    try {
+      await col.doc(product.id).delete();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${product.name} dihapus', style: _ms(size: 12, color: Colors.white)),
+          backgroundColor: Colors.red.shade500,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Gagal menghapus produk: $e', style: _ms(size: 12, color: Colors.white)),
+          backgroundColor: Colors.red.shade500,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    }
+  }
 
+  // ──────────────────────────────────────────
+  //  4b. PLACEHOLDER TAMBAH DRIVER
+  // ──────────────────────────────────────────
   Widget _buildAddDriverSection() {
     return GestureDetector(
       onTap: _showAddDriverDialog,
@@ -2063,7 +1110,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white, width: 1.5),
+          border: Border.all(color: Colors.white, width: 1.5, style: BorderStyle.solid),
         ),
         child: _assignedDrivers.isEmpty
             ? Row(
@@ -2086,7 +1133,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded, color: Colors.black26),
+                  Icon(Icons.chevron_right_rounded, color: Colors.black26),
                 ],
               )
             : Column(
@@ -2107,12 +1154,8 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                             CircleAvatar(
                               radius: 16,
                               backgroundColor: _selGreen.withValues(alpha: 0.12),
-                              backgroundImage:
-                                  d.photoUrl != null ? NetworkImage(d.photoUrl!) : null,
-                              child: d.photoUrl == null
-                                  ? Text(d.name.isNotEmpty ? d.name[0].toUpperCase() : '?',
-                                      style: _ms(size: 12, weight: FontWeight.bold, color: _selGreen))
-                                  : null,
+                              child: Text(d.name.isNotEmpty ? d.name[0].toUpperCase() : '?',
+                                  style: _ms(size: 12, weight: FontWeight.bold, color: _selGreen)),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -2135,13 +1178,12 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
 
   void _showAddDriverDialog() {
     HapticFeedback.selectionClick();
+    final searchCtrl = TextEditingController();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-<<<<<<< HEAD
-      builder: (ctx) => _AddDriverSheet(storeName: _storeName),
-=======
       builder: (ctx) {
         return DraggableScrollableSheet(
           initialChildSize: 0.6,
@@ -2169,6 +1211,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                             style: _ms(size: 11, color: Colors.black45)),
                         const SizedBox(height: 16),
                         TextField(
+                          controller: searchCtrl,
                           decoration: InputDecoration(
                             hintText: 'Nama atau email driver...',
                             hintStyle: _ms(size: 13, color: Colors.black38),
@@ -2199,7 +1242,8 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                                 Icon(Icons.local_shipping_outlined, size: 40, color: Colors.grey.shade300),
                                 const SizedBox(height: 10),
                                 Text('Hasil pencarian driver akan\nmuncul di sini',
-                                    textAlign: TextAlign.center, style: _ms(size: 11, color: Colors.black38)),
+                                    textAlign: TextAlign.center,
+                                    style: _ms(size: 11, color: Colors.black38)),
                               ],
                             ),
                           ),
@@ -2233,57 +1277,9 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           },
         );
       },
->>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
     );
   }
 
-  // ──────────────────────────────────────────
-  //  5. QUICK ACTIONS
-  // ──────────────────────────────────────────
-  Widget _buildQuickActions() {
-    final actions = [
-      _QuickAction(icon: Icons.add_box_rounded, label: 'Tambah\nProduk', color: _selGreen, onTap: () => _showAddEditProductDialog()),
-      _QuickAction(icon: Icons.tune_rounded, label: 'Kelola\nStok', color: const Color(0xFF1565C0), onTap: () => _showAllProductsSheet()),
-      _QuickAction(icon: Icons.local_shipping_rounded, label: 'Status\nPengiriman', color: _selOrange, onTap: () => _showComingSoon('Status Pengiriman')),
-      _QuickAction(icon: Icons.analytics_outlined, label: 'Laporan\nLengkap', color: Colors.deepPurple, onTap: () => _showComingSoon('Laporan Lengkap')),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sellerSectionTitle('Aksi Cepat', 'Kelola geraimu dengan mudah'),
-        const SizedBox(height: 12),
-        Row(
-          children: actions.map((a) => Expanded(
-            child: GestureDetector(
-              onTap: a.onTap,
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 3))],
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: a.color.withValues(alpha: 0.12), shape: BoxShape.circle),
-                      child: Icon(a.icon, color: a.color, size: 22),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(a.label, style: _ms(size: 9, weight: FontWeight.bold, color: _selDark), textAlign: TextAlign.center),
-                  ],
-                ),
-              ),
-            ),
-          )).toList(),
-        ),
-      ],
-    );
-  }
   void _showComingSoon(String fitur) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('$fitur — Segera hadir!', style: _ms(size: 12, color: Colors.white)),
@@ -2320,256 +1316,10 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
 }
 
 // ─────────────────────────────────────────────
-//  Model Classes (internal)
+//  Model Classes
 // ─────────────────────────────────────────────
-class _QuickAction {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _QuickAction({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-}
-
-class _SellerOrder {
-  final String id, buyerName, items, eta;
-  final int total;
-  _SellerOrder({required this.id, required this.buyerName, required this.items, required this.total, required this.eta});
-}
-
-class _SellerDriver {
-  final String name, email;
-  final String? photoUrl;
-  const _SellerDriver({required this.name, required this.email, this.photoUrl});
-}
-
-// ─────────────────────────────────────────────
-//  _AddDriverSheet — cari user A-Z, kirim undangan jadi driver
-// ─────────────────────────────────────────────
-class _AddDriverSheet extends StatefulWidget {
-  final String storeName;
-  const _AddDriverSheet({required this.storeName});
-
-  @override
-  State<_AddDriverSheet> createState() => _AddDriverSheetState();
-}
-
-class _AddDriverSheetState extends State<_AddDriverSheet> {
-  final _searchCtrl = TextEditingController();
-  Timer? _debounce;
-  List<QueryDocumentSnapshot<Map<String, dynamic>>> _results = [];
-  bool _loading = true;
-  final Set<String> _invitedThisSession = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _loadUsers();
-    _searchCtrl.addListener(_onSearchChanged);
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onSearchChanged() {
-    _debounce?.cancel();
-    _debounce = Timer(
-      const Duration(milliseconds: 400),
-      () => _loadUsers(query: _searchCtrl.text),
-    );
-  }
-
-  Future<void> _loadUsers({String? query}) async {
-    setState(() => _loading = true);
-    try {
-      final results = await DriverService.fetchUsersAZ(searchQuery: query);
-      if (mounted) setState(() { _results = results; _loading = false; });
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _confirmInvite(QueryDocumentSnapshot<Map<String, dynamic>> user) async {
-    final name = (user.data()['name'] as String?) ?? 'Pengguna';
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Tambahkan Driver?', style: _ms(size: 16, weight: FontWeight.bold)),
-        content: Text(
-          'Ingin menambahkan akun ini sebagai driver?\n\n$name',
-          style: _ms(size: 13, color: Colors.black54),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Batal', style: _ms(size: 13, color: Colors.black54)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _selGreen,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: Text('Ya, Tambahkan', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      await DriverService.sendDriverInvite(targetUid: user.id, storeName: widget.storeName);
-      if (!mounted) return;
-      setState(() => _invitedThisSession.add(user.id));
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Undangan terkirim ke $name', style: _ms(size: 12, color: Colors.white)),
-        backgroundColor: _selGreen,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('$e', style: _ms(size: 12, color: Colors.white)),
-        backgroundColor: Colors.red.shade600,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.75,
-      minChildSize: 0.5,
-      maxChildSize: 0.92,
-      expand: false,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Tambah Driver', style: _ms(size: 17, weight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text('Cari akun berdasarkan nama atau email untuk diundang jadi driver',
-                        style: _ms(size: 11, color: Colors.black45)),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _searchCtrl,
-                      decoration: InputDecoration(
-                        hintText: 'Nama atau email...',
-                        hintStyle: _ms(size: 13, color: Colors.black38),
-                        prefixIcon: const Icon(Icons.search_rounded, color: Colors.black38),
-                        filled: true,
-                        fillColor: Colors.grey.shade100,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator(color: _selGreen))
-                    : _results.isEmpty
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 32),
-                              child: Column(
-                                children: [
-                                  Icon(Icons.person_search_rounded, size: 40, color: Colors.grey.shade300),
-                                  const SizedBox(height: 10),
-                                  Text('Tidak ada akun yang cocok', style: _ms(size: 11, color: Colors.black38)),
-                                ],
-                              ),
-                            ),
-                          )
-                        : ListView.builder(
-                            controller: scrollController,
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            itemCount: _results.length,
-                            itemBuilder: (context, i) {
-                              final doc = _results[i];
-                              final data = doc.data();
-                              final name = (data['name'] as String?) ?? 'Pengguna';
-                              final email = (data['email'] as String?) ?? '-';
-                              final alreadyInvited = _invitedThisSession.contains(doc.id);
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: Row(
-                                  children: [
-                                    CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor: _selGreen.withValues(alpha: 0.12),
-                                      child: Text(
-                                        name.isNotEmpty ? name[0].toUpperCase() : '?',
-                                        style: _ms(size: 13, weight: FontWeight.bold, color: _selGreen),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(name, style: _ms(size: 13, weight: FontWeight.w600)),
-                                          Text(email, style: _ms(size: 10.5, color: Colors.black38)),
-                                        ],
-                                      ),
-                                    ),
-                                    alreadyInvited
-                                        ? Text('Terkirim', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.black38))
-                                        : TextButton(
-                                            onPressed: () => _confirmInvite(doc),
-                                            style: TextButton.styleFrom(
-                                              backgroundColor: _selGreen.withValues(alpha: 0.1),
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                            ),
-                                            child: Text('Tambahkan', style: _ms(size: 11.5, weight: FontWeight.bold, color: _selGreen)),
-                                          ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-              ),
-              const SizedBox(height: 12),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
 class _SellerProduct {
-  final String? id;
+  final String? id; // null = belum tersimpan di Firestore
   final String name, imageUrl, unit;
   final int price, stock;
 
@@ -2586,21 +1336,26 @@ class _SellerProduct {
     final d = doc.data() as Map<String, dynamic>? ?? {};
     return _SellerProduct(
       id: doc.id,
-      name: (d['name'] as String?) ?? (d['product_name'] as String?) ?? '',
-      imageUrl: (d['imageUrl'] as String?) ?? (d['image_url'] as String?) ?? '',
-      unit: (d['unit'] as String?) ?? 'kg',
+      name: (d['name'] as String?) ?? '',
+      imageUrl: (d['imageUrl'] as String?) ?? '',
+      unit: (d['unit'] as String?) ?? '',
       price: (d['price'] as num?)?.toInt() ?? 0,
       stock: (d['stock'] as num?)?.toInt() ?? 0,
     );
   }
 
   Map<String, dynamic> toMap() => {
-        'product_name': name,
-        'image_url': imageUrl,
+        'name': name,
+        'imageUrl': imageUrl,
         'unit': unit,
         'price': price,
         'stock': stock,
       };
+}
+
+class _SellerDriver {
+  final String name, email;
+  const _SellerDriver({required this.name, required this.email});
 }
 
 // ─────────────────────────────────────────────
