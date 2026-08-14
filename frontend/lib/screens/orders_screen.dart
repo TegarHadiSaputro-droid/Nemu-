@@ -4,6 +4,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/services/address_manager.dart';
 import 'package:frontend/models/orders_manager.dart';
 import 'package:frontend/widgets/address_editor_sheet.dart';
+<<<<<<< HEAD
+=======
+import 'package:frontend/widgets/live_tracking_map.dart';
+import 'package:frontend/models/orders_manager.dart' show
+    kStatusMenungguKonfirmasi, kStatusDikemas, kStatusDalamPengantaran,
+    kStatusSelesai, kStatusDibatalkan;
+>>>>>>> e73728f68825256b94a86cf9ff98a9dafe41091b
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -161,6 +168,7 @@ class _OrdersScreenState extends State<OrdersScreen>
     ).animate(CurvedAnimation(parent: _pulseAnim, curve: Curves.easeInOut));
   }
 
+<<<<<<< HEAD
   @override
   void dispose() {
     _progressAnim.dispose();
@@ -168,6 +176,8 @@ class _OrdersScreenState extends State<OrdersScreen>
     _kurirCardAnim.dispose();
     super.dispose();
   }
+=======
+>>>>>>> e73728f68825256b94a86cf9ff98a9dafe41091b
 
   // ──────────────────────────────────────────
   // EMPTY STATE: Tidak ada pesanan aktif
@@ -261,6 +271,28 @@ class _OrdersScreenState extends State<OrdersScreen>
           }
         }
 
+<<<<<<< HEAD
+=======
+        final driverUid = data?['driverUid'] as String?;
+        final driverLoc = LiveLatLng.fromMap(data?['driverLocation'] as Map<String, dynamic>?);
+        final sellerLoc = LiveLatLng.fromMap(data?['sellerLocation'] as Map<String, dynamic>?);
+
+        final OrderHistoryItem? activeOrder = hasActiveOrder
+            ? OrderHistoryItem(
+                docId: uid ?? '',
+                id: data!['id'] as String? ?? 'ORD-0000',
+                storeName: data['storeName'] as String? ?? 'Gerai Bu Eko',
+                marketName: data['marketName'] as String? ?? 'Pasar Sepinggan',
+                date: 'Hari ini',
+                items: data['items'] as String? ?? '',
+                totalPrice: (data['totalPrice'] as num?)?.toInt() ?? 0,
+                statusLabel: OrderTrackingService.statusLabel(status),
+                statusColor: currentStep >= 2 ? Colors.orange : Colors.blue,
+                rawStatus: status ?? kStatusDikemas,
+              )
+            : null;
+
+>>>>>>> e73728f68825256b94a86cf9ff98a9dafe41091b
         return Scaffold(
           backgroundColor: const Color(0xFFD9DF36),
           body: Stack(
@@ -316,6 +348,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                       ),
                     ],
 
+<<<<<<< HEAD
                     // ── Riwayat Pesanan (StreamBuilder terpisah, realtime) ──
                     SliverToBoxAdapter(
                       child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -362,12 +395,33 @@ class _OrdersScreenState extends State<OrdersScreen>
                                   ),
                                 ),
                               ],
+=======
+                    // ── Riwayat Pesanan (dari OrdersManager ValueNotifier) ──
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.history_rounded, color: Colors.white, size: 20),
+                            const SizedBox(width: 8),
+                            Text('Riwayat Pesanan', style: _manrope(size: 16, weight: FontWeight.bold, color: _dark)),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text('${_orderHistory.length} pesanan',
+                                  style: _manrope(size: 11, weight: FontWeight.w600, color: _dark)),
+>>>>>>> e73728f68825256b94a86cf9ff98a9dafe41091b
                             ),
                           );
                         },
                       ),
                     ),
 
+<<<<<<< HEAD
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: OrdersManager.instance.orderHistoryStream(),
                       builder: (context, historySnap) {
@@ -403,7 +457,26 @@ class _OrdersScreenState extends State<OrdersScreen>
                           ),
                         );
                       },
+=======
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, i) => _buildHistoryCard(_orderHistory[i]),
+                        childCount: _orderHistory.length,
+                      ),
+>>>>>>> e73728f68825256b94a86cf9ff98a9dafe41091b
                     ),
+                    if (_orderHistory.isEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                          child: Center(
+                            child: Text('Belum ada riwayat pesanan.',
+                                style: _manrope(size: 12, color: Colors.black45)),
+                          ),
+                        ),
+                      ),
+
+
                   ],
                 ),
               ),
