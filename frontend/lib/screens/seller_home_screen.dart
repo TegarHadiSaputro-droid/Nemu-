@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -134,28 +135,42 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
       onRefresh: _handleRefresh,
       child: FadeTransition(
         opacity: _entranceAnim,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. Header Toko
-              _buildStoreHeader(),
-              const SizedBox(height: 16),
+        // Align + LayoutBuilder di sini memaksa konten selalu menempel ke atas,
+        // bahkan kalau widget ini dibungkus Center() oleh parent (mis. saat
+        // daftar produk kosong sehingga tinggi konten jadi pendek).
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return Align(
+              alignment: Alignment.topCenter,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      // 1. Header Toko
+                      _buildStoreHeader(),
+                      const SizedBox(height: 16),
 
-              // 2. Alert Pesanan Baru (real-time dari Firestore)
-              _buildOrderAlertSection(),
-              const SizedBox(height: 20),
+                      // 2. Alert Pesanan Baru (real-time dari Firestore)
+                      _buildOrderAlertSection(),
+                      const SizedBox(height: 20),
 
-              // 3. Produk yang Dijual (real-time dari Firestore)
-              _buildProductsSection(),
-              const SizedBox(height: 32),
+                      // 3. Produk yang Dijual (real-time dari Firestore)
+                      _buildProductsSection(),
+                      const SizedBox(height: 32),
 
-              // 3b. Placeholder Tambah Driver
-              _buildAddDriverSection(),
-            ],
-          ),
+                      // 3b. Placeholder Tambah Driver
+                      _buildAddDriverSection(),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -631,6 +646,27 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                 Expanded(
                   child: _sellerSectionTitle('Produk Dijual', '${products.length} produk aktif di geraimu'),
                 ),
+                if (kDebugMode) ...[
+                  GestureDetector(
+                    onTap: _seedDummyProducts,
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.bolt_rounded, size: 13, color: Colors.orange.shade700),
+                          const SizedBox(width: 3),
+                          Text('Seed', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.orange.shade700)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 GestureDetector(
                   onTap: _showAllProductsSheet,
                   child: Container(
@@ -1005,6 +1041,81 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
         );
       },
     );
+  }
+
+  // ── DEBUG ONLY: seed produk dummy untuk testing kelola produk ──
+  Future<void> _seedDummyProducts() async {
+    final col = _productsCollection;
+    if (col == null) return;
+
+    final dummyProducts = [
+      {
+        'name': 'Bawang Merah',
+        'imageUrl': 'https://images.unsplash.com/photo-1580201092675-a0a6a6cafbb1',
+        'unit': 'per kg',
+        'price': 32000,
+        'stock': 25,
+      },
+      {
+        'name': 'Cabai Rawit Merah',
+        'imageUrl': 'https://images.unsplash.com/photo-1583119912267-cc97c911e416',
+        'unit': 'per kg',
+        'price': 45000,
+        'stock': 15,
+      },
+      {
+        'name': 'Tomat Segar',
+        'imageUrl': 'https://images.unsplash.com/photo-1546470427-e5ac89c8ba4d',
+        'unit': 'per kg',
+        'price': 12000,
+        'stock': 40,
+      },
+      {
+        'name': 'Telur Ayam',
+        'imageUrl': '',
+        'unit': 'per 1/2 kg',
+        'price': 15000,
+        'stock': 30,
+      },
+      {
+        'name': 'Beras Premium',
+        'imageUrl': '',
+        'unit': 'per 5 kg',
+        'price': 68000,
+        'stock': 10,
+      },
+    ];
+
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      for (final p in dummyProducts) {
+        final ref = col.doc();
+        batch.set(ref, {
+          ...p,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('${dummyProducts.length} produk dummy ditambahkan',
+              style: _ms(size: 12, color: Colors.white)),
+          backgroundColor: _selGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Gagal seed produk: $e', style: _ms(size: 12, color: Colors.white)),
+          backgroundColor: Colors.red.shade500,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    }
   }
 
   Future<void> _saveProduct({

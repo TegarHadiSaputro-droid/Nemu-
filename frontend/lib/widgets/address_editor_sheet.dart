@@ -1,51 +1,30 @@
-// address_editor_sheet.dart
-//
-// Popup (bottom sheet) untuk mengganti alamat pengiriman.
-// - Input alamat manual, selalu tersedia, jadi cara utama.
-// - Opsional: switch "Gunakan lokasi saat ini" -> minta izin lokasi,
-//   ambil posisi GPS, lalu reverse-geocode jadi alamat yang otomatis
-//   ngisi kolom teks (masih bisa diedit manual).
-// - Kalau lokasi otomatis gagal / alamatnya nggak valid (kosong), muncul
-//   peta kecil buat "drop pin" manual: geser peta sampai pin merah di
-//   tengah pas di lokasinya, lalu tekan "Pakai Titik Ini".
-//
-// ──────────────────────────────────────────────────────────────────
-// SETUP YANG PERLU DITAMBAHIN MANUAL (belum otomatis lewat chat ini):
-//
-// 1. Tambahin ke pubspec.yaml (di bagian dependencies:):
-//      geolocator: ^13.0.1
-//      geocoding: ^3.0.0
-//      flutter_map: ^7.0.2
-//      latlong2: ^0.9.1
-//    Lalu jalanin: flutter pub get
-//
-// 2. Izin lokasi Android — android/app/src/main/AndroidManifest.xml,
-//    taruh di dalam tag <manifest> (sebelum <application>):
-//      <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-//      <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-//
-// 3. Izin lokasi iOS — ios/Runner/Info.plist, taruh di dalam <dict>:
-//      <key>NSLocationWhenInUseUsageDescription</key>
-//      <string>Nemu pakai lokasimu buat isi alamat pengiriman otomatis.</string>
-//
-// 4. Flutter Web: geolocator otomatis pakai Geolocation API browser,
-//    tapi browser cuma ngasih izin di halaman yang dibuka lewat HTTPS
-//    (atau localhost pas development). Nggak perlu setup tambahan.
-//
-// Peta pin-drop di bawah pakai tile OpenStreetMap gratis (tanpa API key),
-// jadi tidak perlu daftar Google Maps API buat fitur ini.
-// ──────────────────────────────────────────────────────────────────
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart' as geocoding;
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart' as latlng;
-import '../services/address_manager.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:latlong2/latlong.dart' as ll;
+import 'package:frontend/services/address_manager.dart';
+import 'package:frontend/screens/location_picker_screen.dart';
+import 'package:frontend/screens/location_picker_screen.dart';
 
-const Color _kGreen = Color(0xFF007C3F);
+const Color _aGreen = Color(0xFF007C3F);
+const Color _aDark = Color(0xFF0F1B11);
 
+TextStyle _as({
+  double size = 14,
+  FontWeight weight = FontWeight.normal,
+  Color color = _aDark,
+}) => GoogleFonts.manrope(fontSize: size, fontWeight: weight, color: color);
+
+// ─────────────────────────────────────────────
+//  AddressEditorSheet
+//  Bottom sheet buat isi/ubah alamat pengiriman. Ada 2 cara ambil
+//  koordinat:
+//   1. "Lokasi Saat Ini"  -> GPS device (otomatis)
+//   2. "Pilih di Peta"    -> user geser pin sendiri di peta interaktif
+//  Plus fallback isi manual (tanpa koordinat) kalau dua-duanya nggak
+//  dipakai/gagal.
+// ─────────────────────────────────────────────
 class AddressEditorSheet extends StatefulWidget {
   const AddressEditorSheet({super.key});
 
@@ -54,61 +33,74 @@ class AddressEditorSheet extends StatefulWidget {
 }
 
 class _AddressEditorSheetState extends State<AddressEditorSheet> {
-  late final TextEditingController _addressController;
-
-  bool _useLocation = false;
-  bool _isLocating = false;
-  String? _locationError;
-  bool _showPinMap = false;
-
-  // Koordinat hasil GPS/pin-drop terakhir (null kalau alamat murni diketik
-  // manual tanpa pernah pakai lokasi/pin).
-  double? _resolvedLat;
-  double? _resolvedLng;
-
-  // Default: pusat Balikpapan, dipakai sebelum GPS/pin diatur manual.
-  latlng.LatLng _pinLocation = const latlng.LatLng(-1.2379, 116.8529);
+  final _controller = TextEditingController();
+  double? _lat;
+  double? _lng;
+  bool _loading = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
+    // Prefill dari alamat yang sudah tersimpan (kalau ada), biar user
+    // gampang edit tanpa mulai dari kosong.
     final current = AddressManager.instance.address.value;
-    _addressController = TextEditingController(text: current?.text ?? '');
-    if (current?.hasCoordinates ?? false) {
-      _resolvedLat = current!.lat;
-      _resolvedLng = current.lng;
-      _pinLocation = latlng.LatLng(current.lat!, current.lng!);
+    if (current != null) {
+      _controller.text = current.text;
+      _lat = current.lat;
+      _lng = current.lng;
     }
   }
 
   @override
   void dispose() {
-    _addressController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  Future<void> _handleUseLocationToggle(bool value) async {
+  /// Dipakai bareng oleh alur GPS maupun alur pilih-di-peta: ubah
+  /// koordinat jadi alamat yang gampang dibaca (reverse geocode),
+  /// lalu isi ke form.
+  Future<void> _terapkanKoordinat(double lat, double lng) async {
+    String alamatText =
+        'Titik lokasi: ${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+
+    try {
+      final placemarks = await placemarkFromCoordinates(lat, lng);
+      if (placemarks.isNotEmpty) {
+        final p = placemarks.first;
+        final bagian = [p.street, p.subLocality, p.locality]
+            .where((s) => s != null && s.trim().isNotEmpty)
+            .join(', ');
+        if (bagian.isNotEmpty) alamatText = bagian;
+      }
+    } catch (_) {
+      // Reverse-geocode gagal (mis. offline) -> tetap pakai teks koordinat.
+    }
+
+    if (!mounted) return;
     setState(() {
-      _useLocation = value;
-      _locationError = null;
-      _showPinMap = false;
+      _lat = lat;
+      _lng = lng;
+      _controller.text = alamatText;
+      _loading = false;
+      _error = null;
     });
-    if (value) await _fetchCurrentLocation();
   }
 
-  Future<void> _fetchCurrentLocation() async {
+  // ── Opsi 1: Lokasi Saat Ini (GPS) ──
+  Future<void> _gunakanLokasiSaatIni() async {
     setState(() {
-      _isLocating = true;
-      _locationError = null;
+      _loading = true;
+      _error = null;
     });
 
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         setState(() {
-          _isLocating = false;
-          _locationError = 'Layanan lokasi perangkat kamu sedang mati. Aktifkan dulu di pengaturan, atau isi manual.';
-          _showPinMap = true;
+          _error = 'GPS tidak aktif. Nyalakan lokasi di pengaturan device dulu.';
+          _loading = false;
         });
         return;
       }
@@ -116,282 +108,220 @@ class _AddressEditorSheetState extends State<AddressEditorSheet> {
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            _error = 'Izin lokasi ditolak. Aktifkan izin lokasi untuk pakai fitur ini.';
+            _loading = false;
+          });
+          return;
+        }
       }
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.deniedForever) {
         setState(() {
-          _isLocating = false;
-          _useLocation = false;
-          _locationError = permission == LocationPermission.deniedForever
-              ? 'Izin lokasi diblokir permanen. Aktifkan manual lewat pengaturan aplikasi, atau isi alamat manual di bawah.'
-              : 'Izin lokasi ditolak. Kamu tetap bisa isi alamat manual di bawah.';
+          _error = 'Izin lokasi diblokir permanen. Aktifkan lewat pengaturan aplikasi.';
+          _loading = false;
         });
         return;
       }
 
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        desiredAccuracy: LocationAccuracy.high,
       );
-      _pinLocation = latlng.LatLng(position.latitude, position.longitude);
-
-      final address = await _reverseGeocode(position.latitude, position.longitude);
-
-      if (address == null || address.trim().isEmpty) {
-        setState(() {
-          _isLocating = false;
-          _locationError = 'Alamat otomatis tidak ditemukan di titik ini. Tandai lokasimu di peta ya.';
-          _showPinMap = true;
-        });
-        return;
-      }
-
-      setState(() {
-        _addressController.text = address;
-        _resolvedLat = position.latitude;
-        _resolvedLng = position.longitude;
-        _isLocating = false;
-      });
+      await _terapkanKoordinat(position.latitude, position.longitude);
     } catch (e) {
       setState(() {
-        _isLocating = false;
-        _locationError = 'Gagal ambil lokasi: $e';
-        _showPinMap = true;
+        _error = 'Gagal ambil lokasi. Coba lagi ya.';
+        _loading = false;
       });
     }
   }
 
-  Future<String?> _reverseGeocode(double lat, double lon) async {
-    try {
-      final placemarks = await geocoding.placemarkFromCoordinates(lat, lon);
-      if (placemarks.isEmpty) return null;
-      final p = placemarks.first;
-      final parts = [p.street, p.subLocality, p.locality, p.subAdministrativeArea]
-          .where((s) => s != null && s.trim().isNotEmpty)
-          .toList();
-      if (parts.isEmpty) return null;
-      return parts.join(', ');
-    } catch (_) {
-      return null;
-    }
+  // ── Opsi 2: Pilih Lokasi di Peta (manual) ──
+  Future<void> _pilihLokasiDiPeta() async {
+    final hasil = await Navigator.push<ll.LatLng>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(initialLat: _lat, initialLng: _lng),
+      ),
+    );
+
+    if (hasil == null) return; // user batal / back tanpa pilih
+
+    setState(() => _loading = true);
+    await _terapkanKoordinat(hasil.latitude, hasil.longitude);
   }
 
-  Future<void> _useThisPin() async {
-    setState(() => _isLocating = true);
-    final address = await _reverseGeocode(_pinLocation.latitude, _pinLocation.longitude);
-    setState(() {
-      _isLocating = false;
-      _resolvedLat = _pinLocation.latitude;
-      _resolvedLng = _pinLocation.longitude;
-      _addressController.text = address ??
-          'Titik lokasi: ${_pinLocation.latitude.toStringAsFixed(5)}, ${_pinLocation.longitude.toStringAsFixed(5)}';
-    });
-  }
-
-  bool _isSaving = false;
-
-  Future<void> _handleSave() async {
-    final text = _addressController.text.trim();
+  void _simpan() {
+    final text = _controller.text.trim();
     if (text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Alamat tidak boleh kosong')),
-      );
+      setState(() => _error = 'Isi alamat dulu, atau pilih lokasi lewat GPS/peta.');
       return;
     }
-    setState(() => _isSaving = true);
-    try {
-      await AddressManager.instance.setAddress(
-        DeliveryAddress(text: text, lat: _resolvedLat, lng: _resolvedLng),
-      );
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menyimpan alamat: $e')),
-        );
-      }
-    }
+    AddressManager.instance.setAddress(
+      DeliveryAddress(text: text, lat: _lat, lng: _lng),
+    );
+    Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
+      // Biar sheet naik pas keyboard muncul
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.72,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) {
-          return Container(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
             ),
-            child: ListView(
-              controller: scrollController,
+            Text('Alamat Pengiriman', style: _as(size: 18, weight: FontWeight.bold)),
+            const SizedBox(height: 16),
+
+            // ── Dua opsi ambil lokasi, sejajar ──
+            Row(
               children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.black12,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
+                Expanded(
+                  child: _opsiLokasiButton(
+                    icon: Icons.my_location_rounded,
+                    label: 'Lokasi Saat Ini',
+                    onTap: _loading ? null : _gunakanLokasiSaatIni,
                   ),
                 ),
-                Text(
-                  'Ganti Alamat',
-                  style: GoogleFonts.manrope(fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Isi manual, atau nyalakan lokasi buat auto-isi.',
-                  style: GoogleFonts.manrope(fontSize: 12.5, color: Colors.black54),
-                ),
-                const SizedBox(height: 16),
-
-                TextField(
-                  controller: _addressController,
-                  maxLines: 3,
-                  style: GoogleFonts.manrope(fontSize: 13.5),
-                  decoration: InputDecoration(
-                    hintText: 'Contoh: Jl. Mawar No. 12, RT 03, Balikpapan',
-                    hintStyle: GoogleFonts.manrope(fontSize: 12.5, color: Colors.black38),
-                    filled: true,
-                    fillColor: Colors.grey.shade100,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.all(14),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: SwitchListTile(
-                    value: _useLocation,
-                    onChanged: _isLocating ? null : _handleUseLocationToggle,
-                    activeColor: _kGreen,
-                    title: Text(
-                      'Gunakan lokasi saat ini',
-                      style: GoogleFonts.manrope(fontSize: 13.5, fontWeight: FontWeight.w700),
-                    ),
-                    subtitle: Text(
-                      'Opsional — alamat otomatis terisi dari GPS',
-                      style: GoogleFonts.manrope(fontSize: 11, color: Colors.black54),
-                    ),
-                  ),
-                ),
-
-                if (_isLocating) ...[
-                  const SizedBox(height: 14),
-                  const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _kGreen)),
-                ],
-
-                if (_locationError != null) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    _locationError!,
-                    style: GoogleFonts.manrope(fontSize: 11.5, color: Colors.red.shade700),
-                  ),
-                ],
-
-                if (_showPinMap) ...[
-                  const SizedBox(height: 14),
-                  Text(
-                    'Tandai lokasi di peta',
-                    style: GoogleFonts.manrope(fontSize: 13, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: SizedBox(
-                      height: 220,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          FlutterMap(
-                            options: MapOptions(
-                              initialCenter: _pinLocation,
-                              initialZoom: 16,
-                              onPositionChanged: (camera, hasGesture) {
-                                if (hasGesture) _pinLocation = camera.center;
-                              },
-                            ),
-                            children: [
-                              TileLayer(
-                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName: 'com.nemu.app', // TODO: sesuaikan applicationId project kamu
-                              ),
-                              RichAttributionWidget(
-                                attributions: [
-                                  TextSourceAttribution('OpenStreetMap contributors'),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const IgnorePointer(
-                            child: Icon(Icons.location_on, size: 40, color: Colors.redAccent),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Geser peta sampai pin merah tepat di lokasimu.',
-                    style: GoogleFonts.manrope(fontSize: 10.5, color: Colors.black45),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: _isLocating ? null : _useThisPin,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: _kGreen,
-                        side: const BorderSide(color: _kGreen),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: Text('Pakai Titik Ini', style: GoogleFonts.manrope(fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isSaving ? null : _handleSave,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _kGreen,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : Text(
-                            'Simpan Alamat',
-                            style: GoogleFonts.manrope(color: Colors.white, fontWeight: FontWeight.w700),
-                          ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _opsiLokasiButton(
+                    icon: Icons.map_rounded,
+                    label: 'Pilih di Peta',
+                    onTap: _loading ? null : _pilihLokasiDiPeta,
                   ),
                 ),
               ],
             ),
-          );
-        },
+
+            if (_loading) ...[
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: _aGreen),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('Memproses lokasi...', style: _as(size: 12, color: Colors.black45)),
+                ],
+              ),
+            ],
+
+            if (_lat != null && _lng != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Titik lokasi: ${_lat!.toStringAsFixed(5)}, ${_lng!.toStringAsFixed(5)}',
+                style: _as(size: 11, color: Colors.black45),
+              ),
+            ],
+
+            const SizedBox(height: 16),
+            Text('Atau tulis manual', style: _as(size: 12, color: Colors.black45)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _controller,
+              maxLines: 2,
+              style: _as(size: 14),
+              decoration: InputDecoration(
+                hintText: 'Contoh: Jl. Marsma Iswahyudi No. 10, Sepinggan',
+                hintStyle: _as(size: 13, color: Colors.black38),
+                filled: true,
+                fillColor: Colors.grey.shade50,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.all(14),
+              ),
+              onChanged: (_) {
+                // Kalau user ngetik manual, koordinat lama dianggap tidak
+                // relevan lagi -- dikosongkan supaya ongkir jarak fallback
+                // ke perkiraan, bukan salah pakai titik lama.
+                if (_lat != null || _lng != null) {
+                  setState(() {
+                    _lat = null;
+                    _lng = null;
+                  });
+                }
+              },
+            ),
+
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!, style: _as(size: 12, color: Colors.redAccent)),
+            ],
+
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: _simpan,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                decoration: BoxDecoration(
+                  color: _aGreen,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Center(
+                  child: Text(
+                    'Simpan Alamat',
+                    style: _as(size: 14, weight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _opsiLokasiButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: _aGreen.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _aGreen.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: _aGreen, size: 20),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: _as(size: 12.5, weight: FontWeight.bold, color: _aGreen),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
