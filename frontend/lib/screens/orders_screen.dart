@@ -2,8 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/services/address_manager.dart';
+<<<<<<< HEAD
 import 'package:frontend/services/orders_manager.dart';
 import 'package:frontend/services/order_tracking_service.dart';
+=======
+import 'package:frontend/models/orders_manager.dart';
+>>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
 import 'package:frontend/widgets/address_editor_sheet.dart';
 import 'package:frontend/widgets/live_tracking_map.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -31,10 +35,12 @@ TextStyle _manrope({
 );
 
 // ─────────────────────────────────────────────
-//  Model: Order History
+//  Model: Order History (dipetakan langsung dari
+//  dokumen Firestore collection('orders'))
 // ─────────────────────────────────────────────
 class OrderHistoryItem {
-  final String id;
+  final String docId;
+  final String id; // orderCode
   final String storeName;
   final String marketName;
   final String date;
@@ -42,10 +48,12 @@ class OrderHistoryItem {
   final int totalPrice;
   final String statusLabel;
   final Color statusColor;
+  final String rawStatus;
   double? ratingStore;
   double? ratingMarket;
 
   OrderHistoryItem({
+    required this.docId,
     required this.id,
     required this.storeName,
     required this.marketName,
@@ -54,9 +62,67 @@ class OrderHistoryItem {
     required this.totalPrice,
     required this.statusLabel,
     required this.statusColor,
+    required this.rawStatus,
     this.ratingStore,
     this.ratingMarket,
   });
+
+  factory OrderHistoryItem.fromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
+    final status = (data['status'] as String?) ?? kStatusMenungguKonfirmasi;
+
+    String label;
+    Color color;
+    switch (status) {
+      case kStatusMenungguKonfirmasi:
+        label = 'Menunggu Konfirmasi';
+        color = Colors.orange;
+        break;
+      case kStatusDikemas:
+        label = 'Diproses';
+        color = Colors.blue;
+        break;
+      case kStatusDalamPengantaran:
+        label = 'Diantar';
+        color = Colors.orange;
+        break;
+      case kStatusSelesai:
+        label = 'Selesai';
+        color = _green;
+        break;
+      case kStatusDibatalkan:
+        label = 'Dibatalkan';
+        color = Colors.red;
+        break;
+      default:
+        label = status;
+        color = Colors.grey;
+    }
+
+    final createdAt = data['createdAt'];
+    String dateLabel = 'Hari ini';
+    if (createdAt is Timestamp) {
+      final dt = createdAt.toDate();
+      final now = DateTime.now();
+      final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+      dateLabel = isToday
+          ? 'Hari ini, ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'
+          : '${dt.day}/${dt.month}/${dt.year}';
+    }
+
+    return OrderHistoryItem(
+      docId: doc.id,
+      id: (data['orderCode'] as String?) ?? doc.id,
+      storeName: (data['namaGerai'] as String?) ?? 'Gerai',
+      marketName: (data['namaMarket'] as String?) ?? '',
+      date: dateLabel,
+      items: (data['itemsSummary'] as String?) ?? '',
+      totalPrice: (data['totalPrice'] as num?)?.toInt() ?? 0,
+      statusLabel: label,
+      statusColor: color,
+      rawStatus: status,
+    );
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -77,6 +143,7 @@ class _OrdersScreenState extends State<OrdersScreen>
   late AnimationController _kurirCardAnim;
   late Animation<double> _pulseAnimation;
 
+<<<<<<< HEAD
   // ── State ──
   int _currentStep = 1; // 0=Diterima, 1=Diproses, 2=Diantar, 3=Selesai
 
@@ -97,18 +164,12 @@ class _OrdersScreenState extends State<OrdersScreen>
   StreamSubscription<Position>? _myLocationSub;
   String? _lastKnownStatus;
 
+=======
+>>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
   @override
   void initState() {
     super.initState();
     _listenOrderStatusForLocationSharing();
-
-    // Ambil state pesanan yang udah ada di OrdersManager (mis. baru aja
-    // dipesan dari checkout_screen.dart), lalu dengerin perubahan
-    // selanjutnya biar layar ini selalu update tanpa perlu di-refresh manual.
-    _activeOrder = OrdersManager.instance.activeOrder.value;
-    _orderHistory = List.of(OrdersManager.instance.history.value);
-    OrdersManager.instance.activeOrder.addListener(_onActiveOrderChanged);
-    OrdersManager.instance.history.addListener(_onHistoryChanged);
 
     _progressAnim = AnimationController(
       vsync: this,
@@ -129,6 +190,14 @@ class _OrdersScreenState extends State<OrdersScreen>
       begin: 0.9,
       end: 1.05,
     ).animate(CurvedAnimation(parent: _pulseAnim, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _progressAnim.dispose();
+    _pulseAnim.dispose();
+    _kurirCardAnim.dispose();
+    super.dispose();
   }
 
   // ──────────────────────────────────────────
@@ -191,6 +260,7 @@ class _OrdersScreenState extends State<OrdersScreen>
     );
   }
 
+<<<<<<< HEAD
   void _listenOrderStatusForLocationSharing() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
@@ -261,10 +331,13 @@ class _OrdersScreenState extends State<OrdersScreen>
     super.dispose();
   }
 
+=======
+>>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
 
+<<<<<<< HEAD
     return StreamBuilder<DocumentSnapshot>(
       stream: uid == null
           ? const Stream.empty()
@@ -301,6 +374,36 @@ class _OrdersScreenState extends State<OrdersScreen>
               )
             : null;
 
+=======
+    if (uid == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFD9DF36),
+        body: Center(
+          child: Text('Silakan login untuk melihat pesanan.', style: _manrope(size: 13, color: _dark)),
+        ),
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: OrdersManager.instance.activeOrdersStream(),
+      builder: (context, activeSnap) {
+        final activeDocs = activeSnap.data?.docs ?? [];
+        final activeOrders = activeDocs.map(OrderHistoryItem.fromDoc).toList();
+        // Ambil pesanan aktif paling baru untuk ditampilkan di live tracker
+        final OrderHistoryItem? activeOrder = activeOrders.isNotEmpty ? activeOrders.first : null;
+
+        int currentStep = 1; // default: Diproses / dikemas
+        if (activeOrder != null) {
+          if (activeOrder.rawStatus == kStatusDalamPengantaran) {
+            currentStep = 2;
+          } else if (activeOrder.rawStatus == kStatusDikemas) {
+            currentStep = 1;
+          } else if (activeOrder.rawStatus == kStatusMenungguKonfirmasi) {
+            currentStep = 0;
+          }
+        }
+
+>>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
         return Scaffold(
           backgroundColor: const Color(0xFFD9DF36),
           body: Stack(
@@ -317,41 +420,13 @@ class _OrdersScreenState extends State<OrdersScreen>
               ),
 
               // ── Blob Dekorasi Standar ──
-              Positioned(
-                top: -40,
-                right: -50,
-                child: _blob(200, Colors.white.withOpacity(0.12)),
-              ),
-              Positioned(
-                top: 80,
-                left: -60,
-                child: _blob(160, Colors.white.withOpacity(0.10)),
-              ),
-              Positioned(
-                top: 220,
-                right: 20,
-                child: _blob(80, Colors.white.withOpacity(0.08)),
-              ),
-              Positioned(
-                top: 300,
-                left: 30,
-                child: _blob(18, Colors.white.withOpacity(0.20)),
-              ),
-              Positioned(
-                top: 340,
-                right: 60,
-                child: _blob(10, Colors.white.withOpacity(0.18)),
-              ),
-              Positioned(
-                bottom: 200,
-                right: -40,
-                child: _blob(150, const Color(0xFFD9DF36).withOpacity(0.18)),
-              ),
-              Positioned(
-                bottom: 350,
-                left: 10,
-                child: _blob(14, Colors.white.withOpacity(0.15)),
-              ),
+              Positioned(top: -40, right: -50, child: _blob(200, Colors.white.withOpacity(0.12))),
+              Positioned(top: 80, left: -60, child: _blob(160, Colors.white.withOpacity(0.10))),
+              Positioned(top: 220, right: 20, child: _blob(80, Colors.white.withOpacity(0.08))),
+              Positioned(top: 300, left: 30, child: _blob(18, Colors.white.withOpacity(0.20))),
+              Positioned(top: 340, right: 60, child: _blob(10, Colors.white.withOpacity(0.18))),
+              Positioned(bottom: 200, right: -40, child: _blob(150, const Color(0xFFD9DF36).withOpacity(0.18))),
+              Positioned(bottom: 350, left: 10, child: _blob(14, Colors.white.withOpacity(0.15))),
 
               // ── Content ──
               SafeArea(
@@ -396,63 +471,93 @@ class _OrdersScreenState extends State<OrdersScreen>
                       ],
                     ],
 
-                    // ── Riwayat Pesanan ──
+                    // ── Riwayat Pesanan (StreamBuilder terpisah, realtime) ──
                     SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.history_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Riwayat Pesanan',
-                              style: _manrope(
-                                size: 16,
-                                weight: FontWeight.bold,
-                                color: _dark,
-                              ),
-                            ),
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                '${_orderHistory.length} pesanan',
-                                style: _manrope(
-                                  size: 11,
-                                  weight: FontWeight.w600,
-                                  color: _dark,
+                      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                        stream: OrdersManager.instance.orderHistoryStream(),
+                        builder: (context, historySnap) {
+                          final historyDocs = historySnap.data?.docs ?? [];
+                          final orderHistory = historyDocs.map(OrderHistoryItem.fromDoc).toList();
+
+                          return Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.history_rounded,
+                                  color: Colors.white,
+                                  size: 20,
                                 ),
-                              ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Riwayat Pesanan',
+                                  style: _manrope(
+                                    size: 16,
+                                    weight: FontWeight.bold,
+                                    color: _dark,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '${orderHistory.length} pesanan',
+                                    style: _manrope(
+                                      size: 11,
+                                      weight: FontWeight.w600,
+                                      color: _dark,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ),
 
-                    SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, i) => Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            16,
-                            0,
-                            16,
-                            i == _orderHistory.length - 1 ? 24 : 10,
+                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: OrdersManager.instance.orderHistoryStream(),
+                      builder: (context, historySnap) {
+                        final historyDocs = historySnap.data?.docs ?? [];
+                        final orderHistory = historyDocs.map(OrderHistoryItem.fromDoc).toList();
+
+                        if (orderHistory.isEmpty) {
+                          return SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                              child: Center(
+                                child: Text(
+                                  'Belum ada riwayat pesanan.',
+                                  style: _manrope(size: 12, color: Colors.black45),
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+
+                        return SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, i) => Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                16,
+                                0,
+                                16,
+                                i == orderHistory.length - 1 ? 24 : 10,
+                              ),
+                              child: _buildHistoryCard(orderHistory[i]),
+                            ),
+                            childCount: orderHistory.length,
                           ),
-                          child: _buildHistoryCard(_orderHistory[i]),
-                        ),
-                        childCount: _orderHistory.length,
-                      ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -768,6 +873,7 @@ class _OrdersScreenState extends State<OrdersScreen>
           ),
 
           const SizedBox(height: 16),
+<<<<<<< HEAD
           Builder(builder: (context) {
             late final IconData icon;
             late final String title;
@@ -821,6 +927,48 @@ class _OrdersScreenState extends State<OrdersScreen>
                         ),
                       ],
                     ),
+=======
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: currentStep <= 1 ? Colors.blue.withOpacity(0.06) : _green.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: currentStep <= 1 ? Colors.blue.withOpacity(0.2) : _green.withOpacity(0.2)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  currentStep <= 1 ? Icons.inventory_2_rounded : Icons.two_wheeler_rounded,
+                  color: currentStep <= 1 ? Colors.blue : _green,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        currentStep == 0
+                            ? 'Menunggu konfirmasi dari penjual'
+                            : currentStep == 1
+                                ? 'Pesanan Anda sedang dikemas oleh pedagang'
+                                : 'Pesanan Anda sedang dalam pengantaran oleh kurir',
+                        style: _manrope(
+                          size: 12,
+                          weight: FontWeight.bold,
+                          color: _dark,
+                        ),
+                      ),
+                      Text(
+                        currentStep == 0
+                            ? 'Mohon tunggu sebentar'
+                            : currentStep == 1
+                                ? 'Estimasi siap: 5–10 menit lagi'
+                                : 'Estimasi tiba: 8–12 menit lagi',
+                        style: _manrope(size: 11, color: Colors.black54),
+                      ),
+                    ],
+>>>>>>> 4084a683add0349e9b8fda954e8b38c68013c6d2
                   ),
                   if (status == OrderStatus.menungguDriver)
                     const SizedBox(
@@ -1357,9 +1505,6 @@ class _OrdersScreenState extends State<OrdersScreen>
   //  SHEETS & MODALS
   // ──────────────────────────────────────────
 
-  /// Sheet: Ubah Alamat -- pakai AddressEditorSheet yang sama dengan
-  /// home_screen.dart & checkout_screen.dart (baca/tulis AddressManager),
-  /// jadi nggak ada lagi daftar alamat palsu yang terpisah di sini.
   void _showChangeAddressSheet() {
     showModalBottomSheet(
       context: context,
@@ -1589,7 +1734,10 @@ class _OrdersScreenState extends State<OrdersScreen>
     );
   }
 
-  /// Modal: Rating Gerai & Pasar (Tanpa Emoji)
+  /// Modal: Rating Gerai & Pasar
+  /// CATATAN: rating masih disimpan lokal di objek (tidak dipersist ke
+  /// Firestore). Kalau mau permanen, tambahkan write ke field
+  /// 'ratingStore' / 'ratingMarket' pada dokumen order terkait di sini.
   void _showRatingModal(OrderHistoryItem order) {
     double ratingStore = 0;
     double ratingMarket = 0;
@@ -1618,7 +1766,6 @@ class _OrdersScreenState extends State<OrdersScreen>
                 ),
                 const SizedBox(height: 20),
 
-                // Rating Gerai
                 _ratingSection(
                   icon: Icons.storefront_rounded,
                   title: 'Gerai: ${order.storeName}',
@@ -1627,7 +1774,6 @@ class _OrdersScreenState extends State<OrdersScreen>
                 ),
                 const SizedBox(height: 16),
 
-                // Rating Pasar
                 _ratingSection(
                   icon: Icons.store_mall_directory_rounded,
                   title: 'Pasar: ${order.marketName}',
@@ -1652,11 +1798,21 @@ class _OrdersScreenState extends State<OrdersScreen>
                       flex: 2,
                       child: ElevatedButton(
                         onPressed: ratingStore > 0 && ratingMarket > 0
-                            ? () {
-                                setState(() {
-                                  order.ratingStore = ratingStore;
-                                  order.ratingMarket = ratingMarket;
-                                });
+                            ? () async {
+                                order.ratingStore = ratingStore;
+                                order.ratingMarket = ratingMarket;
+                                try {
+                                  await FirebaseFirestore.instance
+                                      .collection('orders')
+                                      .doc(order.docId)
+                                      .update({
+                                    'ratingStore': ratingStore,
+                                    'ratingMarket': ratingMarket,
+                                  });
+                                } catch (_) {
+                                  // Abaikan jika gagal, UI lokal tetap terupdate
+                                }
+                                if (!mounted) return;
                                 Navigator.pop(ctx);
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
