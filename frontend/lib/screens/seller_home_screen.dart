@@ -86,6 +86,9 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     ),
   ];
 
+  // ── Mock driver yang sudah terdaftar di gerai ──
+  final List<_SellerDriver> _assignedDrivers = [];
+
   @override
   void initState() {
     super.initState();
@@ -180,22 +183,16 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
               _buildStoreHeader(),
               const SizedBox(height: 16),
 
-              // 2. Alert Pesanan Baru
-              if (_pendingOrders.isNotEmpty) ...[
-                _buildOrderAlertSection(),
-                const SizedBox(height: 20),
-              ],
+              // 2. Alert Pesanan Baru (real-time dari Firestore)
+              _buildOrderAlertSection(),
+              const SizedBox(height: 20),
 
               // 3. Katalog Produk (Firestore real-time)
               _buildProductsSection(),
-              const SizedBox(height: 14),
+              const SizedBox(height: 32),
 
               // 3b. Placeholder Tambah Driver
               _buildAddDriverSection(),
-              const SizedBox(height: 20),
-
-              // 4. Quick Action Grid
-              _buildQuickActions(),
             ],
           ),
         ),
@@ -387,13 +384,26 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   //  2. ALERT PESANAN BARU
   // ──────────────────────────────────────────
   Widget _buildOrderAlertSection() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const SizedBox.shrink();
+
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('simulated_orders')
-          .where('status', whereIn: ['dikemas', 'dalam_pengantaran'])
+          .collection('orders')
+          .where('sellerId', isEqualTo: uid)
+          .where('status', whereIn: ['menunggu_konfirmasi', 'dikemas', 'dalam_pengantaran'])
+          .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        final docs = snapshot.data?.docs ?? [];
+        if (snapshot.hasError) {
+          return const SizedBox.shrink();
+        }
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) return const SizedBox.shrink();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -414,43 +424,45 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(color: Colors.red.shade500, borderRadius: BorderRadius.circular(20)),
-                  child: Text('${docs.length + _pendingOrders.length}', style: _ms(size: 10, weight: FontWeight.bold, color: Colors.white)),
+                  child: Text('${docs.length}', style: _ms(size: 10, weight: FontWeight.bold, color: Colors.white)),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            ...docs.map((doc) => _buildSimulatedOrderCard(doc)),
-            ..._pendingOrders.map((order) => _buildOrderCard(order)),
+            ...docs.map((doc) => _buildRealOrderCard(doc)),
           ],
         );
       },
     );
   }
 
-  Widget _buildSimulatedOrderCard(DocumentSnapshot doc) {
+  Widget _buildRealOrderCard(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    final orderId = data['id'] ?? 'ORD-XXXX';
-    final buyerName = data['buyerName'] ?? 'Pembeli';
-    final items = data['items'] ?? '';
+    final orderId = (data['orderCode'] as String?) ?? doc.id;
+    final buyerName = (data['buyerName'] as String?) ?? 'Pembeli';
+    final items = (data['itemsSummary'] as String?) ?? '';
     final totalPrice = (data['totalPrice'] as num?)?.toInt() ?? 0;
-    final status = data['status'] ?? 'dikemas';
-    final isPackaging = status == 'dikemas';
+    final status = (data['status'] as String?) ?? 'menunggu_konfirmasi';
+
+    final bool isWaiting = status == 'menunggu_konfirmasi';
+    final bool isPackaging = status == 'dikemas';
+
+    final Color accent = isWaiting
+        ? Colors.orange
+        : (isPackaging ? _selAmber : _selGreen);
+
+    final String badgeText = isWaiting
+        ? '⏳ Menunggu Konfirmasi'
+        : (isPackaging ? '⏳ Sedang Dikemas' : '🛵 Dalam Pengantaran');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isPackaging ? _selAmber.withValues(alpha: 0.4) : _selGreen.withValues(alpha: 0.4),
-          width: 1.5,
-        ),
+        border: Border.all(color: accent.withValues(alpha: 0.4), width: 1.5),
         boxShadow: [
-          BoxShadow(
-            color: (isPackaging ? _selAmber : _selGreen).withValues(alpha: 0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          )
+          BoxShadow(color: accent.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -458,37 +470,27 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: (isPackaging ? _selAmber : _selGreen).withValues(alpha: 0.06),
+              color: accent.withValues(alpha: 0.06),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
             ),
             child: Row(
               children: [
                 Container(
                   padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    color: (isPackaging ? _selAmber : _selGreen).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Icon(Icons.receipt_long_rounded, size: 14, color: isPackaging ? _selAmber : _selGreen),
+                  decoration: BoxDecoration(color: accent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                  child: Icon(Icons.receipt_long_rounded, size: 14, color: accent),
                 ),
                 const SizedBox(width: 8),
-                Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: isPackaging ? _selAmber : _selGreen)),
+                Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: accent)),
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: isPackaging ? Colors.orange.shade50 : Colors.green.shade50,
+                    color: accent.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: isPackaging ? Colors.orange.shade200 : Colors.green.shade200),
+                    border: Border.all(color: accent.withValues(alpha: 0.3)),
                   ),
-                  child: Text(
-                    isPackaging ? '⏳ Sedang Dikemas' : '🛵 Dalam Pengantaran',
-                    style: _ms(
-                      size: 9,
-                      weight: FontWeight.bold,
-                      color: isPackaging ? Colors.orange.shade700 : Colors.green.shade700,
-                    ),
-                  ),
+                  child: Text(badgeText, style: _ms(size: 9, weight: FontWeight.bold, color: accent)),
                 ),
               ],
             ),
@@ -516,19 +518,40 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   children: [
                     Text('Total: Rp${_formatRupiah(totalPrice)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
                     const Spacer(),
-                    if (isPackaging)
+                    if (isWaiting) ...[
+                      OutlinedButton(
+                        onPressed: () => _handleRejectOrder(doc.reference, orderId, buyerName),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red.shade600,
+                          side: BorderSide(color: Colors.red.shade300),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text('Tolak', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.red.shade600)),
+                      ),
+                      const SizedBox(width: 8),
                       ElevatedButton(
-                        onPressed: () async {
-                          HapticFeedback.mediumImpact();
-                          await doc.reference.update({'status': 'dalam_pengantaran'});
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Pesanan $orderId diserahkan ke kurir!', style: _ms(size: 12, color: Colors.white)),
-                              backgroundColor: _selGreen,
-                            ),
-                          );
-                        },
+                        onPressed: () => _handleAcceptOrder(doc.reference, orderId),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _selGreen,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text('Terima ✓', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
+                      ),
+                    ] else if (isPackaging)
+                      ElevatedButton(
+                        onPressed: () => _updateOrderStatus(
+                          doc.reference,
+                          'dalam_pengantaran',
+                          successMessage: 'Pesanan $orderId diserahkan ke kurir!',
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _selAmber,
                           foregroundColor: Colors.white,
@@ -542,17 +565,11 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                       )
                     else
                       ElevatedButton(
-                        onPressed: () async {
-                          HapticFeedback.mediumImpact();
-                          await doc.reference.update({'status': 'selesai'});
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Pesanan $orderId telah diselesaikan!', style: _ms(size: 12, color: Colors.white)),
-                              backgroundColor: _selGreen,
-                            ),
-                          );
-                        },
+                        onPressed: () => _updateOrderStatus(
+                          doc.reference,
+                          'selesai',
+                          successMessage: 'Pesanan $orderId telah diselesaikan!',
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _selGreen,
                           foregroundColor: Colors.white,
@@ -574,134 +591,69 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-  Widget _buildOrderCard(_SellerOrder order) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _selAmber.withValues(alpha: 0.4), width: 1.5),
-        boxShadow: [BoxShadow(color: _selAmber.withValues(alpha: 0.12), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: _selAmber.withValues(alpha: 0.06),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(color: _selAmber.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-                  child: Icon(Icons.receipt_long_rounded, size: 14, color: _selAmber),
-                ),
-                const SizedBox(width: 8),
-                Text(order.id, style: _ms(size: 12, weight: FontWeight.bold, color: _selAmber)),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Text('⏳ Menunggu Konfirmasi', style: _ms(size: 9, weight: FontWeight.bold, color: Colors.orange.shade700)),
-                ),
-              ],
-            ),
+  // ── Update status pesanan langsung ke Firestore (data real) ──
+  Future<void> _updateOrderStatus(
+    DocumentReference ref,
+    String newStatus, {
+    String? successMessage,
+  }) async {
+    HapticFeedback.mediumImpact();
+    try {
+      await ref.update({
+        'status': newStatus,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted && successMessage != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(successMessage, style: _ms(size: 12, color: Colors.white)),
+            backgroundColor: _selGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 2),
           ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.person_rounded, size: 14, color: Colors.black38),
-                    const SizedBox(width: 6),
-                    Text(order.buyerName, style: _ms(size: 12, weight: FontWeight.w600)),
-                    const Spacer(),
-                    const Icon(Icons.schedule_rounded, size: 12, color: Colors.black38),
-                    const SizedBox(width: 4),
-                    Text(order.eta, style: _ms(size: 10, color: Colors.black38)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(order.items, style: _ms(size: 11, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text('Total: Rp${_formatRupiah(order.total)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
-                    const Spacer(),
-                    OutlinedButton(
-                      onPressed: () => _handleRejectOrder(order),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red.shade600,
-                        side: BorderSide(color: Colors.red.shade300),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text('Tolak', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.red.shade600)),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () => _handleAcceptOrder(order),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _selGreen,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text('Terima ✓', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memperbarui pesanan: $e', style: _ms(size: 12, color: Colors.white)),
+            backgroundColor: Colors.red.shade500,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
-        ],
-      ),
+        );
+      }
+    }
+  }
+
+  void _handleAcceptOrder(DocumentReference ref, String orderId) {
+    _updateOrderStatus(
+      ref,
+      'dikemas',
+      successMessage: 'Pesanan $orderId diterima!',
     );
   }
 
-  void _handleAcceptOrder(_SellerOrder order) {
-    HapticFeedback.mediumImpact();
-    setState(() => _pendingOrders.remove(order));
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Row(children: [
-        const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
-        const SizedBox(width: 8),
-        Text('Pesanan ${order.id} diterima!', style: _ms(size: 12, color: Colors.white)),
-      ]),
-      backgroundColor: _selGreen,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      duration: const Duration(seconds: 2),
-    ));
-  }
-
-  void _handleRejectOrder(_SellerOrder order) {
+  void _handleRejectOrder(DocumentReference ref, String orderId, String buyerName) {
     HapticFeedback.mediumImpact();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Tolak Pesanan?', style: _ms(size: 17, weight: FontWeight.bold)),
-        content: Text('${order.id} dari ${order.buyerName} akan dibatalkan.', style: _ms(size: 13, color: Colors.black54)),
+        content: Text('$orderId dari $buyerName akan dibatalkan.', style: _ms(size: 13, color: Colors.black54)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Batal', style: _ms(size: 13, color: Colors.black54))),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              setState(() => _pendingOrders.remove(order));
+              _updateOrderStatus(
+                ref,
+                'dibatalkan',
+                successMessage: 'Pesanan $orderId ditolak.',
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade500,
@@ -897,7 +849,18 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   color: _selGreen.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Center(child: Text(icon, style: const TextStyle(fontSize: 42))),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: ((data['image_url'] as String?) ?? (data['imageUrl'] as String?) ?? '').trim().isEmpty
+                      ? Center(child: Text(icon, style: const TextStyle(fontSize: 42)))
+                      : Image.network(
+                          (data['image_url'] as String?) ?? (data['imageUrl'] as String?) ?? '',
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          errorBuilder: (_, __, ___) => Center(child: Text(icon, style: const TextStyle(fontSize: 42))),
+                        ),
+                ),
               ),
               Positioned(
                 top: 6,
@@ -1442,11 +1405,11 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   }
 
   Widget _buildManageProductTile(String docId, Map<String, dynamic> data) {
-    final name = data['product_name'] as String? ?? 'Produk';
+    final name = data['product_name'] as String? ?? data['name'] as String? ?? 'Produk';
     final icon = data['category'] as String? ?? '🛒';
     final price = (data['price'] as num?)?.toInt() ?? 0;
     final stock = (data['stock'] as num?)?.toInt() ?? 0;
-
+    final imageUrl = (data['image_url'] as String?) ?? (data['imageUrl'] as String?) ?? '';
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1463,7 +1426,18 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
               color: _selGreen.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Center(child: Text(icon, style: const TextStyle(fontSize: 22))),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: imageUrl.trim().isEmpty
+                  ? Center(child: Text(icon, style: const TextStyle(fontSize: 22)))
+                  : Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (_, __, ___) => Center(child: Text(icon, style: const TextStyle(fontSize: 22))),
+                    ),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1668,6 +1642,8 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
+
+
   void _confirmDeleteProduct(String docId, String name) {
     HapticFeedback.mediumImpact();
     showDialog(
@@ -1710,10 +1686,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-  // ──────────────────────────────────────────
-  //  3b. PLACEHOLDER TAMBAH DRIVER
-  // ──────────────────────────────────────────
-  final List<_SellerDriver> _assignedDrivers = [];
+
 
   Widget _buildAddDriverSection() {
     return GestureDetector(
@@ -1936,7 +1909,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
       ],
     );
   }
-
   void _showComingSoon(String fitur) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('$fitur — Segera hadir!', style: _ms(size: 12, color: Colors.white)),
@@ -1975,6 +1947,20 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
 // ─────────────────────────────────────────────
 //  Model Classes (internal)
 // ─────────────────────────────────────────────
+class _QuickAction {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+}
+
 class _SellerOrder {
   final String id, buyerName, items, eta;
   final int total;
@@ -1986,10 +1972,320 @@ class _SellerDriver {
   const _SellerDriver({required this.name, required this.email});
 }
 
-class _QuickAction {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-  const _QuickAction({required this.icon, required this.label, required this.color, required this.onTap});
+class _SellerProduct {
+  final String? id;
+  final String name, imageUrl, unit;
+  final int price, stock;
+
+  const _SellerProduct({
+    this.id,
+    required this.name,
+    required this.imageUrl,
+    required this.unit,
+    required this.price,
+    required this.stock,
+  });
+
+  factory _SellerProduct.fromDoc(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>? ?? {};
+    return _SellerProduct(
+      id: doc.id,
+      name: (d['name'] as String?) ?? (d['product_name'] as String?) ?? '',
+      imageUrl: (d['imageUrl'] as String?) ?? (d['image_url'] as String?) ?? '',
+      unit: (d['unit'] as String?) ?? 'kg',
+      price: (d['price'] as num?)?.toInt() ?? 0,
+      stock: (d['stock'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'product_name': name,
+        'image_url': imageUrl,
+        'unit': unit,
+        'price': price,
+        'stock': stock,
+      };
+}
+
+// ─────────────────────────────────────────────
+//  Dialog Tambah/Edit Produk
+// ─────────────────────────────────────────────
+class _ProductFormDialog extends StatefulWidget {
+  final _SellerProduct? existing;
+  final Color selGreen;
+  final TextStyle Function({double size, FontWeight weight, Color color, double? height}) textStyle;
+  final void Function(_SellerProduct product) onSave;
+
+  const _ProductFormDialog({
+    required this.existing,
+    required this.selGreen,
+    required this.textStyle,
+    required this.onSave,
+  });
+
+  @override
+  State<_ProductFormDialog> createState() => _ProductFormDialogState();
+}
+
+class _ProductFormDialogState extends State<_ProductFormDialog> {
+  late final TextEditingController nameCtrl;
+  late final TextEditingController imageUrlCtrl;
+  late final TextEditingController unitCtrl;
+  late final TextEditingController priceCtrl;
+  late final TextEditingController stockCtrl;
+  final formKey = GlobalKey<FormState>();
+
+  bool _imageLoadFailed = false;
+  String _lastCheckedUrl = '';
+  bool _isSaving = false;
+
+  bool get isEdit => widget.existing != null;
+
+  bool _looksLikeDirectImageUrl(String url) {
+    if (url.isEmpty) return true;
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme || !(uri.scheme == 'http' || uri.scheme == 'https')) {
+      return false;
+    }
+    final path = uri.path.toLowerCase();
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.bmp'];
+    final hasImageExtension = imageExtensions.any((ext) => path.endsWith(ext));
+    const knownImageCdnHosts = ['images.unsplash.com', 'cdn.pixabay.com', 'images.pexels.com'];
+    final isKnownCdn = knownImageCdnHosts.any((host) => uri.host.endsWith(host));
+    return hasImageExtension || isKnownCdn;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    nameCtrl = TextEditingController(text: widget.existing?.name ?? '');
+    imageUrlCtrl = TextEditingController(text: widget.existing?.imageUrl ?? '');
+    unitCtrl = TextEditingController(text: widget.existing?.unit ?? 'per kg');
+    priceCtrl = TextEditingController(text: widget.existing != null ? widget.existing!.price.toString() : '');
+    stockCtrl = TextEditingController(text: widget.existing != null ? widget.existing!.stock.toString() : '');
+  }
+
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    imageUrlCtrl.dispose();
+    unitCtrl.dispose();
+    priceCtrl.dispose();
+    stockCtrl.dispose();
+    super.dispose();
+  }
+
+  void _safeSetState(VoidCallback fn) {
+    if (mounted) setState(fn);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selGreen = widget.selGreen;
+    final ms = widget.textStyle;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      backgroundColor: Colors.white,
+      child: Container(
+        width: 340,
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(isEdit ? 'Edit Produk' : 'Tambah Produk', style: ms(size: 16, weight: FontWeight.bold)),
+                const SizedBox(height: 16),
+
+                // Preview foto dari URL
+                Container(
+                  width: double.infinity,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: selGreen.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: imageUrlCtrl.text.trim().isEmpty
+                        ? Center(
+                            child: Icon(Icons.image_outlined, size: 32, color: selGreen.withValues(alpha: 0.4)),
+                          )
+                        : !_looksLikeDirectImageUrl(imageUrlCtrl.text.trim())
+                            ? Center(
+                                child: Icon(Icons.image_not_supported_rounded, size: 28, color: selGreen.withValues(alpha: 0.4)),
+                              )
+                            : Image.network(
+                                imageUrlCtrl.text.trim(),
+                                key: ValueKey(imageUrlCtrl.text.trim()),
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: double.infinity,
+                                loadingBuilder: (context, child, progress) {
+                                  if (progress == null) return child;
+                                  return Center(
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: selGreen.withValues(alpha: 0.5)),
+                                    ),
+                                  );
+                                },
+                                errorBuilder: (context, error, stackTrace) {
+                                  final url = imageUrlCtrl.text.trim();
+                                  if (_lastCheckedUrl != url) {
+                                    _lastCheckedUrl = url;
+                                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      _safeSetState(() => _imageLoadFailed = true);
+                                    });
+                                  }
+                                  return Center(
+                                    child: Icon(Icons.image_not_supported_rounded, size: 28, color: selGreen.withValues(alpha: 0.4)),
+                                  );
+                                },
+                              ),
+                  ),
+                ),
+                if (_imageLoadFailed) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.error_outline_rounded, size: 15, color: Colors.orange.shade700),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Link ini bukan link gambar langsung, jadi tidak bisa dimuat. Buka gambarnya, klik kanan, lalu pilih "Salin alamat gambar" (Copy image address) — bukan menyalin link halaman.',
+                            style: ms(size: 10.5, color: Colors.orange.shade800, height: 1.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: imageUrlCtrl,
+                  keyboardType: TextInputType.url,
+                  onChanged: (value) => _safeSetState(() {
+                    final trimmed = value.trim();
+                    _imageLoadFailed = trimmed.isNotEmpty && !_looksLikeDirectImageUrl(trimmed);
+                    _lastCheckedUrl = '';
+                  }),
+                  decoration: InputDecoration(
+                    labelText: 'URL Foto Produk',
+                    labelStyle: ms(size: 12),
+                    hintText: 'https://...',
+                    hintStyle: ms(size: 11, color: Colors.black26),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Nama Produk',
+                    labelStyle: ms(size: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: unitCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Satuan (contoh: per kg)',
+                    labelStyle: ms(size: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Wajib diisi' : null,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: priceCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Harga (Rp)',
+                          labelStyle: ms(size: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                        validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextFormField(
+                        controller: stockCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Stok',
+                          labelStyle: ms(size: 12),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
+                        validator: (v) => (int.tryParse(v ?? '') == null) ? 'Harus angka' : null,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _isSaving ? null : () => Navigator.pop(context),
+                      child: Text('Batal', style: ms(size: 13, color: Colors.black54)),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _isSaving
+                          ? null
+                          : () {
+                              if (!formKey.currentState!.validate()) return;
+
+                              final newProduct = _SellerProduct(
+                                id: widget.existing?.id,
+                                name: nameCtrl.text.trim(),
+                                imageUrl: imageUrlCtrl.text.trim(),
+                                unit: unitCtrl.text.trim(),
+                                price: int.parse(priceCtrl.text.trim()),
+                                stock: int.parse(stockCtrl.text.trim()),
+                              );
+
+                              setState(() => _isSaving = true);
+                              Navigator.pop(context);
+                              widget.onSave(newProduct);
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: selGreen,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Text(isEdit ? 'Simpan' : 'Tambahkan', style: ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

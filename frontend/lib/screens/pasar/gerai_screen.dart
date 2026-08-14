@@ -5,6 +5,7 @@ import 'package:frontend/models/cart_model.dart';
 import 'package:frontend/screens/pasar/toko_screen.dart';
 import 'package:frontend/screens/pasar/firestore_toko_screen.dart';
 import 'package:frontend/services/store_service.dart';
+import 'package:frontend/services/favorite_gerai_service.dart';
 
 const Color _gGreen  = Color(0xFF007C3F);
 const Color _gYellow = Color(0xFFD9DF36);
@@ -230,6 +231,7 @@ class _GeraiScreenState extends State<GeraiScreen> {
         rating: gerai.rating,
         ulasan: gerai.ulasan,
         badge: null,
+        gerai: gerai,
       ),
     );
   }
@@ -274,6 +276,7 @@ class _GeraiScreenState extends State<GeraiScreen> {
     double? rating,
     int? ulasan,
     String? badge,
+    PasarGerai? gerai,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -370,10 +373,33 @@ class _GeraiScreenState extends State<GeraiScreen> {
               ),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.only(right: 12),
-            child: Icon(Icons.chevron_right_rounded, color: Colors.black26, size: 20),
-          ),
+          if (gerai != null)
+            StreamBuilder<Set<String>>(
+              stream: FavoriteGeraiService.instance.streamFavoriteIds(),
+              builder: (context, snap) {
+                final isSaved = snap.data?.contains(gerai.id) ?? false;
+                return GestureDetector(
+                  onTap: () => FavoriteGeraiService.instance.toggle(
+                    gerai: gerai,
+                    marketId: widget.market.id,
+                    namaMarket: widget.market.nama,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Icon(
+                      isSaved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                      color: isSaved ? _gGreen : Colors.black38,
+                      size: 22,
+                    ),
+                  ),
+                );
+              },
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: Icon(Icons.chevron_right_rounded, color: Colors.black26, size: 20),
+            ),
         ],
       ),
     );

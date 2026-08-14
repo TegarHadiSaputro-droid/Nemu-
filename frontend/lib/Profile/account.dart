@@ -24,8 +24,10 @@ import 'Edit Profile/edit_profile_page.dart';
 import 'Nemu+/nemu_plus_page.dart';
 import 'Kelola Toko/kelola_toko_page.dart';
 import 'Pusat Bantuan/pusat_bantuan_page.dart';
+import 'Favorite/favorite_gerai_page.dart'; // TODO: sesuaikan path jika Profile bukan folder yang tepat
 import '../settings/setting_page.dart'; // TODO: sesuaikan path jika lokasi setting_page.dart berbeda
 import '../screens/home_screen.dart';
+import '../screens/home_screen2.dart'; // TODO: sesuaikan path jika lokasi home_screen2.dart berbeda
 
 
 // ---------------------------------------------------------------------------
@@ -121,6 +123,18 @@ class AccountPage extends StatelessWidget {
                       _MenuItemData(
                         icon: Icons.favorite_border,
                         label: 'Favorit saya',
+                        onTap: () {
+                          // Terhubung ke FavoriteGeraiService yang sama
+                          // dipakai di beranda (section "Gerai Tersimpan")
+                          // dan tombol bookmark di gerai_screen.dart —
+                          // jadi datanya realtime sinkron di ketiga tempat.
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const FavoriteGeraiPage(),
+                            ),
+                          );
+                        },
                       ),
                       _MenuItemData(
                         icon: Icons.storefront_outlined,
@@ -188,6 +202,12 @@ class AccountPage extends StatelessWidget {
                     const SizedBox(height: 8),
                     _MenuGroup(
                       items: [
+                        _MenuItemData(
+                          icon: Icons.storefront,
+                          label: 'Jadikan Penjual (Debug Dev Only)',
+                          customColor: Colors.teal,
+                          onTap: () => _debugMakeSeller(context),
+                        ),
                         _MenuItemData(
                           icon: Icons.bug_report,
                           label: 'Reset Status ke Pembeli (Debug Dev Only)',
@@ -487,6 +507,65 @@ class _MenuGroup extends StatelessWidget {
           );
         }),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DEBUG ONLY — set roles.seller jadi true + buat dokumen minimal di
+// collection "seller", TANPA perlu isi form gerai (daftar_gerai_form_page).
+// Data gerai (nama pasar, nomor kios, dst) sengaja diisi placeholder,
+// supaya bisa langsung dites sebagai Penjual. StreamBuilder di
+// _ProfileHeader otomatis nangkep perubahan roles.seller ini.
+// ---------------------------------------------------------------------------
+Future<void> _debugMakeSeller(BuildContext context) async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
+
+  try {
+    final firestore = FirebaseFirestore.instance;
+    final userRef = firestore.collection('users').doc(uid);
+    final userSnapshot = await userRef.get();
+    final userData = userSnapshot.data() ?? {};
+
+    // Satu batch supaya atomik, sama seperti registerAsSeller() di
+    // AuthService — kalau salah satu gagal, dua-duanya di-rollback.
+    final batch = firestore.batch();
+
+    batch.update(userRef, {'roles.seller': true});
+
+    final sellerRef = firestore.collection('seller').doc(uid);
+    batch.set(sellerRef, {
+      'uid': uid,
+      'name': userData['name'],
+      'email': userData['email'],
+      'phone': userData['phone'],
+      'namaGerai': '[DEBUG] Gerai Contoh',
+      'isOpen': true,
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    await batch.commit();
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Role berhasil di-set ke Penjual'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    // Navigasikan layar pengguna secara langsung ke home_screen2.dart
+    // (tampilan Penjual), sama seperti _resetToBuyer() mengarahkan
+    // balik ke home_screen.dart (tampilan Pembeli).
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const HomeScreen2()),
+      (route) => false,
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Gagal set ke penjual: $e')),
     );
   }
 }
