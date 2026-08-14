@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/services/driver_service.dart'; // sesuaikan path kalau struktur foldermu beda
 import 'package:frontend/services/order_tracking_service.dart';
+import 'package:frontend/services/store_service.dart';
 import 'package:frontend/widgets/live_tracking_map.dart';
 
 // ─────────────────────────────────────────────
@@ -62,13 +63,11 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   late AnimationController _entranceCtrl;
   late Animation<double> _entranceAnim;
 
-  // ── State toko ──
+  // ── State gerai (dari Firestore subcollection 'seller/{uid}') ──
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _geraiSub;
+  Map<String, dynamic>? _geraiData;
+  // _storeId adalah UID seller itu sendiri (dokumen 'seller/{uid}')
   String? _storeId;
-  Map<String, dynamic>? _storeData;
-  bool _checkingStore = true; // sedang cek Firestore saat pertama buka
-
-  // ── Stream subscription ──
-  StreamSubscription<QuerySnapshot>? _storeSub;
 
   // ── Mock orders (tetap dipertahankan selama pesanan real belum aktif) ──
   final List<_SellerOrder> _pendingOrders = [
@@ -120,6 +119,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
+    _storeId = uid; // dokumen seller/{uid} — storeId == uid seller
     _geraiSub = FirebaseFirestore.instance
         .collection('seller')
         .doc(uid)
@@ -129,7 +129,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
         setState(() => _geraiData = snap.data());
       }
     }, onError: (e) {
-      debugPrint('Gagal memuat daftar driver: $e');
+      debugPrint('Gagal memuat data gerai: $e');
     });
   }
 
@@ -196,23 +196,18 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
 
   // ── Getters nama & pasar dari Firestore ──
   String get _storeName {
-    final name = _storeData?['store_name'] as String?;
+    final name = _geraiData?['store_name'] as String?;
     return (name != null && name.isNotEmpty) ? name : '${widget.userName}\'s Gerai';
   }
 
   String get _pasarName =>
-      (_storeData?['market_section'] as String?) ?? 'Pasar Tradisional';
+      (_geraiData?['market_section'] as String?) ?? 'Pasar Tradisional';
 
   String get _storeDescription =>
-      (_storeData?['description'] as String?) ?? '';
+      (_geraiData?['description'] as String?) ?? '';
 
   @override
   Widget build(BuildContext context) {
-    if (_checkingStore) {
-      return const Center(
-        child: CircularProgressIndicator(color: _selGreen),
-      );
-    }
 
     return RefreshIndicator(
       color: _selGreen,
@@ -851,33 +846,27 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     }
   }
 
-  void _handleAcceptOrder(DocumentReference ref, String orderId) {
-    _updateOrderStatus(
-      ref,
-      'dikemas',
-      successMessage: 'Pesanan $orderId diterima!',
-    );
+  void _handleAcceptOrder(_SellerOrder order) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Pesanan ${order.id} diterima!', style: _ms(size: 12, color: Colors.white)),
+      backgroundColor: _selGreen,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
   }
 
-  void _handleRejectOrder(DocumentReference ref, String orderId, String buyerName) {
+  void _handleRejectOrder(_SellerOrder order) {
     HapticFeedback.mediumImpact();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Tolak Pesanan?', style: _ms(size: 17, weight: FontWeight.bold)),
-        content: Text('$orderId dari $buyerName akan dibatalkan.', style: _ms(size: 13, color: Colors.black54)),
+        content: Text('${order.id} dari ${order.buyerName} akan dibatalkan.', style: _ms(size: 13, color: Colors.black54)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Batal', style: _ms(size: 13, color: Colors.black54))),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _updateOrderStatus(
-                ref,
-                'dibatalkan',
-                successMessage: 'Pesanan $orderId ditolak.',
-              );
-            },
+            onPressed: () => Navigator.pop(ctx),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade500,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -2106,20 +2095,14 @@ class _SellerOrder {
 
 class _SellerDriver {
   final String name, email;
-  const _SellerDriver({required this.name, required this.email});
+  final String? photoUrl;
+  const _SellerDriver({required this.name, required this.email, this.photoUrl});
 }
 
 class _SellerProduct {
-  final String? id;
-  final String name, imageUrl, unit;
+  final String name, icon, unit;
   final int price, stock;
   const _SellerProduct({required this.name, required this.icon, required this.unit, required this.price, required this.stock});
-}
-
-class _SellerDriver {
-  final String name, email;
-  final String? photoUrl;
-  const _SellerDriver({required this.name, required this.email, this.photoUrl});
 }
 
 // ─────────────────────────────────────────────
@@ -2340,6 +2323,63 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
       },
     );
   }
+}
+
+// ─────────────────────────────────────────────
+//  Data class untuk produk Firestore (beda dari _SellerProduct lokal)
+// ─────────────────────────────────────────────
+class _FirestoreProduct {
+  final String? id;
+  final String name, imageUrl, unit;
+  final int price, stock;
+  const _FirestoreProduct({
+    this.id,
+    required this.name,
+    required this.imageUrl,
+    required this.unit,
+    required this.price,
+    required this.stock,
+  });
+
+  factory _FirestoreProduct.fromDoc(DocumentSnapshot doc) {
+    final d = doc.data() as Map<String, dynamic>? ?? {};
+    return _FirestoreProduct(
+      id: doc.id,
+      name: (d['name'] as String?) ?? (d['product_name'] as String?) ?? '',
+      imageUrl: (d['imageUrl'] as String?) ?? (d['image_url'] as String?) ?? '',
+      unit: (d['unit'] as String?) ?? 'kg',
+      price: (d['price'] as num?)?.toInt() ?? 0,
+      stock: (d['stock'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+        'product_name': name,
+        'image_url': imageUrl,
+        'unit': unit,
+        'price': price,
+        'stock': stock,
+      };
+}
+
+// ─────────────────────────────────────────────
+//  Dialog Tambah/Edit Produk
+// ─────────────────────────────────────────────
+class _ProductFormDialog extends StatefulWidget {
+  final _FirestoreProduct? existing;
+  final Color selGreen;
+  final TextStyle Function({double size, FontWeight weight, Color color, double? height}) textStyle;
+  final void Function(_FirestoreProduct product) onSave;
+
+  const _ProductFormDialog({
+    required this.existing,
+    required this.selGreen,
+    required this.textStyle,
+    required this.onSave,
+  });
+
+  @override
+  State<_ProductFormDialog> createState() => _ProductFormDialogState();
 }
 
 class _ProductFormDialogState extends State<_ProductFormDialog> {
@@ -2575,7 +2615,7 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
                           : () {
                               if (!formKey.currentState!.validate()) return;
 
-                              final newProduct = _SellerProduct(
+                              final newProduct = _FirestoreProduct(
                                 id: widget.existing?.id,
                                 name: nameCtrl.text.trim(),
                                 imageUrl: imageUrlCtrl.text.trim(),

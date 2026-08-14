@@ -6,6 +6,9 @@ import 'package:frontend/services/orders_manager.dart';
 import 'package:frontend/services/order_tracking_service.dart';
 import 'package:frontend/widgets/address_editor_sheet.dart';
 import 'package:frontend/widgets/live_tracking_map.dart';
+import 'package:frontend/models/orders_manager.dart' show
+    kStatusMenungguKonfirmasi, kStatusDikemas, kStatusDalamPengantaran,
+    kStatusSelesai, kStatusDibatalkan;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
@@ -193,13 +196,6 @@ class _OrdersScreenState extends State<OrdersScreen>
     ).animate(CurvedAnimation(parent: _pulseAnim, curve: Curves.easeInOut));
   }
 
-  @override
-  void dispose() {
-    _progressAnim.dispose();
-    _pulseAnim.dispose();
-    _kurirCardAnim.dispose();
-    super.dispose();
-  }
 
   // ──────────────────────────────────────────
   // EMPTY STATE: Tidak ada pesanan aktif
@@ -360,14 +356,16 @@ class _OrdersScreenState extends State<OrdersScreen>
 
         final OrderHistoryItem? activeOrder = hasActiveOrder
             ? OrderHistoryItem(
-                id: data['id'] ?? 'ORD-0000',
-                storeName: data['storeName'] ?? 'Gerai Bu Eko',
-                marketName: data['marketName'] ?? 'Pasar Sepinggan',
+                docId: uid ?? '',
+                id: data!['id'] as String? ?? 'ORD-0000',
+                storeName: data['storeName'] as String? ?? 'Gerai Bu Eko',
+                marketName: data['marketName'] as String? ?? 'Pasar Sepinggan',
                 date: 'Hari ini',
-                items: data['items'] ?? '',
-                totalPrice: data['totalPrice'] ?? 0,
+                items: data['items'] as String? ?? '',
+                totalPrice: (data['totalPrice'] as num?)?.toInt() ?? 0,
                 statusLabel: OrderTrackingService.statusLabel(status),
                 statusColor: currentStep >= 2 ? Colors.orange : Colors.blue,
+                rawStatus: status ?? kStatusDikemas,
               )
             : null;
 
@@ -438,94 +436,48 @@ class _OrdersScreenState extends State<OrdersScreen>
                       ],
                     ],
 
-                    // ── Riwayat Pesanan (StreamBuilder terpisah, realtime) ──
+                    // ── Riwayat Pesanan (dari OrdersManager ValueNotifier) ──
                     SliverToBoxAdapter(
-                      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                        stream: OrdersManager.instance.orderHistoryStream(),
-                        builder: (context, historySnap) {
-                          final historyDocs = historySnap.data?.docs ?? [];
-                          final orderHistory = historyDocs.map(OrderHistoryItem.fromDoc).toList();
-
-                          return Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.history_rounded,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Riwayat Pesanan',
-                                  style: _manrope(
-                                    size: 16,
-                                    weight: FontWeight.bold,
-                                    color: _dark,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.3),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    '${orderHistory.length} pesanan',
-                                    style: _manrope(
-                                      size: 11,
-                                      weight: FontWeight.w600,
-                                      color: _dark,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.history_rounded, color: Colors.white, size: 20),
+                            const SizedBox(width: 8),
+                            Text('Riwayat Pesanan', style: _manrope(size: 16, weight: FontWeight.bold, color: _dark)),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.3),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text('${_orderHistory.length} pesanan',
+                                  style: _manrope(size: 11, weight: FontWeight.w600, color: _dark)),
                             ),
-                          );
-                        },
+                          ],
+                        ),
                       ),
                     ),
 
-                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: OrdersManager.instance.orderHistoryStream(),
-                      builder: (context, historySnap) {
-                        final historyDocs = historySnap.data?.docs ?? [];
-                        final orderHistory = historyDocs.map(OrderHistoryItem.fromDoc).toList();
-
-                        if (orderHistory.isEmpty) {
-                          return SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                              child: Center(
-                                child: Text(
-                                  'Belum ada riwayat pesanan.',
-                                  style: _manrope(size: 12, color: Colors.black45),
-                                ),
-                              ),
-                            ),
-                          );
-                        }
-
-                        return SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, i) => Padding(
-                              padding: EdgeInsets.fromLTRB(
-                                16,
-                                0,
-                                16,
-                                i == orderHistory.length - 1 ? 24 : 10,
-                              ),
-                              child: _buildHistoryCard(orderHistory[i]),
-                            ),
-                            childCount: orderHistory.length,
-                          ),
-                        );
-                      },
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, i) => _buildHistoryCard(_orderHistory[i]),
+                        childCount: _orderHistory.length,
+                      ),
                     ),
+                    if (_orderHistory.isEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                          child: Center(
+                            child: Text('Belum ada riwayat pesanan.',
+                                style: _manrope(size: 12, color: Colors.black45)),
+                          ),
+                        ),
+                      ),
+
+
                   ],
                 ),
               ),
