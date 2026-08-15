@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:frontend/services/driver_service.dart';
+import 'package:frontend/screens/login_screen.dart';
 
 const Color _ibGreen = Color(0xFF007C3F);
 const Color _ibDark = Color(0xFF0F1B11);
@@ -15,6 +16,61 @@ TextStyle _ib({
     GoogleFonts.manrope(fontSize: size, fontWeight: weight, color: color);
 
 // ─────────────────────────────────────────────
+//  Notifikasi sistem (statis)
+//  Dulu tinggal di home_screen.dart sebagai _NotificationSheet (bottom
+//  sheet terpisah dari InboxScreen). Sekarang digabung ke sini supaya
+//  cuma ada SATU pintu masuk "Pesan & Notifikasi" -- lebih gampang
+//  ditemukan user, nggak bikin bingung ada 2 kotak pesan beda tempat.
+//  Masih statis/mock (belum dari backend) -- kalau nanti notifikasi
+//  sistem sudah beneran datang dari Firestore/backend, tinggal ganti
+//  list ini jadi hasil query, struktur tile-nya nggak perlu berubah.
+// ─────────────────────────────────────────────
+class _SystemNotifItem {
+  final IconData icon;
+  final Color iconColor;
+  final String title, sub;
+  final bool isUnread;
+  const _SystemNotifItem({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.sub,
+    required this.isUnread,
+  });
+}
+
+const List<_SystemNotifItem> _systemNotifs = [
+  _SystemNotifItem(
+    icon: Icons.local_shipping_rounded,
+    iconColor: Color(0xFFFF7B00),
+    title: 'Pesanan dikirim!',
+    sub: 'Pak Budi sedang mengantar pesananmu • 2 mnt lalu',
+    isUnread: true,
+  ),
+  _SystemNotifItem(
+    icon: Icons.check_circle_rounded,
+    iconColor: Color(0xFF007C3F),
+    title: 'Pesanan dikonfirmasi',
+    sub: 'Lapak Sari menerima pesananmu • 15 mnt lalu',
+    isUnread: true,
+  ),
+  _SystemNotifItem(
+    icon: Icons.campaign_rounded,
+    iconColor: Color(0xFF0071FF),
+    title: 'Promo hari ini!',
+    sub: 'Ongkir flat Rp2.000 untuk semua pesanan • 1 jam lalu',
+    isUnread: false,
+  ),
+  _SystemNotifItem(
+    icon: Icons.star_rounded,
+    iconColor: Color(0xFFF5A623),
+    title: 'Beri ulasan',
+    sub: 'Bagaimana pesananmu kemarin? Beri bintang yuk! • 1 hari lalu',
+    isUnread: false,
+  ),
+];
+
+// ─────────────────────────────────────────────
 //  InboxScreen
 //  Dibuka lewat icon amplop di home_screen.dart. Isinya pesan yang
 //  dikirim ke users/{uid}/inbox — sekarang baru dipakai buat undangan
@@ -23,6 +79,12 @@ TextStyle _ib({
 // ─────────────────────────────────────────────
 class InboxScreen extends StatelessWidget {
   const InboxScreen({super.key});
+
+  /// Jumlah notifikasi sistem yang belum dibaca -- dipakai home_screen.dart
+  /// buat badge angka merah di tombol lonceng, supaya badge-nya
+  /// mencerminkan TOTAL (pesan Firestore + notifikasi sistem), bukan cuma
+  /// salah satunya.
+  static int get systemUnreadCount => _systemNotifs.where((n) => n.isUnread).length;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +99,7 @@ class InboxScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _ibDark, size: 20),
         ),
-        title: Text('Pesan', style: _ib(size: 18, weight: FontWeight.bold)),
+        title: Text('Pesan & Notifikasi', style: _ib(size: 18, weight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: uid == null
@@ -55,7 +117,7 @@ class InboxScreen extends StatelessWidget {
                 }
 
                 final docs = snapshot.data?.docs ?? [];
-                if (docs.isEmpty) {
+                if (docs.isEmpty && _systemNotifs.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -68,10 +130,29 @@ class InboxScreen extends StatelessWidget {
                   );
                 }
 
-                return ListView.builder(
+                // Digabung jadi satu list: pesan dari Firestore (undangan
+                // driver, dll) di atas karena lebih actionable/real-time,
+                // notifikasi sistem (statis) di bawahnya dengan pemisah.
+                return ListView(
                   padding: const EdgeInsets.all(16),
-                  itemCount: docs.length,
-                  itemBuilder: (context, i) => _InboxTile(doc: docs[i]),
+                  children: [
+                    ...docs.map((doc) => _InboxTile(doc: doc)),
+                    if (docs.isNotEmpty && _systemNotifs.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(child: Divider(color: Colors.grey.shade300)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: Text('Notifikasi', style: _ib(size: 11, color: Colors.black38)),
+                          ),
+                          Expanded(child: Divider(color: Colors.grey.shade300)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    ..._systemNotifs.map((n) => _SystemNotifTile(item: n)),
+                  ],
                 );
               },
             ),
@@ -95,6 +176,26 @@ class _InboxTileState extends State<_InboxTile> {
     try {
       if (accept) {
         await DriverService.acceptDriverInvite(widget.doc.id);
+
+        // acceptDriverInvite() sudah signOut() user di dalamnya. Di sini
+        // kita bersihkan seluruh stack navigasi dan arahkan ke LoginScreen
+        // supaya user login ulang sebagai Driver -- juga mencegah user
+        // "back" ke InboxScreen/HomeScreen lama yang sesinya sudah mati.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Berhasil jadi Driver! Silakan login ulang.'),
+            ),
+          );
+          await Future.delayed(const Duration(milliseconds: 800));
+        }
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false,
+          );
+        }
+        return; // widget sudah dilepas dari stack, jangan lanjut ke finally
       } else {
         await DriverService.declineDriverInvite(widget.doc.id);
       }
@@ -189,6 +290,62 @@ class _InboxTileState extends State<_InboxTile> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+//  _SystemNotifTile — tile notifikasi sistem (statis, bukan dari inbox
+//  Firestore). Sengaja dibuat mirip _InboxTile di atas biar visualnya
+//  konsisten walau sumber datanya beda.
+// ─────────────────────────────────────────────
+class _SystemNotifTile extends StatelessWidget {
+  final _SystemNotifItem item;
+  const _SystemNotifTile({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: item.isUnread ? _ibGreen.withValues(alpha: 0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: item.isUnread ? _ibGreen.withValues(alpha: 0.15) : Colors.grey.shade200,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: item.iconColor.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(item.icon, color: item.iconColor, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.title, style: _ib(size: 12.5, weight: FontWeight.w600)),
+                const SizedBox(height: 3),
+                Text(item.sub, style: _ib(size: 11, color: Colors.black54)),
+              ],
+            ),
+          ),
+          if (item.isUnread)
+            Container(
+              width: 8,
+              height: 8,
+              margin: const EdgeInsets.only(top: 4, left: 6),
+              decoration: const BoxDecoration(color: _ibGreen, shape: BoxShape.circle),
+            ),
         ],
       ),
     );

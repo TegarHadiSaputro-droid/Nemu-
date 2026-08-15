@@ -533,7 +533,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // Tombol Pesan (undangan driver, dll)
+          // Tombol Pesan & Notifikasi (undangan driver + notifikasi sistem,
+          // sekarang digabung jadi satu pintu masuk lewat InboxScreen --
+          // dulu ada 2 tombol terpisah (amplop -> InboxScreen, lonceng ->
+          // _NotificationSheet bottom sheet berisi notif statis), sekarang
+          // cuma 1 supaya user nggak bingung ada 2 "kotak pesan" beda.
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: FirebaseAuth.instance.currentUser == null
                 ? null
@@ -544,7 +548,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     .where('read', isEqualTo: false)
                     .snapshots(),
             builder: (context, snapshot) {
-              final unreadCount = snapshot.data?.docs.length ?? 0;
+              final unreadCount =
+                  (snapshot.data?.docs.length ?? 0) + InboxScreen.systemUnreadCount;
               return GestureDetector(
                 onTap: () => Navigator.push(
                   context,
@@ -559,7 +564,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      const Icon(Icons.mail_outline_rounded, color: _textDark, size: 22),
+                      const Icon(Icons.notifications_outlined, color: _textDark, size: 22),
                       if (unreadCount > 0)
                         Positioned(
                           right: -3,
@@ -580,20 +585,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               );
             },
-          ),
-          const SizedBox(width: 10),
-
-          // Tombol Notifikasi
-          GestureDetector(
-            onTap: _showNotificationPanel,
-            child: Container(
-              padding: const EdgeInsets.all(9),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.35),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.notifications_outlined, color: _textDark, size: 22),
-            ),
           ),
           const SizedBox(width: 10),
 
@@ -627,15 +618,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         ],
       ),
-    );
-  }
-
-  void _showNotificationPanel() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _NotificationSheet(),
     );
   }
 
@@ -2239,184 +2221,4 @@ class _RecipeBundle {
     required this.tagColor,
     required this.imageUrl,
   });
-}
-
-// ─────────────────────────────────────────────
-//  _NotificationSheet — Panel Notifikasi
-// ─────────────────────────────────────────────
-class _NotificationSheet extends StatelessWidget {
-  const _NotificationSheet();
-
-  static const _notifs = [
-    _NotifItem(
-      icon: Icons.local_shipping_rounded,
-      iconColor: Color(0xFFFF7B00),
-      title: 'Pesanan dikirim!',
-      sub: 'Pak Budi sedang mengantar pesananmu • 2 mnt lalu',
-      isUnread: true,
-    ),
-    _NotifItem(
-      icon: Icons.check_circle_rounded,
-      iconColor: Color(0xFF007C3F),
-      title: 'Pesanan dikonfirmasi',
-      sub: 'Lapak Sari menerima pesananmu • 15 mnt lalu',
-      isUnread: true,
-    ),
-    _NotifItem(
-      icon: Icons.campaign_rounded,
-      iconColor: Color(0xFF0071FF),
-      title: 'Promo hari ini!',
-      sub: 'Ongkir flat Rp2.000 untuk semua pesanan • 1 jam lalu',
-      isUnread: false,
-    ),
-    _NotifItem(
-      icon: Icons.star_rounded,
-      iconColor: Color(0xFFF5A623),
-      title: 'Beri ulasan',
-      sub: 'Bagaimana pesananmu kemarin? Beri bintang yuk! • 1 hari lalu',
-      isUnread: false,
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Handle bar
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Text(
-                'Notifikasi',
-                style: GoogleFonts.manrope(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF0F1B11),
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF007C3F).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '2 baru',
-                  style: GoogleFonts.manrope(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF007C3F),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ..._notifs.map((n) => _NotifTile(item: n)),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
-}
-
-class _NotifItem {
-  final IconData icon;
-  final Color iconColor;
-  final String title, sub;
-  final bool isUnread;
-  const _NotifItem({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.sub,
-    required this.isUnread,
-  });
-}
-
-class _NotifTile extends StatelessWidget {
-  final _NotifItem item;
-  const _NotifTile({super.key, required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: item.isUnread
-            ? const Color(0xFF007C3F).withOpacity(0.05)
-            : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: item.isUnread
-              ? const Color(0xFF007C3F).withOpacity(0.15)
-              : Colors.grey.shade200,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: item.iconColor.withOpacity(0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(item.icon, color: item.iconColor, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: GoogleFonts.manrope(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF0F1B11),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  item.sub,
-                  style: GoogleFonts.manrope(
-                    fontSize: 11.5,
-                    color: Colors.black54,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (item.isUnread)
-            Container(
-              width: 8,
-              height: 8,
-              margin: const EdgeInsets.only(top: 4),
-              decoration: const BoxDecoration(
-                color: Color(0xFF007C3F),
-                shape: BoxShape.circle,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }

@@ -138,15 +138,26 @@ class DriverService {
     final inviteRef =
         _firestore.collection('users').doc(uid).collection('inbox').doc(inviteId);
     batch.update(inviteRef, {'status': 'accepted', 'read': true});
-    batch.set(
-      _firestore.collection('users').doc(uid),
-      {
-        'roles.driver': true,
-        'roles.buyer': false,
-      },
-      SetOptions(merge: true),
-    );
+
+    // PENTING: pakai batch.update() di sini, BUKAN batch.set(..., merge:true).
+    // Dot-notation ('roles.driver') sebagai key top-level cuma dijamin
+    // di-treat sebagai nested field path oleh update(). Kalau dipakai di
+    // set()+merge, Firestore malah bikin field baru literal bernama
+    // "roles.driver" (sejajar dengan map "roles", bukan nested di
+    // dalamnya) -- makanya sebelumnya roles.driver di dalam map "roles"
+    // nggak pernah benar-benar ke-update walau operasinya "berhasil".
+    final userRef = _firestore.collection('users').doc(uid);
+    batch.update(userRef, {
+      'roles.driver': true,
+      'roles.buyer': false,
+    });
+
     await batch.commit();
+
+    // Sign out setelah accept berhasil -- user diarahkan login ulang
+    // (dilakukan oleh InboxScreen setelah ini return) supaya sesi & data
+    // ter-refresh sebagai Driver.
+    await _auth.signOut();
   }
 
   /// Tolak undangan jadi driver.
