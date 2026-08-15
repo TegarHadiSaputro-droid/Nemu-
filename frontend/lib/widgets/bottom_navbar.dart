@@ -14,12 +14,14 @@ class NemuBottomNavbar extends StatefulWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
   final bool isSeller;
+  final bool isDriver;
 
   const NemuBottomNavbar({
     super.key,
     required this.currentIndex,
     required this.onTap,
     this.isSeller = false,
+    this.isDriver = false,
   });
 
   @override
@@ -37,6 +39,15 @@ class _NemuBottomNavbarState extends State<NemuBottomNavbar>
   final int _activeOrderCount = 1;
 
   List<_NavItem> get _currentNavItems {
+    if (widget.isDriver) {
+      // Cuma 2 tab -- HARUS sinkron sama HomeScreen3 yang cuma punya 2
+      // tujuan (index 0 = Dashboard, selain itu = Akun). Kalau nambah tab
+      // di sini, HomeScreen3._navIndex switching-nya juga wajib diupdate.
+      return const [
+        _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
+        _NavItem(icon: Icons.person_rounded, label: 'Akun'),
+      ];
+    }
     if (widget.isSeller) {
       return const [
         _NavItem(icon: Icons.dashboard_rounded, label: 'Beranda Penjual'),
@@ -87,7 +98,7 @@ class _NemuBottomNavbarState extends State<NemuBottomNavbar>
   @override
   void didUpdateWidget(covariant NemuBottomNavbar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.isSeller != widget.isSeller) {
+    if (oldWidget.isSeller != widget.isSeller || oldWidget.isDriver != widget.isDriver) {
       for (final ctrl in _bounceControllers) {
         ctrl.dispose();
       }

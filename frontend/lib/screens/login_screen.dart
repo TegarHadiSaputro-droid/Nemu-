@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'home_screen.dart';
 import 'home_screen2.dart';
+import 'home_screen3.dart';
 import '../utils/page_transitions.dart';
 
 /// ============================================================
@@ -49,7 +50,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       TextInput.finishAutofillContext(shouldSave: true);
 
-      final isSeller = await AuthService.isSeller();
+      final isDriver = await AuthService.isDriver();
+      final isSeller = isDriver ? false : await AuthService.isSeller();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -64,7 +66,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
         Navigator.pushReplacement(
           context,
-          slideRoute(isSeller ? const HomeScreen2() : const HomeScreen()),
+          slideRoute(
+            isDriver
+                ? const HomeScreen3()
+                : (isSeller ? const HomeScreen2() : const HomeScreen()),
+          ),
         );
       }
     } on FirebaseAuthException catch (e) {

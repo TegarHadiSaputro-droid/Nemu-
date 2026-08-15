@@ -89,6 +89,18 @@ class AuthGate extends StatelessWidget {
 
         final user = snapshot.data;
 
+        // PENTING: user yang emailnya belum diverifikasi dianggap SAMA
+        // SEPERTI belum login di sini. Ini menutup race condition dengan
+        // AuthService.register() -- createUserWithEmailAndPassword()
+        // langsung memicu authStateChanges() (walau email belum
+        // diverifikasi) SEBELUM register() sempat signOut() user itu lagi.
+        // Tanpa cek ini, AuthGate akan sempat merender HomeScreen di
+        // celah balapan tersebut, dan HomeScreen.initState() langsung
+        // memicu popup "Nama panggilan Anda?" -- padahal harusnya user
+        // belum boleh masuk sama sekali sebelum verifikasi + login manual
+        // lewat LoginScreen (yang memang sudah mengecek emailVerified).
+        final isVerified = user?.emailVerified ?? false;
+
         // Sudah pernah login sebelumnya (sesi tersimpan otomatis oleh
         // Firebase) -> langsung ke Beranda, tidak perlu login ulang.
         //
@@ -102,7 +114,7 @@ class AuthGate extends StatelessWidget {
         // roles.buyer / roles.seller lama sebelum sempat "dimatikan" --
         // begitu roles.driver true, akun itu harus selalu masuk ke
         // dashboard Driver, apa pun status role lainnya.
-        if (user != null) {
+        if (user != null && isVerified) {
           return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
                 .collection('users')

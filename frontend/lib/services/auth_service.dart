@@ -54,17 +54,31 @@ class AuthService {
     // pendaftaran gerai di Nemu+ berhasil dikirim.
     await _firestore.collection('users').doc(user.uid).set({
       'name': name,
+      'nickname': '', // diisi user nanti lewat popup di HomeScreen
+      'username': '',
+      'bio': '',
       'email': email,
       'phone': phone,
       'roles': {
         'buyer': true,
         'seller': false,
+        'driver': false,
       },
       'createdAt': FieldValue.serverTimestamp(),
     });
 
     // Kirim email verifikasi
     await user.sendEmailVerification();
+
+    // PENTING: sign out lagi setelah registrasi, sama seperti di login() &
+    // resendVerificationEmail(). createUserWithEmailAndPassword() otomatis
+    // "login"-kan user meskipun emailnya belum diverifikasi — kalau tidak
+    // di-signOut di sini, listener authStateChanges() di root app (kalau
+    // ada) akan langsung nganggep user sudah login dan lompat ke HomeScreen
+    // saat itu juga, sebelum dialog "Cek Email Kamu" sempat ditampilkan.
+    // Ini penyebab popup nickname di HomeScreen muncul langsung setelah
+    // registrasi, bukan pas user benar-benar buka HomeScreen.
+    await _auth.signOut();
 
     return user;
   }
@@ -202,6 +216,20 @@ class AuthService {
  
     final roles = data['roles'] as Map<String, dynamic>?;
     return roles?['seller'] == true;
+  }
+
+  /// Sama seperti isSeller(), tapi cek roles.driver. Dipakai login_screen.dart
+  /// buat nentuin redirect ke HomeScreen3 (dashboard Driver).
+  static Future<bool> isDriver() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    final snapshot = await _firestore.collection('users').doc(user.uid).get();
+    final data = snapshot.data();
+    if (data == null) return false;
+
+    final roles = data['roles'] as Map<String, dynamic>?;
+    return roles?['driver'] == true;
   }
  
   /// Versi stream dari isSeller(), untuk halaman yang perlu langsung

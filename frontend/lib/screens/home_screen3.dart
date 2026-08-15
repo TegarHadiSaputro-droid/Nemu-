@@ -139,7 +139,19 @@ class _HomeScreen3State extends State<HomeScreen3> with TickerProviderStateMixin
                     children: [
                       Expanded(
                         child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300),
+                          duration: const Duration(milliseconds: 350),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, animation) {
+                            final slide = Tween<Offset>(
+                              begin: const Offset(0, 0.03),
+                              end: Offset.zero,
+                            ).animate(animation);
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(position: slide, child: child),
+                            );
+                          },
                           child: _navIndex == 0
                               ? DriverDashboardBody(
                                   key: const ValueKey('driver_dash'),
@@ -155,7 +167,7 @@ class _HomeScreen3State extends State<HomeScreen3> with TickerProviderStateMixin
                       // Bottom Nav Khusus Driver
                       NemuBottomNavbar(
                         currentIndex: _navIndex,
-                        isSeller: true,
+                        isDriver: true,
                         onTap: (i) => setState(() => _navIndex = i),
                       ),
                     ],
@@ -222,6 +234,9 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
 
   bool _isOnline = false;
   bool _togglingOnline = false;
+
+  // ── Kecepatan live (dari GPS stream), buat estimasi waktu tempuh ──
+  double _currentSpeedKmh = 0;
 
   // ── GPS 24/7 selama online ──
   StreamSubscription<Position>? _gpsSub;
@@ -306,6 +321,7 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
   }
 
   void _maybeShowRequestPopup() {
+    if (!mounted) return;
     if (_requestDialogOpen || _activeOrderDoc != null) return;
     final pending = _openRequests.where((d) => !_dismissedRequestIds.contains(d.id));
     if (pending.isEmpty) return;
@@ -362,6 +378,12 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
     ).listen((pos) async {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
+
+      // pos.speed dari Geolocator dalam meter/detik -> konversi ke km/jam.
+      // Kadang GPS ngasih noise/negatif pas device diam, jadi di-clamp ke 0.
+      if (mounted) {
+        setState(() => _currentSpeedKmh = (pos.speed * 3.6).clamp(0, 200).toDouble());
+      }
 
       // 1) Selalu update posisi umum si driver (dipakai buat matching driver
       // terdekat di fase berikutnya / status "aktif").
@@ -474,6 +496,22 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
     }
   }
 
+  // Jarak (km) & estimasi waktu tempuh dari posisi driver ke tujuan.
+  // Geolocator.distanceBetween() ngasih jarak garis lurus (meter) -- bukan
+  // jarak jalan asli, tapi cukup buat estimasi kasar tanpa perlu API
+  // routing berbayar. Rute tercepat yang sebenarnya (ngikutin jalan)
+  // ditangani lewat tombol "Petunjuk Arah" yang buka Google Maps eksternal.
+  ({double distanceKm, int etaMinutes})? _estimateTrip(LiveLatLng from, LiveLatLng to) {
+    final meters = Geolocator.distanceBetween(from.lat, from.lng, to.lat, to.lng);
+    final km = meters / 1000;
+    // Pakai kecepatan live kalau driver emang lagi jalan (>5 km/h), kalau
+    // diam/baru mulai pakai asumsi rata-rata motor di kota (25 km/h) biar
+    // ETA nggak jadi infinite/aneh pas kecepatan live-nya 0.
+    final speedForEta = _currentSpeedKmh > 5 ? _currentSpeedKmh : 25.0;
+    final etaMinutes = (km / speedForEta * 60).ceil().clamp(1, 999);
+    return (distanceKm: km, etaMinutes: etaMinutes);
+  }
+
   Future<void> _openExternalNavigation(LiveLatLng destination) async {
     final uri = Uri.parse(
       'https://www.google.com/maps/dir/?api=1&destination=${destination.lat},${destination.lng}&travelmode=motorcycle',
@@ -540,7 +578,12 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: _entranceAnim,
-      child: SingleChildScrollView(
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.04),
+          end: Offset.zero,
+        ).animate(_entranceAnim),
+        child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         child: Column(
@@ -560,6 +603,7 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
             _buildIncomingRequestsSection(),
           ],
         ),
+      ),
       ),
     );
   }
@@ -722,6 +766,7 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
     final marketName = data['marketName'] as String? ?? '';
     final buyerName = data['buyerName'] as String? ?? 'Pembeli';
     final items = data['items'] as String? ?? '';
+    final deliveryAddress = (data['deliveryAddress'] as String?) ?? '';
 
     final sellerLoc = LiveLatLng.fromMap(data['sellerLocation'] as Map<String, dynamic>?);
     final buyerLiveLoc = LiveLatLng.fromMap(data['buyerLiveLocation'] as Map<String, dynamic>?);
@@ -779,6 +824,24 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
             const SizedBox(height: 4),
             Text(items, style: _md(size: 11, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
           ],
+          if (!headingToStore && deliveryAddress.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.location_on_rounded, size: 14, color: Colors.redAccent),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    deliveryAddress,
+                    style: _md(size: 11.5, color: Colors.black54),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           if (destination != null)
             LiveTrackingMap(
@@ -798,6 +861,40 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
                 style: _md(size: 11, color: Colors.black45),
               ),
             ),
+          if (destination != null && myLoc != null) ...[
+            const SizedBox(height: 10),
+            Builder(builder: (context) {
+              final trip = _estimateTrip(myLoc, destination);
+              if (trip == null) return const SizedBox.shrink();
+              return Row(
+                children: [
+                  Expanded(
+                    child: _tripStat(
+                      icon: Icons.route_rounded,
+                      value: '${trip.distanceKm.toStringAsFixed(1)} km',
+                      label: 'Jarak',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _tripStat(
+                      icon: Icons.timer_outlined,
+                      value: '${trip.etaMinutes} mnt',
+                      label: 'Estimasi',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _tripStat(
+                      icon: Icons.speed_rounded,
+                      value: '${_currentSpeedKmh.toStringAsFixed(0)} km/h',
+                      label: 'Kecepatan',
+                    ),
+                  ),
+                ],
+              );
+            }),
+          ],
           const SizedBox(height: 14),
           Row(
             children: [
@@ -860,6 +957,21 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
     );
   }
 
+  Widget _tripStat({required IconData icon, required String value, required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        children: [
+          Icon(icon, size: 15, color: _drGreen),
+          const SizedBox(height: 4),
+          Text(value, style: _md(size: 12, weight: FontWeight.bold)),
+          Text(label, style: _md(size: 9, color: Colors.black45)),
+        ],
+      ),
+    );
+  }
+
   Widget _statBox({required IconData icon, required String value, required String label}) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
@@ -912,6 +1024,7 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
         const SizedBox(height: 8),
         ...visible.map((doc) {
           final data = doc.data();
+          final deliveryAddress = (data['deliveryAddress'] as String?) ?? '';
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(14),
@@ -932,6 +1045,23 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      if (deliveryAddress.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on_rounded, size: 11, color: Colors.redAccent),
+                            const SizedBox(width: 3),
+                            Expanded(
+                              child: Text(
+                                deliveryAddress,
+                                style: _md(size: 10, color: Colors.black45),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -969,6 +1099,10 @@ class _IncomingRequestDialog extends StatelessWidget {
     final marketName = (data['marketName'] as String?) ?? '';
     final items = (data['items'] as String?) ?? '';
     final totalPrice = (data['totalPrice'] as num?)?.toInt() ?? 0;
+    // TODO: konfirmasi nama field alamat pembeli yang sebenarnya di
+    // order_tracking_service.dart / skema dokumen 'orders' -- 'deliveryAddress'
+    // masih tebakan mengikuti pola storeName/marketName/buyerName.
+    final deliveryAddress = (data['deliveryAddress'] as String?) ?? '';
 
     return Dialog(
       backgroundColor: Colors.white,
@@ -994,6 +1128,24 @@ class _IncomingRequestDialog extends StatelessWidget {
             Text('$storeName${marketName.isNotEmpty ? ' • $marketName' : ''}', style: _md(size: 13, weight: FontWeight.w600)),
             const SizedBox(height: 4),
             Text(items, style: _md(size: 11.5, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
+            if (deliveryAddress.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.location_on_rounded, size: 14, color: Colors.redAccent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      deliveryAddress,
+                      style: _md(size: 11, color: Colors.black54),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 8),
             Text('Total: Rp$totalPrice', style: _md(size: 13, weight: FontWeight.bold, color: _drGreen)),
             const SizedBox(height: 18),
