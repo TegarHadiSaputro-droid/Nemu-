@@ -221,14 +221,41 @@ class StoreService {
   //  BUYER — Streams untuk sisi Pembeli
   // ════════════════════════════════════════════
 
-  /// Stream semua toko aktif dari Firestore, opsional difilter per pasar.
+  /// Stream semua toko aktif dari Firestore.
   /// Dipakai oleh GeraiScreen (sisi Pembeli) untuk menampilkan gerai real-time.
+  ///
+  /// CATATAN: sengaja TIDAK difilter `market_type` di sisi server (Firestore
+  /// `isEqualTo` itu case-sensitive & whitespace-sensitive, jadi gampang
+  /// meleset kalau field `market_type` yang ditulis penjual beda dikit dari
+  /// nama pasar yang dipakai di sisi pembeli -- toko real jadi "hilang"
+  /// tanpa error apa pun). Pencocokan per-pasar dilakukan di caller
+  /// (GeraiScreen) secara ternormalisasi -- lihat `matchesMarket` di bawah.
   static Stream<QuerySnapshot> allActiveStoresStream({String? marketType}) {
-    Query query = _stores;
-    if (marketType != null && marketType.isNotEmpty) {
-      query = query.where('market_type', isEqualTo: marketType);
-    }
-    return query.snapshots();
+    return _stores.snapshots();
+  }
+
+  /// Cek apakah sebuah dokumen toko cocok dengan pasar tertentu.
+  /// Dibandingkan ternormalisasi (trim + lowercase) terhadap nama ATAU id
+  /// pasar, dan terhadap field `market_type` maupun `market_section`
+  /// (keduanya ditulis saat createStore/updateStore).
+  static bool matchesMarket(
+    Map<String, dynamic> data, {
+    required String marketId,
+    required String marketNama,
+  }) {
+    String norm(String? s) => (s ?? '').trim().toLowerCase();
+
+    final storeMarketType = norm(data['market_type'] as String?);
+    final storeMarketSection = norm(data['market_section'] as String?);
+    final targetId = norm(marketId);
+    final targetNama = norm(marketNama);
+
+    if (storeMarketType.isEmpty && storeMarketSection.isEmpty) return false;
+
+    return storeMarketType == targetId ||
+        storeMarketType == targetNama ||
+        storeMarketSection == targetId ||
+        storeMarketSection == targetNama;
   }
 
   /// Stream produk satu toko untuk sisi Pembeli.

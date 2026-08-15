@@ -170,9 +170,6 @@ class OrdersScreen extends StatefulWidget {
   State<OrdersScreen> createState() => _OrdersScreenState();
 }
 
-@override
-State<OrdersScreen> createState() => _OrdersScreenState();
-
 class _OrdersScreenState extends State<OrdersScreen>
     with TickerProviderStateMixin {
   // ── Animation Controllers ──
