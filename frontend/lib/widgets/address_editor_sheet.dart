@@ -5,7 +5,6 @@ import 'package:geocoding/geocoding.dart';
 import 'package:latlong2/latlong.dart' as ll;
 import 'package:frontend/services/address_manager.dart';
 import 'package:frontend/screens/location_picker_screen.dart';
-import 'package:frontend/screens/location_picker_screen.dart';
 
 const Color _aGreen = Color(0xFF007C3F);
 const Color _aDark = Color(0xFF0F1B11);

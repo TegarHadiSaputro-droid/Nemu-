@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/models/cart_model.dart';
 import 'package:frontend/utils/ongkir.dart';
 import 'package:frontend/models/orders_manager.dart';
 import 'package:frontend/services/address_manager.dart';
 import 'package:frontend/screens/orders_screen.dart';
+import 'package:frontend/screens/home_screen.dart';
+import 'package:frontend/widgets/address_editor_sheet.dart';
 
 const Color _cGreen = Color(0xFF007C3F);
 const Color _cYellow = Color(0xFFD9DF36);
@@ -185,71 +185,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     HapticFeedback.heavyImpact();
     setState(() => _ordered = true);
 
-    // Bikin ringkasan pesanan dari isi keranjang buat dikirim ke OrdersManager
-    // (dibaca orders_screen.dart). Kalau keranjang isinya dari beberapa
-    // gerai/pasar sekaligus, nama-namanya digabung.
-    final items = _cart.items.value;
-    final storeNames = items.map((i) => i.namaGerai).toSet().join(' + ');
-    final marketNames = items.map((i) => i.namaMarket).toSet().join(' + ');
-    final itemsSummary = items
-        .map((i) => '${i.produk.nama} x${i.qty}')
-        .join(', ');
-    final order = OrderHistoryItem(
-      id: 'ORD${DateTime.now().millisecondsSinceEpoch}',
-      storeName: storeNames,
-      marketName: marketNames,
-      date: DateTime.now().toIso8601String(),
-      items: itemsSummary,
-      totalPrice: _total,
-      statusLabel: 'Diproses',
-      statusColor: _cGreen,
-    );
-
-    // Simpan juga ke Firestore (collection simulated_orders) supaya bisa
-    // dibaca sisi penjual/driver di luar OrdersManager lokal.
+    // OrdersManager.placeOrder() yang menulis pesanan ke Firestore
+    // (collection 'orders'), dikelompokkan otomatis per gerai/sellerId
+    // supaya tiap seller cuma menerima order miliknya sendiri.
+    final catatan = _catatanCtrl.text.trim();
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null) {
-        String buyerName = 'Sobat Nemu';
-        try {
-          final userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(uid)
-              .get();
-          if (userDoc.exists) {
-            buyerName =
-                userDoc.data()?['nickname'] ??
-                userDoc.data()?['name'] ??
-                'Sobat Nemu';
-          }
-        } catch (_) {}
-
-        await FirebaseFirestore.instance
-            .collection('simulated_orders')
-            .doc(uid)
-            .set({
-              'id': order.id,
-              'buyerUid': uid,
-              'buyerName': buyerName,
-              'items': itemsSummary.isNotEmpty
-                  ? itemsSummary
-                  : 'Tomat Segar 1kg',
-              'totalPrice': _total,
-              'status': 'dikemas',
-              'storeName': storeNames.isNotEmpty ? storeNames : 'Gerai Bu Eko',
-              'marketName': marketNames.isNotEmpty
-                  ? marketNames
-                  : 'Pasar Sepinggan',
-              'createdAt': FieldValue.serverTimestamp(),
-            });
-      }
+      await OrdersManager.instance.placeOrder(
+        items: _cart.items.value,
+        catatan: catatan.isEmpty ? null : catatan,
+      );
     } catch (e) {
-      debugPrint('Firestore write error: $e');
+      debugPrint('Gagal membuat pesanan: $e');
+      if (mounted) {
+        setState(() => _ordered = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Gagal membuat pesanan, coba lagi ya',
+              style: _cs(size: 13, color: Colors.white),
+            ),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
     }
 
     await Future.delayed(const Duration(seconds: 2));
     if (mounted) {
-      OrdersManager.instance.placeOrder(order);
       _cart.kosongkan();
       _showSuccessDialog();
     }

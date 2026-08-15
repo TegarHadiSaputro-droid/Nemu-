@@ -2726,7 +2726,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   //     tombol bookmark di gerai_screen.dart & halaman Akun > Favorit Saya.
   // ──────────────────────────────────────────
   Widget _buildStoreList() {
-    return Column(children: _stores.map((s) => _buildStoreCard(s)).toList());
+    return StreamBuilder<List<FavoriteGerai>>(
+      stream: FavoriteGeraiService.instance.streamFavorites(),
+      builder: (context, snapshot) {
+        final favorites = snapshot.data ?? const [];
+        if (favorites.isEmpty) {
+          return Text(
+            'Belum ada gerai favorit. Simpan gerai kesukaanmu lewat tombol bookmark ya!',
+            style: _m(size: 12, color: Colors.black45),
+          );
+        }
+        return Column(
+          children: favorites.map((g) => _buildSavedGeraiCard(g)).toList(),
+        );
+      },
+    );
   }
 
   Widget _buildSavedGeraiCard(FavoriteGerai g) {
@@ -2782,18 +2796,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                     const SizedBox(width: 3),
                     Text(
-                      '${s.rating}',
+                      '${g.rating}',
                       style: _m(size: 11, weight: FontWeight.w600),
                     ),
                     const SizedBox(width: 10),
-                    const Icon(
-                      Icons.location_on_rounded,
-                      color: Colors.redAccent,
-                      size: 13,
-                    ),
-                    const SizedBox(width: 2),
                     Text(
-                      s.distance,
+                      '${g.ulasan} ulasan',
                       style: _m(size: 11, color: Colors.black45),
                     ),
                   ],
@@ -2804,26 +2812,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: s.isOpen ? Colors.green.shade50 : Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  s.isOpen ? 'Buka' : 'Tutup',
-                  style: _m(
-                    size: 10,
-                    weight: FontWeight.bold,
-                    color: s.isOpen
-                        ? Colors.green.shade700
-                        : Colors.red.shade400,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
               ElevatedButton(
-                onPressed: s.isOpen ? () {} : null,
+                onPressed: () {},
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _greenBottom,
                   foregroundColor: Colors.white,
