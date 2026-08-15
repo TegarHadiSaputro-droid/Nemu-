@@ -251,7 +251,14 @@ class _TokoPasarScreenState extends State<TokoPasarScreen> {
             // Tombol tambah cepat
             GestureDetector(
               onTap: () {
-                _cart.tambah(p, 1, widget.gerai.nama, widget.market.nama);
+                _cart.tambah(
+                  p,
+                  1,
+                  widget.gerai.nama,
+                  widget.market.nama,
+                  geraiId: widget.gerai.id,
+                  sellerId: widget.gerai.sellerId ?? widget.gerai.id,
+                );
                 setState(() {});
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(

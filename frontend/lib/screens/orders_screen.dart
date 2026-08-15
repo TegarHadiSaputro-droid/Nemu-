@@ -2,13 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/services/address_manager.dart';
-import 'package:frontend/services/orders_manager.dart';
 import 'package:frontend/services/order_tracking_service.dart';
 import 'package:frontend/widgets/address_editor_sheet.dart';
 import 'package:frontend/widgets/live_tracking_map.dart';
-import 'package:frontend/models/orders_manager.dart' show
-    kStatusMenungguKonfirmasi, kStatusDikemas, kStatusDalamPengantaran,
-    kStatusSelesai, kStatusDibatalkan;
+import 'package:frontend/models/orders_manager.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
@@ -69,26 +66,45 @@ class OrderHistoryItem {
 
   factory OrderHistoryItem.fromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
-    final status = (data['status'] as String?) ?? kStatusMenungguKonfirmasi;
+    final status = (data['status'] as String?) ?? kStatusPending;
 
     String label;
     Color color;
     switch (status) {
-      case kStatusMenungguKonfirmasi:
+      case kStatusPending:
         label = 'Menunggu Konfirmasi';
         color = Colors.orange;
         break;
+      case kStatusAccepted:
+        label = 'Diterima Penjual';
+        color = Colors.blue;
+        break;
+      case kStatusProcessing:
       case kStatusDikemas:
         label = 'Diproses';
         color = Colors.blue;
         break;
+      case kStatusMenungguKonfirmasi:
+        label = 'Menunggu Konfirmasi';
+        color = Colors.orange;
+        break;
+      case kStatusMenungguDriver:
+        label = 'Mencari Driver';
+        color = Colors.orange;
+        break;
+      case kStatusMenujuPenjual:
       case kStatusDalamPengantaran:
+      case kStatusDiantar:
         label = 'Diantar';
         color = Colors.orange;
         break;
       case kStatusSelesai:
         label = 'Selesai';
         color = _green;
+        break;
+      case kStatusRejected:
+        label = 'Ditolak Penjual';
+        color = Colors.red;
         break;
       case kStatusDibatalkan:
         label = 'Dibatalkan';
@@ -99,7 +115,7 @@ class OrderHistoryItem {
         color = Colors.grey;
     }
 
-    final createdAt = data['createdAt'];
+    final createdAt = data['created_at'] ?? data['createdAt'];
     String dateLabel = 'Hari ini';
     if (createdAt is Timestamp) {
       final dt = createdAt.toDate();
@@ -113,17 +129,36 @@ class OrderHistoryItem {
     return OrderHistoryItem(
       docId: doc.id,
       id: (data['orderCode'] as String?) ?? doc.id,
-      storeName: (data['namaGerai'] as String?) ?? 'Gerai',
-      marketName: (data['namaMarket'] as String?) ?? '',
+      storeName: (data['store_name'] as String?) ?? (data['namaGerai'] as String?) ?? 'Gerai',
+      marketName: (data['market_type'] as String?) ?? (data['namaMarket'] as String?) ?? '',
       date: dateLabel,
       items: (data['itemsSummary'] as String?) ?? '',
-      totalPrice: (data['totalPrice'] as num?)?.toInt() ?? 0,
+      totalPrice: (data['total_price'] as num?)?.toInt() ?? (data['totalPrice'] as num?)?.toInt() ?? 0,
       statusLabel: label,
       statusColor: color,
       rawStatus: status,
     );
   }
+
+  bool get isActive => [
+    kStatusPending,
+    kStatusAccepted,
+    kStatusProcessing,
+    kStatusMenungguKonfirmasi,
+    kStatusDikemas,
+    kStatusMenungguDriver,
+    kStatusMenujuPenjual,
+    kStatusDalamPengantaran,
+    kStatusDiantar,
+  ].contains(rawStatus);
+
+  bool get isHistory => [
+    kStatusSelesai,
+    kStatusRejected,
+    kStatusDibatalkan,
+  ].contains(rawStatus);
 }
+
 
 // ─────────────────────────────────────────────
 //  OrdersScreen
@@ -146,22 +181,7 @@ class _OrdersScreenState extends State<OrdersScreen>
   late AnimationController _kurirCardAnim;
   late Animation<double> _pulseAnimation;
 
-  // ── State ──
-  int _currentStep = 1; // 0=Diterima, 1=Diproses, 2=Diantar, 3=Selesai
-
-  // Dynamic state management
-  // `_activeOrder` == null => Empty State (tidak ada pesanan aktif)
-  // `_orderHistory` menyimpan pesanan yang sudah selesai / riwayat
-  // Keduanya sekarang sumbernya dari OrdersManager.instance -- diisi begitu
-  // checkout_screen.dart manggil OrdersManager.instance.placeOrder(...).
-  List<OrderHistoryItem> _orderHistory = [];
-  OrderHistoryItem? _activeOrder;
-
-  // ── Broadcast lokasi device Pembeli SELAMA status == diantar, supaya
-  // Driver bisa lacak posisi Pembeli buat antar yang akurat. Dikelola lewat
-  // subscription terpisah dari StreamBuilder di build() supaya bisa
-  // start/stop stream GPS sebagai efek samping begitu status berubah,
-  // bukan di dalam builder (yang dipanggil ulang tiap frame).
+  // ── Stream subscription untuk GPS sharing saat diantar ──
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _orderStatusSub;
   StreamSubscription<Position>? _myLocationSub;
   String? _lastKnownStatus;
@@ -169,15 +189,6 @@ class _OrdersScreenState extends State<OrdersScreen>
   @override
   void initState() {
     super.initState();
-    _listenOrderStatusForLocationSharing();
-
-    // Ambil state pesanan yang udah ada di OrdersManager (mis. baru aja
-    // dipesan dari checkout_screen.dart), lalu dengerin perubahan
-    // selanjutnya biar layar ini selalu update tanpa perlu di-refresh manual.
-    _activeOrder = OrdersManager.instance.activeOrder.value;
-    _orderHistory = List.of(OrdersManager.instance.history.value);
-    OrdersManager.instance.activeOrder.addListener(_onActiveOrderChanged);
-    OrdersManager.instance.history.addListener(_onHistoryChanged);
 
     _progressAnim = AnimationController(
       vsync: this,
@@ -261,27 +272,6 @@ class _OrdersScreenState extends State<OrdersScreen>
     );
   }
 
-  void _listenOrderStatusForLocationSharing() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    _orderStatusSub = FirebaseFirestore.instance
-        .collection('simulated_orders')
-        .doc(uid)
-        .snapshots()
-        .listen((snap) {
-          final status = snap.data()?['status'] as String?;
-          if (status == _lastKnownStatus) return;
-          _lastKnownStatus = status;
-
-          if (status == OrderStatus.diantar) {
-            _startSharingMyLocation(uid);
-          } else {
-            _stopSharingMyLocation();
-          }
-        });
-  }
-
   Future<void> _startSharingMyLocation(String orderDocId) async {
     if (_myLocationSub != null) return; // udah jalan
     try {
@@ -313,22 +303,8 @@ class _OrdersScreenState extends State<OrdersScreen>
     _myLocationSub = null;
   }
 
-  void _onActiveOrderChanged() {
-    if (mounted)
-      setState(() => _activeOrder = OrdersManager.instance.activeOrder.value);
-  }
-
-  void _onHistoryChanged() {
-    if (mounted)
-      setState(
-        () => _orderHistory = List.of(OrdersManager.instance.history.value),
-      );
-  }
-
   @override
   void dispose() {
-    OrdersManager.instance.activeOrder.removeListener(_onActiveOrderChanged);
-    OrdersManager.instance.history.removeListener(_onHistoryChanged);
     _orderStatusSub?.cancel();
     _myLocationSub?.cancel();
     _progressAnim.dispose();
@@ -341,51 +317,72 @@ class _OrdersScreenState extends State<OrdersScreen>
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
 
-    return StreamBuilder<DocumentSnapshot>(
+    // Stream dari Firestore collection 'orders' milik pembeli yang login
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: uid == null
           ? const Stream.empty()
           : FirebaseFirestore.instance
-                .collection('simulated_orders')
-                .doc(uid)
-                .snapshots(),
+              .collection('orders')
+              .where('buyer_id', isEqualTo: uid)
+              .snapshots(),
       builder: (context, snapshot) {
-        final data = snapshot.data?.data() as Map<String, dynamic>?;
-        final status = data?['status'] as String?;
-        final hasActiveOrder = data != null && status != OrderStatus.selesai;
+        final docs = snapshot.data?.docs ?? [];
 
-        // 0=Diterima (implisit begitu order dibuat), 1=Diproses/Menunggu
-        // Driver, 2=Diantar (driver menuju toko ATAU sudah bawa barang),
-        // 3=Selesai.
-        int currentStep = 1;
-        if (status == OrderStatus.menujuPenjual ||
-            status == OrderStatus.diantar) {
+        // Pisahkan pesanan aktif vs riwayat
+        final activeOrders = docs
+            .map((doc) => OrderHistoryItem.fromDoc(doc))
+            .where((o) => o.isActive)
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
+
+        final historyOrders = docs
+            .map((doc) => OrderHistoryItem.fromDoc(doc))
+            .where((o) => o.isHistory)
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
+
+        // Ambil pesanan aktif paling baru
+        final OrderHistoryItem? activeOrder =
+            activeOrders.isNotEmpty ? activeOrders.first : null;
+
+        // Tentukan currentStep berdasarkan status
+        final status = activeOrder?.rawStatus;
+        int currentStep = 0;
+        if (status == kStatusAccepted || status == kStatusProcessing || status == kStatusDikemas) {
+          currentStep = 1;
+        } else if (status == kStatusMenungguDriver || status == kStatusMenujuPenjual ||
+            status == kStatusDalamPengantaran || status == kStatusDiantar) {
           currentStep = 2;
-        } else if (status == OrderStatus.selesai) {
+        } else if (status == kStatusSelesai) {
           currentStep = 3;
         }
 
-        final driverUid = data?['driverUid'] as String?;
-        final driverLoc = LiveLatLng.fromMap(
-          data?['driverLocation'] as Map<String, dynamic>?,
-        );
-        final sellerLoc = LiveLatLng.fromMap(
-          data?['sellerLocation'] as Map<String, dynamic>?,
-        );
+        // GPS sharing — trigger saat status diantar
+        if (status == kStatusDiantar && _lastKnownStatus != kStatusDiantar) {
+          _lastKnownStatus = kStatusDiantar;
+          if (uid != null) _startSharingMyLocation(activeOrder!.docId);
+        } else if (status != kStatusDiantar && _lastKnownStatus == kStatusDiantar) {
+          _lastKnownStatus = status;
+          _stopSharingMyLocation();
+        }
 
-        final OrderHistoryItem? activeOrder = hasActiveOrder
-            ? OrderHistoryItem(
-                docId: uid ?? '',
-                id: data!['id'] as String? ?? 'ORD-0000',
-                storeName: data['storeName'] as String? ?? 'Gerai Bu Eko',
-                marketName: data['marketName'] as String? ?? 'Pasar Sepinggan',
-                date: 'Hari ini',
-                items: data['items'] as String? ?? '',
-                totalPrice: (data['totalPrice'] as num?)?.toInt() ?? 0,
-                statusLabel: OrderTrackingService.statusLabel(status),
-                statusColor: currentStep >= 2 ? Colors.orange : Colors.blue,
-                rawStatus: status ?? kStatusDikemas,
-              )
-            : null;
+        // Untuk doc aktif yang punya driver
+        QueryDocumentSnapshot<Map<String, dynamic>>? activeDoc;
+        if (activeOrder != null) {
+          for (final d in docs) {
+            if (d.id == activeOrder.docId) {
+              activeDoc = d;
+              break;
+            }
+          }
+          activeDoc ??= (docs.isNotEmpty ? docs.first : null);
+        }
+        final activeDocData = activeDoc?.data();
+        final driverUid = activeDocData?['driverUid'] as String?;
+        final driverLoc = LiveLatLng.fromMap(
+            activeDocData?['driverLocation'] as Map<String, dynamic>?);
+        final sellerLoc = LiveLatLng.fromMap(
+            activeDocData?['sellerLocation'] as Map<String, dynamic>?);
 
         return Scaffold(
           backgroundColor: const Color(0xFFD9DF36),
@@ -419,7 +416,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                     // ── Header: Judul + Alamat ──
                     SliverToBoxAdapter(child: _buildHeader()),
 
-                    // Conditional: show empty state when no active order, otherwise show tracker + kurir
+                    // Pesanan aktif / empty state
                     if (activeOrder == null)
                       SliverToBoxAdapter(
                         child: Padding(
@@ -458,7 +455,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                       ],
                     ],
 
-                    // ── Riwayat Pesanan (dari OrdersManager ValueNotifier) ──
+                    // ── Riwayat Pesanan (real-time dari Firestore) ──
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
@@ -474,7 +471,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                                 color: Colors.white.withOpacity(0.3),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: Text('${_orderHistory.length} pesanan',
+                              child: Text('${historyOrders.length} pesanan',
                                   style: _manrope(size: 11, weight: FontWeight.w600, color: _dark)),
                             ),
                           ],
@@ -484,11 +481,11 @@ class _OrdersScreenState extends State<OrdersScreen>
 
                     SliverList(
                       delegate: SliverChildBuilderDelegate(
-                        (context, i) => _buildHistoryCard(_orderHistory[i]),
-                        childCount: _orderHistory.length,
+                        (context, i) => _buildHistoryCard(historyOrders[i]),
+                        childCount: historyOrders.length,
                       ),
                     ),
-                    if (_orderHistory.isEmpty)
+                    if (historyOrders.isEmpty)
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
@@ -498,8 +495,6 @@ class _OrdersScreenState extends State<OrdersScreen>
                           ),
                         ),
                       ),
-
-
                   ],
                 ),
               ),
@@ -509,6 +504,7 @@ class _OrdersScreenState extends State<OrdersScreen>
       },
     );
   }
+
 
   // ──────────────────────────────────────────
   //  HEADER: Judul + Alamat Pengiriman (Clean & Jelas dengan Border)
