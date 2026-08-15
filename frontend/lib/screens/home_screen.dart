@@ -1,6 +1,7 @@
+import 'dart:ui' as ui;
+import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math' as math;
-import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/services/api_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -16,13 +17,77 @@ import 'package:frontend/mitra/pages/mitra_category_page.dart';
 import 'package:frontend/mitra/pages/mitra_subcategory_page.dart';
 import 'package:frontend/mitra/data/mitra_data.dart';
 import 'package:frontend/mitra/models/mitra_models.dart';
+import 'pasar/checkout_screen.dart';
+import 'package:intl/intl.dart';
 
+// Model untuk Item Bahan
+class IngredientItem {
+  final String name;
+  final int price;
+  final IconData icon;
+  int quantity;
+
+  IngredientItem({
+    required this.name,
+    required this.price,
+    required this.icon,
+    this.quantity = 1,
+  });
+}
+
+// Data Struktur Paket Resep dengan Harga Detail & Ikon Sesuai
+final Map<String, List<IngredientItem>> recipeIngredientsData = {
+  'Sayur Sop Komplit': [
+    IngredientItem(name: 'Ayam', price: 8000, icon: Icons.kebab_dining),
+    IngredientItem(name: 'Wortel', price: 3000, icon: Icons.eco),
+    IngredientItem(
+      name: 'Kentang',
+      price: 3000,
+      icon: Icons.radio_button_checked,
+    ),
+    IngredientItem(name: 'Buncis', price: 2500, icon: Icons.grass),
+    IngredientItem(name: 'Bumbu Sup', price: 1500, icon: Icons.set_meal),
+  ],
+  'Capcay Seafood Segar': [
+    IngredientItem(name: 'Udang', price: 11000, icon: Icons.set_meal),
+    IngredientItem(name: 'Bakso Ikan', price: 6000, icon: Icons.circle),
+    IngredientItem(name: 'Sawi Hijau', price: 3000, icon: Icons.eco),
+    IngredientItem(name: 'Wortel', price: 3000, icon: Icons.eco),
+    IngredientItem(name: 'Bumbu Capcay', price: 3000, icon: Icons.soup_kitchen),
+  ],
+  'Sambal Goreng Ati': [
+    IngredientItem(name: 'Ati Ampela', price: 10000, icon: Icons.restaurant),
+    IngredientItem(
+      name: 'Cabai Merah',
+      price: 5000,
+      icon: Icons.local_fire_department,
+    ),
+    IngredientItem(
+      name: 'Kentang',
+      price: 4000,
+      icon: Icons.radio_button_checked,
+    ),
+    IngredientItem(name: 'Santan', price: 2500, icon: Icons.water_drop),
+    IngredientItem(name: 'Bumbu', price: 2500, icon: Icons.soup_kitchen),
+  ],
+  'Soto Ayam Kampung': [
+    IngredientItem(
+      name: 'Ayam Kampung',
+      price: 16000,
+      icon: Icons.kebab_dining,
+    ),
+    IngredientItem(name: 'Telur', price: 5000, icon: Icons.egg),
+    IngredientItem(name: 'Bumbu Rempah', price: 4000, icon: Icons.soup_kitchen),
+    IngredientItem(name: 'Sohun', price: 4000, icon: Icons.ramen_dining),
+    IngredientItem(name: 'Tauge', price: 3000, icon: Icons.grass),
+  ],
+};
 // ─────────────────────────────────────────────
 //  Warna Palette
 // ─────────────────────────────────────────────
-const Color _yellowTop   = Color(0xFFD9DF36);
+const Color _yellowTop = Color(0xFFD9DF36);
 const Color _greenBottom = Color(0xFF007C3F);
-const Color _textDark    = Color(0xFF0F1B11);
+const Color _textDark = Color(0xFF0F1B11);
 
 // ─────────────────────────────────────────────
 //  Helper: TextStyle Manrope
@@ -32,13 +97,12 @@ TextStyle _m({
   FontWeight weight = FontWeight.normal,
   Color color = _textDark,
   double? height,
-}) =>
-    GoogleFonts.manrope(
-      fontSize: size,
-      fontWeight: weight,
-      color: color,
-      height: height,
-    );
+}) => GoogleFonts.manrope(
+  fontSize: size,
+  fontWeight: weight,
+  color: color,
+  height: height,
+);
 
 // ─────────────────────────────────────────────
 //  HomeScreen
@@ -53,6 +117,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   int _navIndex = 0;
   int _bannerIndex = 0;
   int _selectedCommodityIndex = 0;
@@ -67,55 +134,191 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   String _userName = 'Sobat Nemu'; // placeholder sebelum nickname dimuat/diisi
   String? _photoUrl; // foto profil dari Firestore (users/{uid}.photoUrl)
-  int _cartItemCount = 1;
-  bool _isDelivering = false; // State status pengantaran (perlu order asli buat jadi true)
-  
+
   static const List<String> _welcomeGreetings = [
-    'Sini mampir enggih!',                   // Jawa Tengah / Solo
-    'Sampurasun, hayu mampir euy!',          // Sunda (Jawa Barat)
-    'Mai singgah bli, santai aja!',          // Bali
-    'Horas lae, mampir jo!',                 // Batak (Sumatera Utara)
-    'Kuy lah mampir dimari!',                // Betawi (Jakarta)
-    'Mari jo mampir sini, kawan!',           // Manado (Sulawesi Utara)
-    'Yo ipar, mari mampir!',                 // Papua
-    'Monggo pinarak mase!',                  // Jawa Timur / Surabaya
-    'Wee mampir maki\' bro!',                // Makassar (Sulawesi Selatan)
-    'Mampir lah sutan, rancak bana!',        // Minangkabau (Sumatera Barat)
-    'Sok mangga lebet teh, kang!',           // Sunda (Priangan)
-    'Lakasi mampir wal, rami nih!',          // Banjar (Kalimantan Selatan)
-    'Tabik pun, mampir pay!',                // Lampung
-    'Mejuah-juah, mampir mari!',             // Karo (Sumatera Utara)
-    'Ngereng mampir taretan!',               // Madura (Jawa Timur)
-    'Mampir nyok gaes, seru nih!',           // Betawi slang (Jakarta)
-    'Salam takzim, singgah dulu yuk!',       // Melayu (Riau / Kepulauan)
-    'Yo pace mace, mari rapat!',             // Papua (Jayapura)
-    'Mai melali bli, seru abis!',            // Bali (casual)
-    'Monggo pinarak mbakyu!',                // Jawa (Yogyakarta)
+    'Sini mampir enggih!', // Jawa Tengah / Solo
+    'Sampurasun, hayu mampir euy!', // Sunda (Jawa Barat)
+    'Mai singgah bli, santai aja!', // Bali
+    'Horas lae, mampir jo!', // Batak (Sumatera Utara)
+    'Kuy lah mampir dimari!', // Betawi (Jakarta)
+    'Mari jo mampir sini, kawan!', // Manado (Sulawesi Utara)
+    'Yo ipar, mari mampir!', // Papua
+    'Monggo pinarak mase!', // Jawa Timur / Surabaya
+    'Wee mampir maki\' bro!', // Makassar (Sulawesi Selatan)
+    'Mampir lah sutan, rancak bana!', // Minangkabau (Sumatera Barat)
+    'Sok mangga lebet teh, kang!', // Sunda (Priangan)
+    'Lakasi mampir wal, rami nih!', // Banjar (Kalimantan Selatan)
+    'Tabik pun, mampir pay!', // Lampung
+    'Mejuah-juah, mampir mari!', // Karo (Sumatera Utara)
+    'Ngereng mampir taretan!', // Madura (Jawa Timur)
+    'Mampir nyok gaes, seru nih!', // Betawi slang (Jakarta)
+    'Salam takzim, singgah dulu yuk!', // Melayu (Riau / Kepulauan)
+    'Yo pace mace, mari rapat!', // Papua (Jayapura)
+    'Mai melali bli, seru abis!', // Bali (casual)
+    'Monggo pinarak mbakyu!', // Jawa (Yogyakarta)
   ];
   String _welcomeGreeting = 'Halo, selamat datang!';
 
   // ── Data State dari API Backend ──
   List<_BannerData> _banners = const [
-    _BannerData(tag: 'FRESH TODAY', title: 'Belanja Bahan Segar\nTanpa Ke Pasar', sub: 'Diantar langsung oleh mitra pedagang pasar.', bgColor: Colors.white, tagColor: _greenBottom, icon: Icons.eco_rounded),
-    _BannerData(tag: 'PROMO', title: 'Ongkir Flat Rp2.000\nUntuk Jarak < 3 km', sub: 'Berlaku setiap hari untuk semua produk pasar.', bgColor: Colors.white, tagColor: Colors.orange, icon: Icons.local_shipping_rounded),
-    _BannerData(tag: 'JASA', title: 'Panggil Tukang\nKapan Saja', sub: 'Tenaga ahli berpengalaman siap membantu kamu.', bgColor: Colors.white, tagColor: Colors.blue, icon: Icons.handyman_rounded),
+    _BannerData(
+      tag: 'FRESH TODAY',
+      title: 'Belanja Bahan Segar\nTanpa Ke Pasar',
+      sub: 'Diantar langsung oleh mitra pedagang pasar.',
+      bgColor: Colors.white,
+      tagColor: _greenBottom,
+      icon: Icons.eco_rounded,
+    ),
+    _BannerData(
+      tag: 'PROMO',
+      title: 'Ongkir Flat Rp2.000\nUntuk Jarak < 3 km',
+      sub: 'Berlaku setiap hari untuk semua produk pasar.',
+      bgColor: Colors.white,
+      tagColor: Colors.orange,
+      icon: Icons.local_shipping_rounded,
+    ),
+    _BannerData(
+      tag: 'JASA',
+      title: 'Panggil Tukang\nKapan Saja',
+      sub: 'Tenaga ahli berpengalaman siap membantu kamu.',
+      bgColor: Colors.white,
+      tagColor: Colors.blue,
+      icon: Icons.handyman_rounded,
+    ),
   ];
 
   List<_CommodityData> _commodities = const [
-    _CommodityData(name: 'Cabai Merah', icon: '🌶️', unit: '/kg', currentPrice: 42000, predictedPrice: 45000, changePercent: 7.1, isUp: true, predictionNote: 'Prediksi Besok: Naik ~Rp3.000 karena pasokan menurun.', historyPrices: [35000, 37000, 38000, 39500, 40000, 42000, 45000], days: ['5 hari lalu', '4 hari lalu', '3 hari lalu', 'Lusa', 'Kemarin', 'Hari Ini', 'Prediksi']),
-    _CommodityData(name: 'Bawang Merah', icon: '🧅', unit: '/kg', currentPrice: 28000, predictedPrice: 26500, changePercent: 5.3, isUp: false, predictionNote: 'Prediksi Besok: Turun ~Rp1.500 karena panen lokal.', historyPrices: [33000, 32000, 31000, 30000, 29500, 28000, 26500], days: ['5 hari lalu', '4 hari lalu', '3 hari lalu', 'Lusa', 'Kemarin', 'Hari Ini', 'Prediksi']),
-    _CommodityData(name: 'Tomat Segar', icon: '🍅', unit: '/kg', currentPrice: 12000, predictedPrice: 12000, changePercent: 0.0, isUp: false, predictionNote: 'Prediksi Besok: Stabil — pasokan cukup.', historyPrices: [11000, 11500, 12000, 11800, 12000, 12000, 12000], days: ['5 hari lalu', '4 hari lalu', '3 hari lalu', 'Lusa', 'Kemarin', 'Hari Ini', 'Prediksi']),
-    _CommodityData(name: 'Daging Ayam', icon: '🍗', unit: '/kg', currentPrice: 36000, predictedPrice: 38000, changePercent: 5.5, isUp: true, predictionNote: 'Prediksi Besok: Naik mendekati akhir pekan.', historyPrices: [33000, 33500, 34000, 35000, 35500, 36000, 38000], days: ['5 hari lalu', '4 hari lalu', '3 hari lalu', 'Lusa', 'Kemarin', 'Hari Ini', 'Prediksi']),
-    _CommodityData(name: 'Bawang Putih', icon: '🧄', unit: '/kg', currentPrice: 32000, predictedPrice: 31000, changePercent: 3.1, isUp: false, predictionNote: 'Prediksi Besok: Sedikit turun.', historyPrices: [34000, 33500, 33000, 32500, 32500, 32000, 31000], days: ['5 hari lalu', '4 hari lalu', '3 hari lalu', 'Lusa', 'Kemarin', 'Hari Ini', 'Prediksi']),
+    _CommodityData(
+      name: 'Cabai Merah',
+      icon: '🌶️',
+      unit: '/kg',
+      currentPrice: 42000,
+      predictedPrice: 45000,
+      changePercent: 7.1,
+      isUp: true,
+      predictionNote: 'Prediksi Besok: Naik ~Rp3.000 karena pasokan menurun.',
+      historyPrices: [35000, 37000, 38000, 39500, 40000, 42000, 45000],
+      days: [
+        '5 hari lalu',
+        '4 hari lalu',
+        '3 hari lalu',
+        'Lusa',
+        'Kemarin',
+        'Hari Ini',
+        'Prediksi',
+      ],
+    ),
+    _CommodityData(
+      name: 'Bawang Merah',
+      icon: '🧅',
+      unit: '/kg',
+      currentPrice: 28000,
+      predictedPrice: 26500,
+      changePercent: 5.3,
+      isUp: false,
+      predictionNote: 'Prediksi Besok: Turun ~Rp1.500 karena panen lokal.',
+      historyPrices: [33000, 32000, 31000, 30000, 29500, 28000, 26500],
+      days: [
+        '5 hari lalu',
+        '4 hari lalu',
+        '3 hari lalu',
+        'Lusa',
+        'Kemarin',
+        'Hari Ini',
+        'Prediksi',
+      ],
+    ),
+    _CommodityData(
+      name: 'Tomat Segar',
+      icon: '🍅',
+      unit: '/kg',
+      currentPrice: 12000,
+      predictedPrice: 12000,
+      changePercent: 0.0,
+      isUp: false,
+      predictionNote: 'Prediksi Besok: Stabil — pasokan cukup.',
+      historyPrices: [11000, 11500, 12000, 11800, 12000, 12000, 12000],
+      days: [
+        '5 hari lalu',
+        '4 hari lalu',
+        '3 hari lalu',
+        'Lusa',
+        'Kemarin',
+        'Hari Ini',
+        'Prediksi',
+      ],
+    ),
+    _CommodityData(
+      name: 'Daging Ayam',
+      icon: '🍗',
+      unit: '/kg',
+      currentPrice: 36000,
+      predictedPrice: 38000,
+      changePercent: 5.5,
+      isUp: true,
+      predictionNote: 'Prediksi Besok: Naik mendekati akhir pekan.',
+      historyPrices: [33000, 33500, 34000, 35000, 35500, 36000, 38000],
+      days: [
+        '5 hari lalu',
+        '4 hari lalu',
+        '3 hari lalu',
+        'Lusa',
+        'Kemarin',
+        'Hari Ini',
+        'Prediksi',
+      ],
+    ),
+    _CommodityData(
+      name: 'Bawang Putih',
+      icon: '🧄',
+      unit: '/kg',
+      currentPrice: 32000,
+      predictedPrice: 31000,
+      changePercent: 3.1,
+      isUp: false,
+      predictionNote: 'Prediksi Besok: Sedikit turun.',
+      historyPrices: [34000, 33500, 33000, 32500, 32500, 32000, 31000],
+      days: [
+        '5 hari lalu',
+        '4 hari lalu',
+        '3 hari lalu',
+        'Lusa',
+        'Kemarin',
+        'Hari Ini',
+        'Prediksi',
+      ],
+    ),
   ];
 
-
-
   List<_MarketStore> _stores = const [
-    _MarketStore(name: 'Pasar Sepinggan', category: 'Sayur, Buah & Daging', rating: 4.8, distance: '1.5 km', isOpen: true),
-    _MarketStore(name: 'Pasar Buton', category: 'Sembako & Rempah', rating: 4.6, distance: '4.8 km', isOpen: true),
-    _MarketStore(name: 'Pasar Klandasan', category: 'Ikan & Seafood Segar', rating: 4.9, distance: '9.5 km', isOpen: true),
-    _MarketStore(name: 'Pasar Pandansari', category: 'Beras & Palawija', rating: 4.7, distance: '13.0 km', isOpen: false),
+    _MarketStore(
+      name: 'Pasar Sepinggan',
+      category: 'Sayur, Buah & Daging',
+      rating: 4.8,
+      distance: '1.5 km',
+      isOpen: true,
+    ),
+    _MarketStore(
+      name: 'Pasar Buton',
+      category: 'Sembako & Rempah',
+      rating: 4.6,
+      distance: '4.8 km',
+      isOpen: true,
+    ),
+    _MarketStore(
+      name: 'Pasar Klandasan',
+      category: 'Ikan & Seafood Segar',
+      rating: 4.9,
+      distance: '9.5 km',
+      isOpen: true,
+    ),
+    _MarketStore(
+      name: 'Pasar Pandansari',
+      category: 'Beras & Palawija',
+      rating: 4.7,
+      distance: '13.0 km',
+      isOpen: false,
+    ),
   ];
 
   List<_RecipeBundle> _recipeBundles = const [
@@ -127,7 +330,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       icon: '🍲',
       ingredients: ['Wortel', 'Kentang', 'Buncis', 'Ayam', 'Bumbu Sup'],
       tagColor: Colors.orange,
-      imageUrl: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=400&q=80',
+      imageUrl:
+          'https://images.unsplash.com/photo-1547592180-85f173990554?w=400&q=80',
     ),
     _RecipeBundle(
       title: 'Capcay Seafood Segar',
@@ -135,9 +339,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       portion: '2-3 porsi',
       totalPrice: 26000,
       icon: '🥦',
-      ingredients: ['Sawi Hijau', 'Wortel', 'Udang', 'Bakso Ikan', 'Bumbu Capcay'],
+      ingredients: [
+        'Sawi Hijau',
+        'Wortel',
+        'Udang',
+        'Bakso Ikan',
+        'Bumbu Capcay',
+      ],
       tagColor: Colors.green,
-      imageUrl: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&q=80',
+      imageUrl:
+          'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&q=80',
     ),
     _RecipeBundle(
       title: 'Soto Ayam Kampung',
@@ -147,7 +358,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       icon: '🍜',
       ingredients: ['Ayam Kampung', 'Tauge', 'Sohun', 'Telur', 'Bumbu Rempah'],
       tagColor: Color(0xFFD97706),
-      imageUrl: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400&q=80',
+      imageUrl:
+          'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400&q=80',
     ),
     _RecipeBundle(
       title: 'Sambal Goreng Ati',
@@ -157,7 +369,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       icon: '🌶️',
       ingredients: ['Ati Ampela', 'Kentang', 'Cabai Merah', 'Santan', 'Bumbu'],
       tagColor: Colors.red,
-      imageUrl: 'https://images.unsplash.com/photo-1596797038530-2c107229654b?w=400&q=80',
+      imageUrl:
+          'https://images.unsplash.com/photo-1596797038530-2c107229654b?w=400&q=80',
     ),
   ];
 
@@ -167,7 +380,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     HomeScreen.navIndexNotifier.value = 0;
     HomeScreen.navIndexNotifier.addListener(_onNavIndexChanged);
 
-    _welcomeGreeting = _welcomeGreetings[math.Random().nextInt(_welcomeGreetings.length)];
+    _welcomeGreeting =
+        _welcomeGreetings[math.Random().nextInt(_welcomeGreetings.length)];
     _loadApiData();
     _loadNicknameOrAsk();
     AddressManager.instance.loadFromFirestore();
@@ -191,7 +405,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       curve: Curves.easeOutCubic,
     );
     _chartAnimCtrl.forward();
-
   }
 
   void _onNavIndexChanged() {
@@ -293,7 +506,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               },
               child: Text(
                 'Simpan',
-                style: _m(size: 14, weight: FontWeight.bold, color: Colors.white),
+                style: _m(
+                  size: 14,
+                  weight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
@@ -307,41 +524,53 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (apiData != null && mounted) {
       setState(() {
         if (apiData['banners'] != null) {
-          _banners = (apiData['banners'] as List).map((b) => _BannerData(
-            tag: b['tag'] ?? '',
-            title: b['title'] ?? '',
-            sub: b['sub'] ?? '',
-            bgColor: Colors.white,
-            tagColor: _parseColor(b['tag_color']),
-            icon: _parseIcon(b['icon']),
-          )).toList();
+          _banners = (apiData['banners'] as List)
+              .map(
+                (b) => _BannerData(
+                  tag: b['tag'] ?? '',
+                  title: b['title'] ?? '',
+                  sub: b['sub'] ?? '',
+                  bgColor: Colors.white,
+                  tagColor: _parseColor(b['tag_color']),
+                  icon: _parseIcon(b['icon']),
+                ),
+              )
+              .toList();
         }
 
         if (apiData['commodities'] != null) {
-          _commodities = (apiData['commodities'] as List).map((c) => _CommodityData(
-            name: c['name'] ?? '',
-            icon: c['icon'] ?? '🥦',
-            unit: c['unit'] ?? '/kg',
-            currentPrice: (c['current_price'] as num).toInt(),
-            predictedPrice: (c['predicted_price'] as num).toInt(),
-            changePercent: (c['change_percent'] as num).toDouble(),
-            isUp: c['is_up'] ?? true,
-            predictionNote: c['prediction_note'] ?? '',
-            historyPrices: (c['history_prices'] as List).map((hp) => (hp as num).toInt()).toList(),
-            days: (c['days'] as List).map((d) => d.toString()).toList(),
-          )).toList();
+          _commodities = (apiData['commodities'] as List)
+              .map(
+                (c) => _CommodityData(
+                  name: c['name'] ?? '',
+                  icon: c['icon'] ?? '🥦',
+                  unit: c['unit'] ?? '/kg',
+                  currentPrice: (c['current_price'] as num).toInt(),
+                  predictedPrice: (c['predicted_price'] as num).toInt(),
+                  changePercent: (c['change_percent'] as num).toDouble(),
+                  isUp: c['is_up'] ?? true,
+                  predictionNote: c['prediction_note'] ?? '',
+                  historyPrices: (c['history_prices'] as List)
+                      .map((hp) => (hp as num).toInt())
+                      .toList(),
+                  days: (c['days'] as List).map((d) => d.toString()).toList(),
+                ),
+              )
+              .toList();
         }
 
-
-
         if (apiData['stores'] != null) {
-          _stores = (apiData['stores'] as List).map((s) => _MarketStore(
-            name: s['name'] ?? '',
-            category: s['category'] ?? '',
-            rating: (s['rating'] as num).toDouble(),
-            distance: s['distance'] ?? '',
-            isOpen: s['is_open'] ?? true,
-          )).toList();
+          _stores = (apiData['stores'] as List)
+              .map(
+                (s) => _MarketStore(
+                  name: s['name'] ?? '',
+                  category: s['category'] ?? '',
+                  rating: (s['rating'] as num).toDouble(),
+                  distance: s['distance'] ?? '',
+                  isOpen: s['is_open'] ?? true,
+                ),
+              )
+              .toList();
         }
       });
     }
@@ -361,10 +590,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   static IconData _parseIcon(String? name) {
     switch (name) {
-      case 'local_shipping_rounded': return Icons.local_shipping_rounded;
-      case 'handyman_rounded': return Icons.handyman_rounded;
+      case 'local_shipping_rounded':
+        return Icons.local_shipping_rounded;
+      case 'handyman_rounded':
+        return Icons.handyman_rounded;
       case 'eco_rounded':
-      default: return Icons.eco_rounded;
+      default:
+        return Icons.eco_rounded;
     }
   }
 
@@ -388,7 +620,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _handleRefresh() async {
     setState(() {
-      _welcomeGreeting = _welcomeGreetings[math.Random().nextInt(_welcomeGreetings.length)];
+      _welcomeGreeting =
+          _welcomeGreetings[math.Random().nextInt(_welcomeGreetings.length)];
     });
     await ApiService.syncMarketPrices();
     await _loadApiData();
@@ -411,13 +644,41 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
 
           // ── Dekorasi Playful Background ──
-          Positioned(top: -40, right: -50, child: _blob(200, Colors.white.withValues(alpha: 0.12))),
-          Positioned(top: 80, left: -60, child: _blob(160, Colors.white.withValues(alpha: 0.10))),
-          Positioned(top: 220, right: 20, child: _blob(80, Colors.white.withValues(alpha: 0.08))),
-          Positioned(top: 300, left: 30, child: _dot(18, Colors.white.withValues(alpha: 0.20))),
-          Positioned(top: 340, right: 60, child: _dot(10, Colors.white.withValues(alpha: 0.18))),
-          Positioned(bottom: 200, right: -40, child: _blob(150, const Color(0xFFD9DF36).withValues(alpha: 0.18))),
-          Positioned(bottom: 350, left: 10, child: _dot(14, Colors.white.withValues(alpha: 0.15))),
+          Positioned(
+            top: -40,
+            right: -50,
+            child: _blob(200, Colors.white.withValues(alpha: 0.12)),
+          ),
+          Positioned(
+            top: 80,
+            left: -60,
+            child: _blob(160, Colors.white.withValues(alpha: 0.10)),
+          ),
+          Positioned(
+            top: 220,
+            right: 20,
+            child: _blob(80, Colors.white.withValues(alpha: 0.08)),
+          ),
+          Positioned(
+            top: 300,
+            left: 30,
+            child: _dot(18, Colors.white.withValues(alpha: 0.20)),
+          ),
+          Positioned(
+            top: 340,
+            right: 60,
+            child: _dot(10, Colors.white.withValues(alpha: 0.18)),
+          ),
+          Positioned(
+            bottom: 200,
+            right: -40,
+            child: _blob(150, const Color(0xFFD9DF36).withValues(alpha: 0.18)),
+          ),
+          Positioned(
+            bottom: 350,
+            left: 10,
+            child: _dot(14, Colors.white.withValues(alpha: 0.15)),
+          ),
 
           // ── Konten Utama ──
           Positioned.fill(
@@ -428,70 +689,82 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     child: _navIndex == 1
                         ? const PasarScreen()
                         : _navIndex == 3
-                            ? const MitraCategoryPage()
-                            : _navIndex == 4
-                                ? const OrdersScreen()
-                                : RefreshIndicator(
-                                    color: _greenBottom,
-                                    backgroundColor: Colors.white,
-                                    onRefresh: _handleRefresh,
-                                    child: SingleChildScrollView(
-                                      physics: const AlwaysScrollableScrollPhysics(
-                                        parent: BouncingScrollPhysics(),
-                                      ),
-                                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          // 1. Top Bar (Ikut scroll)
-                                          _buildTopBar(),
-                                          const SizedBox(height: 12),
+                        ? const MitraCategoryPage()
+                        : _navIndex == 4
+                        ? const OrdersScreen()
+                        : RefreshIndicator(
+                            color: _greenBottom,
+                            backgroundColor: Colors.white,
+                            onRefresh: _handleRefresh,
+                            child: SingleChildScrollView(
+                              physics: const AlwaysScrollableScrollPhysics(
+                                parent: BouncingScrollPhysics(),
+                              ),
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // 1. Top Bar (Ikut scroll)
+                                  _buildTopBar(),
+                                  const SizedBox(height: 12),
 
-                                          // Search Bar
-                                          _buildSearchBar(),
-                                          const SizedBox(height: 14),
+                                  // Search Bar
+                                  _buildSearchBar(),
+                                  const SizedBox(height: 14),
 
-                                          // Quick Info Row (Alamat & Kurir Pak Budi)
-                                          _buildQuickInfoRow(),
-                                          const SizedBox(height: 14),
+                                  // Quick Info Row (Alamat & Kurir Pak Budi)
+                                  _buildQuickInfoRow(),
+                                  const SizedBox(height: 14),
 
-                                          // Banner Carousel (auto-scroll 10s)
-                                          _buildBannerCarousel(),
-                                          const SizedBox(height: 10),
-                                          _buildCarouselDots(),
-                                          const SizedBox(height: 20),
+                                  // Banner Carousel (auto-scroll 10s)
+                                  _buildBannerCarousel(),
+                                  const SizedBox(height: 10),
+                                  _buildCarouselDots(),
+                                  const SizedBox(height: 20),
 
-                                          // 🛠️ 4. ELEMEN BARU 3: Quick Chips Jasa Tukang
-                                          _buildHandymanQuickChips(),
-                                          const SizedBox(height: 20),
+                                  // 🛠️ 4. ELEMEN BARU 3: Quick Chips Jasa Tukang
+                                  _buildHandymanQuickChips(),
+                                  const SizedBox(height: 20),
 
-                                          // 3 Kategori Utama
-                                          _buildSectionTitle('Layanan Utama', 'Pilih kategori kebutuhanmu'),
-                                          const SizedBox(height: 12),
-                                          _buildCategoryRow(),
-                                          const SizedBox(height: 24),
-
-                                          // 📈 FEATURE GRAFIK PREDIKSI HARGA PASAR (Kotak Gede + Interaktif)
-                                          _buildSectionTitle('Pemantauan Harga Pasar', 'Pantau fluktuasi & prediksi harga komoditas terkini'),
-                                          const SizedBox(height: 12),
-                                          _buildInteractivePriceTrendSection(),
-                                          const SizedBox(height: 24),
-
-                                          // 🍲 ELEMEN BARU: MASAK APA HARI INI? (Paket Resep Instan Sekali Klik)
-                                          _buildSectionTitle('Masak Apa Hari Ini?', 'Beli komplit bahan resep favorit dalam sekali klik'),
-                                          const SizedBox(height: 12),
-                                          _buildRecipeBundlesScroll(),
-                                          const SizedBox(height: 24),
-
-                                          // Gerai Pasar Terdekat
-                                          _buildSectionTitle('Pasar Terdekat dari Rumah', 'Rekomendasi pasar tradisional di Kota Balikpapan'),
-                                          const SizedBox(height: 12),
-                                          _buildStoreList(),
-                                          const SizedBox(height: 8),
-                                        ],
-                                      ),
-                                    ),
+                                  // 3 Kategori Utama
+                                  _buildSectionTitle(
+                                    'Layanan Utama',
+                                    'Pilih kategori kebutuhanmu',
                                   ),
+                                  const SizedBox(height: 12),
+                                  _buildCategoryRow(),
+                                  const SizedBox(height: 24),
+
+                                  // 📈 FEATURE GRAFIK PREDIKSI HARGA PASAR (Kotak Gede + Interaktif)
+                                  _buildSectionTitle(
+                                    'Pemantauan Harga Pasar',
+                                    'Pantau fluktuasi & prediksi harga komoditas terkini',
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildInteractivePriceTrendSection(),
+                                  const SizedBox(height: 24),
+
+                                  // 🍲 ELEMEN BARU: MASAK APA HARI INI? (Paket Resep Instan Sekali Klik)
+                                  _buildSectionTitle(
+                                    'Masak Apa Hari Ini?',
+                                    'Beli komplit bahan resep favorit dalam sekali klik',
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildRecipeBundlesScroll(),
+                                  const SizedBox(height: 24),
+
+                                  // Gerai Pasar Terdekat
+                                  _buildSectionTitle(
+                                    'Pasar Terdekat dari Rumah',
+                                    'Rekomendasi pasar tradisional di Kota Balikpapan',
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildStoreList(),
+                                  const SizedBox(height: 8),
+                                ],
+                              ),
+                            ),
+                          ),
                   ),
 
                   // Bottom Nav
@@ -539,11 +812,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_welcomeGreeting,
-                    style: _m(size: 13, color: _textDark.withValues(alpha: 0.7))),
+                Text(
+                  _welcomeGreeting,
+                  style: _m(size: 13, color: _textDark.withValues(alpha: 0.7)),
+                ),
                 const SizedBox(height: 2),
-                Text(_userName,
-                    style: _m(size: 20, weight: FontWeight.bold, color: _textDark)),
+                Text(
+                  _userName,
+                  style: _m(
+                    size: 20,
+                    weight: FontWeight.bold,
+                    color: _textDark,
+                  ),
+                ),
               ],
             ),
           ),
@@ -553,11 +834,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             stream: FirebaseAuth.instance.currentUser == null
                 ? null
                 : FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(FirebaseAuth.instance.currentUser!.uid)
-                    .collection('inbox')
-                    .where('read', isEqualTo: false)
-                    .snapshots(),
+                      .collection('users')
+                      .doc(FirebaseAuth.instance.currentUser!.uid)
+                      .collection('inbox')
+                      .where('read', isEqualTo: false)
+                      .snapshots(),
             builder: (context, snapshot) {
               final unreadCount = snapshot.data?.docs.length ?? 0;
               return GestureDetector(
@@ -568,25 +849,39 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: Container(
                   padding: const EdgeInsets.all(9),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.35),
+                    color: Colors.white.withValues(alpha: 0.35),
                     shape: BoxShape.circle,
                   ),
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      const Icon(Icons.mail_outline_rounded, color: _textDark, size: 22),
+                      const Icon(
+                        Icons.mail_outline_rounded,
+                        color: _textDark,
+                        size: 22,
+                      ),
                       if (unreadCount > 0)
                         Positioned(
                           right: -3,
                           top: -3,
                           child: Container(
                             padding: const EdgeInsets.all(3),
-                            constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
-                            decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                            constraints: const BoxConstraints(
+                              minWidth: 15,
+                              minHeight: 15,
+                            ),
+                            decoration: const BoxDecoration(
+                              color: Colors.redAccent,
+                              shape: BoxShape.circle,
+                            ),
                             child: Text(
                               unreadCount > 9 ? '9+' : '$unreadCount',
                               textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
@@ -604,10 +899,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: Container(
               padding: const EdgeInsets.all(9),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.35),
+                color: Colors.white.withValues(alpha: 0.35),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.notifications_outlined, color: _textDark, size: 22),
+              child: const Icon(
+                Icons.notifications_outlined,
+                color: _textDark,
+                size: 22,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -627,7 +926,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               decoration: BoxDecoration(
                 color: Colors.white,
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 6)],
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 6,
+                  ),
+                ],
                 image: _photoUrl != null
                     ? DecorationImage(
                         image: NetworkImage(_photoUrl!),
@@ -654,38 +958,65 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _iconButton(IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(9),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.35),
-        shape: BoxShape.circle,
-      ),
-      child: Icon(icon, color: _textDark, size: 22),
-    );
-  }
-
   // ──────────────────────────────────────────
   //  SEARCH BAR
   // ──────────────────────────────────────────
   Widget _buildSearchBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 3))],
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, color: _greenBottom, size: 20),
+          Icon(Icons.search_rounded, color: _greenBottom, size: 20),
           const SizedBox(width: 10),
-          Text('Cari sayur, ikan, tukang...', style: _m(size: 13, color: Colors.black45)),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: _greenBottom.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-            child: Text('Filter', style: _m(size: 11, color: _greenBottom, weight: FontWeight.w600)),
+          Expanded(
+            // Cari bagian ini di dalam Expanded
+            child: TextField(
+              controller: _searchController, // <-- Menghubungkan controller
+              decoration: const InputDecoration(
+                hintText: 'Cari sayur, ikan, tukang...',
+                hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
+                border: InputBorder.none,
+              ),
+              onChanged: (text) {
+                // <-- MENJADI PENCARIAN REAL-TIME
+                setState(() {
+                  _searchQuery = text
+                      .toLowerCase()
+                      .trim(); // Update kata kunci tiap ketik
+                });
+              },
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              // Aksi tombol filter
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8D8),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Filter',
+                style: TextStyle(
+                  color: Color(0xFF007A3D),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -742,7 +1073,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: StreamBuilder<DocumentSnapshot>(
             stream: uid == null
                 ? const Stream.empty()
-                : FirebaseFirestore.instance.collection('simulated_orders').doc(uid).snapshots(),
+                : FirebaseFirestore.instance
+                      .collection('simulated_orders')
+                      .doc(uid)
+                      .snapshots(),
             builder: (context, snapshot) {
               final data = snapshot.data?.data() as Map<String, dynamic>?;
               final status = data?['status'] as String?;
@@ -751,7 +1085,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               if (hasActiveOrder) {
                 final isPackaging = status == 'dikemas';
                 return _quickCard(
-                  icon: isPackaging ? Icons.inventory_2_rounded : Icons.two_wheeler_rounded,
+                  icon: isPackaging
+                      ? Icons.inventory_2_rounded
+                      : Icons.two_wheeler_rounded,
                   iconColor: Colors.white,
                   title: isPackaging ? 'Sedang Dikemas' : 'Dalam Pengantaran',
                   sub: isPackaging
@@ -760,9 +1096,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   bgColor: Colors.orange.shade700,
                   textColor: Colors.white,
                   subTextColor: Colors.white.withValues(alpha: 0.9),
-                  gradientColors: [Colors.orange.shade800, Colors.orange.shade600],
+                  gradientColors: [
+                    Colors.orange.shade800,
+                    Colors.orange.shade600,
+                  ],
                   onTap: () {
-                    HomeScreen.navIndexNotifier.value = 4; // Switch to tab Pesanan
+                    HomeScreen.navIndexNotifier.value =
+                        4; // Switch to tab Pesanan
                   },
                 );
               }
@@ -801,14 +1141,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: gradientColors == null ? bgColor : null,
-          gradient: gradientColors != null ? LinearGradient(colors: gradientColors) : null,
+          gradient: gradientColors != null
+              ? LinearGradient(colors: gradientColors)
+              : null,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: (gradientColors != null ? gradientColors.first : Colors.black).withValues(alpha: gradientColors != null ? 0.2 : 0.06),
+              color:
+                  (gradientColors != null ? gradientColors.first : Colors.black)
+                      .withValues(alpha: gradientColors != null ? 0.2 : 0.06),
               blurRadius: 8,
               offset: const Offset(0, 3),
-            )
+            ),
           ],
         ),
         child: Row(
@@ -816,24 +1160,39 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: gradientColors != null ? Colors.white.withValues(alpha: 0.2) : iconColor.withValues(alpha: 0.12),
+                color: gradientColors != null
+                    ? Colors.white.withValues(alpha: 0.2)
+                    : iconColor.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: gradientColors != null ? Colors.white : iconColor, size: 18),
+              child: Icon(
+                icon,
+                color: gradientColors != null ? Colors.white : iconColor,
+                size: 18,
+              ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: _m(size: 11, weight: FontWeight.bold, color: textColor)),
+                  Text(
+                    title,
+                    style: _m(
+                      size: 11,
+                      weight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     sub,
                     style: _m(
                       size: 9.5,
                       color: subTextColor,
-                      weight: subTextColor == _greenBottom ? FontWeight.w800 : FontWeight.normal,
+                      weight: subTextColor == _greenBottom
+                          ? FontWeight.w800
+                          : FontWeight.normal,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -867,7 +1226,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // sementara dibiarkan tidak melakukan apa-apa saat ditekan.
   void _onBannerTap(_BannerData b) {
     if (b.tag == 'JASA') {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const MitraCategoryPage()));
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MitraCategoryPage()),
+      );
     }
   }
 
@@ -879,8 +1241,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         decoration: BoxDecoration(
           color: b.bgColor,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: b.tagColor.withValues(alpha: 0.4), width: 2),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 5))],
+          border: Border.all(
+            color: b.tagColor.withValues(alpha: 0.4),
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
+            ),
+          ],
         ),
         padding: const EdgeInsets.all(18),
         child: Column(
@@ -888,11 +1259,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: b.tagColor, borderRadius: BorderRadius.circular(20)),
-              child: Text(b.tag, style: _m(size: 10, weight: FontWeight.bold, color: Colors.white)),
+              decoration: BoxDecoration(
+                color: b.tagColor,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                b.tag,
+                style: _m(
+                  size: 10,
+                  weight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
             ),
             const Spacer(),
-            Text(b.title, style: _m(size: 16, weight: FontWeight.bold, height: 1.3)),
+            Text(
+              b.title,
+              style: _m(size: 16, weight: FontWeight.bold, height: 1.3),
+            ),
             const SizedBox(height: 4),
             Text(b.sub, style: _m(size: 11.5, color: Colors.black54)),
             const SizedBox(height: 10),
@@ -901,11 +1285,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               style: ElevatedButton.styleFrom(
                 backgroundColor: b.tagColor,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 elevation: 0,
               ),
-              child: Text('Lihat Detail', style: _m(size: 11, weight: FontWeight.bold, color: Colors.white)),
+              child: Text(
+                'Lihat Detail',
+                style: _m(
+                  size: 11,
+                  weight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ],
         ),
@@ -937,16 +1333,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // ──────────────────────────────────────────
   Widget _buildHandymanQuickChips() {
     final chips = [
-      {'label': 'Perbaikan', 'icon': Icons.handyman_rounded, 'color': Colors.orange.shade800},
-      {'label': 'Kebersihan', 'icon': Icons.cleaning_services_rounded, 'color': Colors.teal},
-      {'label': 'Pendidikan', 'icon': Icons.school_rounded, 'color': Colors.indigo},
-      {'label': 'Kesehatan', 'icon': Icons.health_and_safety_rounded, 'color': Colors.redAccent},
+      {
+        'label': 'Perbaikan',
+        'icon': Icons.handyman_rounded,
+        'color': Colors.orange.shade800,
+      },
+      {
+        'label': 'Kebersihan',
+        'icon': Icons.cleaning_services_rounded,
+        'color': Colors.teal,
+      },
+      {
+        'label': 'Pendidikan',
+        'icon': Icons.school_rounded,
+        'color': Colors.indigo,
+      },
+      {
+        'label': 'Kesehatan',
+        'icon': Icons.health_and_safety_rounded,
+        'color': Colors.redAccent,
+      },
     ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionTitle('Panggil Tukang Cepat', 'Tenaga ahli siap datang ke rumah'),
+        _buildSectionTitle(
+          'Panggil Tukang Cepat',
+          'Tenaga ahli siap datang ke rumah',
+        ),
         const SizedBox(height: 10),
         SizedBox(
           height: 40,
@@ -962,17 +1377,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 onTap: () => _bukaKategoriMitra(label),
                 child: Container(
                   margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6)],
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 6,
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
                       Icon(item['icon'] as IconData, size: 16, color: color),
                       const SizedBox(width: 6),
-                      Text(label, style: _m(size: 11, weight: FontWeight.bold, color: _textDark)),
+                      Text(
+                        label,
+                        style: _m(
+                          size: 11,
+                          weight: FontWeight.bold,
+                          color: _textDark,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -998,7 +1428,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (kategori == null) return;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => MitraSubCategoryPage(kategori: kategori!)),
+      MaterialPageRoute(
+        builder: (_) => MitraSubCategoryPage(kategori: kategori!),
+      ),
     );
   }
 
@@ -1009,8 +1441,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: _m(size: 15, weight: FontWeight.bold, color: Colors.white)),
-        Text(sub, style: _m(size: 11, color: Colors.white.withValues(alpha: 0.8))),
+        Text(
+          title,
+          style: _m(size: 15, weight: FontWeight.bold, color: Colors.white),
+        ),
+        Text(
+          sub,
+          style: _m(size: 11, color: Colors.white.withValues(alpha: 0.8)),
+        ),
       ],
     );
   }
@@ -1020,9 +1458,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // ──────────────────────────────────────────
   Widget _buildCategoryRow() {
     final cats = [
-      {'label': 'Gerai Pasar', 'icon': Icons.storefront_rounded, 'color': const Color(0xFF1B7A3E)},
-      {'label': 'Cek Harga', 'icon': Icons.show_chart_rounded, 'color': const Color(0xFF1565C0)},
-      {'label': 'Jasa Tukang', 'icon': Icons.handyman_rounded, 'color': const Color(0xFFE65100)},
+      {
+        'label': 'Gerai Pasar',
+        'icon': Icons.storefront_rounded,
+        'color': const Color(0xFF1B7A3E),
+      },
+      {
+        'label': 'Cek Harga',
+        'icon': Icons.show_chart_rounded,
+        'color': const Color(0xFF1565C0),
+      },
+      {
+        'label': 'Jasa Tukang',
+        'icon': Icons.handyman_rounded,
+        'color': const Color(0xFFE65100),
+      },
     ];
 
     return Row(
@@ -1035,18 +1485,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 8, offset: const Offset(0, 3))],
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.07),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
                   child: Icon(c['icon'] as IconData, color: color, size: 26),
                 ),
                 const SizedBox(height: 8),
-                Text(c['label'] as String, style: _m(size: 11, weight: FontWeight.bold), textAlign: TextAlign.center),
+                Text(
+                  c['label'] as String,
+                  style: _m(size: 11, weight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
           ),
@@ -1076,7 +1539,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final hariIni = prices[todayIdx];
     final kemarin = prices[yesterdayIdx];
     final selisih = hariIni - kemarin;
-    final selisihLabel = selisih >= 0 ? '+Rp${_formatPrice(selisih.abs())}' : '-Rp${_formatPrice(selisih.abs())}';
+    final selisihLabel = selisih >= 0
+        ? '+Rp${_formatPrice(selisih.abs())}'
+        : '-Rp${_formatPrice(selisih.abs())}';
 
     return Container(
       padding: const EdgeInsets.all(0),
@@ -1084,7 +1549,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.10), blurRadius: 18, offset: const Offset(0, 6)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.10),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
         ],
       ),
       child: Column(
@@ -1104,20 +1573,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         color: _greenBottom.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.analytics_rounded, color: _greenBottom, size: 20),
+                      child: const Icon(
+                        Icons.analytics_rounded,
+                        color: _greenBottom,
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Harga Pasar Hari Ini', style: _m(size: 15, weight: FontWeight.bold)),
-                        Text('Pasar Mayestik — Data realtime', style: _m(size: 10, color: Colors.black45)),
+                        Text(
+                          'Harga Pasar Hari Ini',
+                          style: _m(size: 15, weight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Pasar Mayestik — Data realtime',
+                          style: _m(size: 10, color: Colors.black45),
+                        ),
                       ],
                     ),
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.green.shade50,
                     borderRadius: BorderRadius.circular(8),
@@ -1128,10 +1610,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       Container(
                         width: 6,
                         height: 6,
-                        decoration: BoxDecoration(color: Colors.green.shade500, shape: BoxShape.circle),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade500,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                       const SizedBox(width: 4),
-                      Text('LIVE', style: _m(size: 9, weight: FontWeight.bold, color: Colors.green.shade700)),
+                      Text(
+                        'LIVE',
+                        style: _m(
+                          size: 9,
+                          weight: FontWeight.bold,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1157,12 +1649,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: isSelected ? _greenBottom : Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(22),
                         boxShadow: isSelected
-                            ? [BoxShadow(color: _greenBottom.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 2))]
+                            ? [
+                                BoxShadow(
+                                  color: _greenBottom.withValues(alpha: 0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
                             : [],
                       ),
                       child: Row(
@@ -1173,7 +1674,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             c.name,
                             style: _m(
                               size: 12,
-                              weight: isSelected ? FontWeight.bold : FontWeight.w600,
+                              weight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.w600,
                               color: isSelected ? Colors.white : Colors.black87,
                             ),
                           ),
@@ -1207,9 +1710,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       children: [
                         Row(
                           children: [
-                            Text(selected.icon, style: const TextStyle(fontSize: 20)),
+                            Text(
+                              selected.icon,
+                              style: const TextStyle(fontSize: 20),
+                            ),
                             const SizedBox(width: 6),
-                            Text(selected.name, style: _m(size: 12, color: Colors.black54, weight: FontWeight.w500)),
+                            Text(
+                              selected.name,
+                              style: _m(
+                                size: 12,
+                                color: Colors.black54,
+                                weight: FontWeight.w500,
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 4),
@@ -1218,12 +1731,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           children: [
                             Text(
                               'Rp${_formatPrice(selected.currentPrice)}',
-                              style: _m(size: 24, weight: FontWeight.bold, color: _textDark),
+                              style: _m(
+                                size: 24,
+                                weight: FontWeight.bold,
+                                color: _textDark,
+                              ),
                             ),
                             const SizedBox(width: 2),
                             Padding(
                               padding: const EdgeInsets.only(bottom: 3),
-                              child: Text(selected.unit, style: _m(size: 11, color: Colors.black45)),
+                              child: Text(
+                                selected.unit,
+                                style: _m(size: 11, color: Colors.black45),
+                              ),
                             ),
                           ],
                         ),
@@ -1231,18 +1751,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
-                                color: selected.isUp ? Colors.red.shade50 : Colors.green.shade50,
+                                color: selected.isUp
+                                    ? Colors.red.shade50
+                                    : Colors.green.shade50,
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    selected.isUp ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                                    selected.isUp
+                                        ? Icons.trending_up_rounded
+                                        : Icons.trending_down_rounded,
                                     size: 13,
-                                    color: selected.isUp ? Colors.red.shade600 : Colors.green.shade600,
+                                    color: selected.isUp
+                                        ? Colors.red.shade600
+                                        : Colors.green.shade600,
                                   ),
                                   const SizedBox(width: 3),
                                   Text(
@@ -1250,7 +1779,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                     style: _m(
                                       size: 10,
                                       weight: FontWeight.bold,
-                                      color: selected.isUp ? Colors.red.shade600 : Colors.green.shade600,
+                                      color: selected.isUp
+                                          ? Colors.red.shade600
+                                          : Colors.green.shade600,
                                     ),
                                   ),
                                 ],
@@ -1321,9 +1852,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Text(_shortPrice(maxP), style: _m(size: 9, color: Colors.black38, weight: FontWeight.w600)),
-                                Text(_shortPrice(midP), style: _m(size: 9, color: Colors.black38, weight: FontWeight.w600)),
-                                Text(_shortPrice(minP), style: _m(size: 9, color: Colors.black38, weight: FontWeight.w600)),
+                                Text(
+                                  _shortPrice(maxP),
+                                  style: _m(
+                                    size: 9,
+                                    color: Colors.black38,
+                                    weight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  _shortPrice(midP),
+                                  style: _m(
+                                    size: 9,
+                                    color: Colors.black38,
+                                    weight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  _shortPrice(minP),
+                                  style: _m(
+                                    size: 9,
+                                    color: Colors.black38,
+                                    weight: FontWeight.w600,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -1374,12 +1926,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             textAlign: TextAlign.center,
                             style: _m(
                               size: 8,
-                              weight: (isPrediction || isToday) ? FontWeight.bold : FontWeight.normal,
+                              weight: (isPrediction || isToday)
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
                               color: isPrediction
                                   ? Colors.deepPurple
                                   : isToday
-                                      ? _greenBottom
-                                      : Colors.black38,
+                                  ? _greenBottom
+                                  : Colors.black38,
                             ),
                           ),
                         );
@@ -1413,7 +1967,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 const Spacer(),
                 GestureDetector(
                   onTap: () => setState(() => _touchedDataPointIndex = null),
-                  child: Text('Ketuk titik grafik ☝️', style: _m(size: 9, color: Colors.black38)),
+                  child: Text(
+                    'Ketuk titik grafik ☝️',
+                    style: _m(size: 9, color: Colors.black38),
+                  ),
                 ),
               ],
             ),
@@ -1430,7 +1987,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [_greenBottom.withValues(alpha: 0.08), Colors.deepPurple.withValues(alpha: 0.04)],
+                  colors: [
+                    _greenBottom.withValues(alpha: 0.08),
+                    Colors.deepPurple.withValues(alpha: 0.04),
+                  ],
                 ),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: _greenBottom.withValues(alpha: 0.15)),
@@ -1444,18 +2004,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       color: _greenBottom.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.trending_up_rounded, color: _greenBottom, size: 18),
+                    child: const Icon(
+                      Icons.trending_up_rounded,
+                      color: _greenBottom,
+                      size: 18,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Prediksi Harga Besok', style: _m(size: 10, weight: FontWeight.bold, color: _greenBottom)),
+                        Text(
+                          'Prediksi Harga Besok',
+                          style: _m(
+                            size: 10,
+                            weight: FontWeight.bold,
+                            color: _greenBottom,
+                          ),
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           selected.predictionNote,
-                          style: _m(size: 10.5, weight: FontWeight.w500, color: Colors.black87, height: 1.4),
+                          style: _m(
+                            size: 10.5,
+                            weight: FontWeight.w500,
+                            color: Colors.black87,
+                            height: 1.4,
+                          ),
                         ),
                       ],
                     ),
@@ -1550,7 +2126,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         color: isPrediction ? Colors.deepPurple.shade50 : Colors.blue.shade50,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isPrediction ? Colors.deepPurple.shade200 : Colors.blue.shade200,
+          color: isPrediction
+              ? Colors.deepPurple.shade200
+              : Colors.blue.shade200,
         ),
       ),
       child: Row(
@@ -1570,7 +2148,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   style: _m(
                     size: 10,
                     weight: FontWeight.bold,
-                    color: isPrediction ? Colors.deepPurple : Colors.blue.shade700,
+                    color: isPrediction
+                        ? Colors.deepPurple
+                        : Colors.blue.shade700,
                   ),
                 ),
                 Text(
@@ -1581,36 +2161,41 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
           if (idx > 0) ...[
-            Builder(builder: (_) {
-              final diff = price - selected.historyPrices[idx - 1];
-              final isUp = diff > 0;
-              final isStable = diff == 0;
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isStable
-                      ? Colors.grey.shade100
-                      : isUp
-                          ? Colors.red.shade50
-                          : Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  isStable
-                      ? 'Stabil'
-                      : '${isUp ? "+" : "-"}Rp${_formatPrice(diff.abs())}',
-                  style: _m(
-                    size: 9,
-                    weight: FontWeight.bold,
-                    color: isStable
-                        ? Colors.grey
-                        : isUp
-                            ? Colors.red.shade600
-                            : Colors.green.shade600,
+            Builder(
+              builder: (_) {
+                final diff = price - selected.historyPrices[idx - 1];
+                final isUp = diff > 0;
+                final isStable = diff == 0;
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 3,
                   ),
-                ),
-              );
-            }),
+                  decoration: BoxDecoration(
+                    color: isStable
+                        ? Colors.grey.shade100
+                        : isUp
+                        ? Colors.red.shade50
+                        : Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    isStable
+                        ? 'Stabil'
+                        : '${isUp ? "+" : "-"}Rp${_formatPrice(diff.abs())}',
+                    style: _m(
+                      size: 9,
+                      weight: FontWeight.bold,
+                      color: isStable
+                          ? Colors.grey
+                          : isUp
+                          ? Colors.red.shade600
+                          : Colors.green.shade600,
+                    ),
+                  ),
+                );
+              },
+            ),
           ],
         ],
       ),
@@ -1620,39 +2205,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // ──────────────────────────────────────────
   //  🍲 MASAK APA HARI INI? (PAKET RESEP KILAT - FULL PHOTO CARD)
   // ──────────────────────────────────────────
+
   Widget _buildRecipeBundlesScroll() {
+    final filteredBundles = _recipeBundles.where((recipe) {
+      return recipe.title.toLowerCase().contains(_searchQuery);
+    }).toList();
     return SizedBox(
       height: 210,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: _recipeBundles.length,
+        itemCount: filteredBundles.length,
         itemBuilder: (_, i) {
-          final recipe = _recipeBundles[i];
+          final recipe = filteredBundles[i];
           return GestureDetector(
-            onTap: () {
-              setState(() => _cartItemCount += recipe.ingredients.length);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      const Icon(Icons.shopping_bag_outlined, color: Colors.white, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Paket ${recipe.title} (${recipe.ingredients.length} bahan) masuk keranjang!',
-                          style: _m(size: 11, color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                  duration: const Duration(seconds: 2),
-                  backgroundColor: _greenBottom,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              );
-            },
+            onTap: () => _showRecipeCheckoutSheet(context, recipe),
             child: Container(
               width: 155,
               margin: const EdgeInsets.only(right: 14),
@@ -1671,7 +2238,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // ── 1. Foto Full Resep (No White Border) ──
                     Image.network(
                       recipe.imageUrl,
                       fit: BoxFit.cover,
@@ -1679,16 +2245,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         if (loadingProgress == null) return child;
                         return Container(
                           color: _greenBottom.withValues(alpha: 0.15),
-                          child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _greenBottom)),
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: _greenBottom,
+                            ),
+                          ),
                         );
                       },
                       errorBuilder: (ctx, _, __) => Container(
                         color: _greenBottom.withValues(alpha: 0.2),
-                        child: Center(child: Text(recipe.icon, style: const TextStyle(fontSize: 42))),
+                        child: Center(
+                          child: Text(
+                            recipe.icon,
+                            style: const TextStyle(fontSize: 42),
+                          ),
+                        ),
                       ),
                     ),
-
-                    // ── 2. Gradient Gelap Bawah ──
                     Positioned.fill(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
@@ -1705,13 +2279,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                       ),
                     ),
-
-                    // ── 3. Badge Durasi (Pojok Kanan Atas) ──
                     Positioned(
                       top: 8,
                       right: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black.withValues(alpha: 0.60),
                           borderRadius: BorderRadius.circular(8),
@@ -1719,18 +2294,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.timer_outlined, color: Colors.white, size: 10),
+                            const Icon(
+                              Icons.timer_outlined,
+                              color: Colors.white,
+                              size: 10,
+                            ),
                             const SizedBox(width: 3),
                             Text(
                               recipe.duration,
-                              style: _m(size: 8.5, weight: FontWeight.bold, color: Colors.white),
+                              style: _m(
+                                size: 8.5,
+                                weight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                           ],
                         ),
                       ),
                     ),
-
-                    // ── 4. Info Bawah: Judul, Isi Bahan, Harga + Tombol ──
                     Positioned(
                       left: 10,
                       right: 10,
@@ -1741,12 +2322,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         children: [
                           Row(
                             children: [
-                              Text(recipe.icon, style: const TextStyle(fontSize: 12)),
+                              Text(
+                                recipe.icon,
+                                style: const TextStyle(fontSize: 12),
+                              ),
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Text(
                                   recipe.title,
-                                  style: _m(size: 12.5, weight: FontWeight.bold, color: Colors.white),
+                                  style: _m(
+                                    size: 12.5,
+                                    weight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -1766,7 +2354,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             children: [
                               Text(
                                 'Rp${_formatPrice(recipe.totalPrice)}',
-                                style: _m(size: 11.5, weight: FontWeight.bold, color: Colors.white),
+                                style: _m(
+                                  size: 11.5,
+                                  weight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                               ),
                               Container(
                                 padding: const EdgeInsets.all(5),
@@ -1774,7 +2366,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   color: _greenBottom,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(Icons.add_shopping_cart_rounded, color: Colors.white, size: 14),
+                                child: const Icon(
+                                  Icons.add_shopping_cart_rounded,
+                                  color: Colors.white,
+                                  size: 14,
+                                ),
                               ),
                             ],
                           ),
@@ -1791,15 +2387,338 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  void _showRecipeCheckoutSheet(BuildContext context, _RecipeBundle recipe) {
+    final String recipeTitle = recipe.title;
 
+    // Ambil daftar bahan berdasarkan judul resep
+    final List<IngredientItem> ingredients =
+        (recipeIngredientsData[recipeTitle] ?? [])
+            .map(
+              (item) => IngredientItem(
+                name: item.name,
+                price: item.price,
+                icon: item.icon,
+                quantity: 1,
+              ),
+            )
+            .toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            int totalPrice = ingredients.fold(
+              0,
+              (sum, item) => sum + (item.price * item.quantity),
+            );
+            int totalItems = ingredients.fold(
+              0,
+              (sum, item) => sum + item.quantity,
+            );
+
+            return Stack(
+              children: [
+                // 1. Background Blur
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.2),
+                    ),
+                  ),
+                ),
+
+                // 2. Kartu Rincian Mengambang
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    margin: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F7F0),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header Modal
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              recipeTitle,
+                              style: GoogleFonts.manrope(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF0F1B11),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, color: Colors.grey),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Daftar Item Bahan
+                        Flexible(
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: ingredients.length,
+                            itemBuilder: (context, index) {
+                              final item = ingredients[index];
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Ikon Spesifik Bahan
+                                    Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE2E8D8),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        item.icon,
+                                        color: const Color(0xFF007A3D),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    // Nama & Harga Spesifik Item
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item.name,
+                                            style: GoogleFonts.manrope(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                              color: const Color(0xFF0F1B11),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Sekarang: Rp ${item.price}',
+                                            style: GoogleFonts.manrope(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: const Color(0xFF007A3D),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+
+                                    // Tombol Pengatur Kuantitas (+/-)
+                                    Row(
+                                      children: [
+                                        if (item.quantity > 0) ...[
+                                          InkWell(
+                                            onTap: () {
+                                              setModalState(() {
+                                                item.quantity--;
+                                              });
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.all(4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey.shade200,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: const Icon(
+                                                Icons.remove,
+                                                size: 18,
+                                                color: Colors.black,
+                                              ),
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8.0,
+                                            ),
+                                            child: Text(
+                                              '${item.quantity}',
+                                              style: GoogleFonts.manrope(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                        InkWell(
+                                          onTap: () {
+                                            setModalState(() {
+                                              item.quantity++;
+                                            });
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF007A3D),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: const Icon(
+                                              Icons.add,
+                                              size: 18,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Floating Banner Checkout
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF007A3D),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      const Icon(
+                                        Icons.shopping_cart_outlined,
+                                        color: Colors.white,
+                                        size: 24,
+                                      ),
+                                      if (totalItems > 0)
+                                        Positioned(
+                                          right: -6,
+                                          top: -6,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: const BoxDecoration(
+                                              color: Colors.red,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Text(
+                                              '$totalItems',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '$totalItems item',
+                                        style: GoogleFonts.manrope(
+                                          color: Colors.white70,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Rp $totalPrice',
+                                        style: GoogleFonts.manrope(
+                                          color: Colors.white,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+
+                              // Tombol Aksi Ke Halaman Checkout
+                              InkWell(
+                                onTap: totalItems == 0
+                                    ? null
+                                    : () {
+                                        Navigator.pop(context);
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const CheckoutScreen(),
+                                          ),
+                                        );
+                                      },
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      'Checkout',
+                                      style: GoogleFonts.manrope(
+                                        color: Colors.white,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      color: Colors.white,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   // ──────────────────────────────────────────
   //  DAFTAR GERAI PASAR
   // ──────────────────────────────────────────
   Widget _buildStoreList() {
-    return Column(
-      children: _stores.map((s) => _buildStoreCard(s)).toList(),
-    );
+    return Column(children: _stores.map((s) => _buildStoreCard(s)).toList());
   }
 
   Widget _buildStoreCard(_MarketStore s) {
@@ -1809,7 +2728,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 3))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -1820,7 +2745,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               color: _greenBottom.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.storefront_rounded, color: _greenBottom, size: 28),
+            child: const Icon(
+              Icons.storefront_rounded,
+              color: _greenBottom,
+              size: 28,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1833,13 +2762,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
+                    const Icon(
+                      Icons.star_rounded,
+                      color: Colors.amber,
+                      size: 14,
+                    ),
                     const SizedBox(width: 3),
-                    Text('${s.rating}', style: _m(size: 11, weight: FontWeight.w600)),
+                    Text(
+                      '${s.rating}',
+                      style: _m(size: 11, weight: FontWeight.w600),
+                    ),
                     const SizedBox(width: 10),
-                    const Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 13),
+                    const Icon(
+                      Icons.location_on_rounded,
+                      color: Colors.redAccent,
+                      size: 13,
+                    ),
                     const SizedBox(width: 2),
-                    Text(s.distance, style: _m(size: 11, color: Colors.black45)),
+                    Text(
+                      s.distance,
+                      style: _m(size: 11, color: Colors.black45),
+                    ),
                   ],
                 ),
               ],
@@ -1859,7 +2802,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   style: _m(
                     size: 10,
                     weight: FontWeight.bold,
-                    color: s.isOpen ? Colors.green.shade700 : Colors.red.shade400,
+                    color: s.isOpen
+                        ? Colors.green.shade700
+                        : Colors.red.shade400,
                   ),
                 ),
               ),
@@ -1870,13 +2815,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   backgroundColor: _greenBottom,
                   foregroundColor: Colors.white,
                   disabledBackgroundColor: Colors.grey.shade200,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   elevation: 0,
                 ),
-                child: Text('Masuk', style: _m(size: 11, weight: FontWeight.bold, color: Colors.white)),
+                child: Text(
+                  'Masuk',
+                  style: _m(
+                    size: 11,
+                    weight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ],
           ),
@@ -1901,7 +2858,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 12, offset: Offset(0, -3))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 12,
+            offset: Offset(0, -3),
+          ),
+        ],
       ),
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       child: Row(
@@ -1926,7 +2889,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: selected ? _greenBottom.withValues(alpha: 0.1) : Colors.transparent,
+                color: selected
+                    ? _greenBottom.withValues(alpha: 0.1)
+                    : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -2029,7 +2994,10 @@ class _EnhancedLineChartPainter extends CustomPainter {
     // Path untuk garis aktual (sampai "Hari Ini")
     if (actualEndIndex > 0) {
       final actualPath = Path();
-      actualPath.moveTo(points[0].dx, _lerp(size.height, points[0].dy, animationValue));
+      actualPath.moveTo(
+        points[0].dx,
+        _lerp(size.height, points[0].dy, animationValue),
+      );
       for (int i = 1; i <= actualEndIndex; i++) {
         final prev = points[i - 1];
         final cur = points[i];
@@ -2058,7 +3026,10 @@ class _EnhancedLineChartPainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [lineColor.withValues(alpha: 0.20 * animationValue), lineColor.withValues(alpha: 0.0)],
+          colors: [
+            lineColor.withValues(alpha: 0.20 * animationValue),
+            lineColor.withValues(alpha: 0.0),
+          ],
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
       canvas.drawPath(fillPath, fillPaint);
     }
@@ -2094,14 +3065,20 @@ class _EnhancedLineChartPainter extends CustomPainter {
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Colors.deepPurple.withValues(alpha: 0.10 * animationValue), Colors.deepPurple.withValues(alpha: 0.0)],
+          colors: [
+            Colors.deepPurple.withValues(alpha: 0.10 * animationValue),
+            Colors.deepPurple.withValues(alpha: 0.0),
+          ],
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
       canvas.drawPath(predFillPath, predFillPaint);
     }
 
     // ── 4. Titik data (dots) ──
     for (int i = 0; i < points.length; i++) {
-      final p = Offset(points[i].dx, _lerp(size.height, points[i].dy, animationValue));
+      final p = Offset(
+        points[i].dx,
+        _lerp(size.height, points[i].dy, animationValue),
+      );
       final isTouched = touchedIndex == i;
       final isPrediction = i >= predictionStartIndex;
 
@@ -2109,8 +3086,16 @@ class _EnhancedLineChartPainter extends CustomPainter {
 
       if (isTouched) {
         // Lingkaran highlight besar saat disentuh
-        canvas.drawCircle(p, 12, Paint()..color = dotColor.withValues(alpha: 0.15));
-        canvas.drawCircle(p, 8, Paint()..color = dotColor.withValues(alpha: 0.25));
+        canvas.drawCircle(
+          p,
+          12,
+          Paint()..color = dotColor.withValues(alpha: 0.15),
+        );
+        canvas.drawCircle(
+          p,
+          8,
+          Paint()..color = dotColor.withValues(alpha: 0.25),
+        );
       }
 
       // Dot utama
@@ -2119,7 +3104,7 @@ class _EnhancedLineChartPainter extends CustomPainter {
 
       // Label harga di atas titik "Hari Ini" dan "Prediksi"
       if (i == predictionStartIndex - 1 || i == predictionStartIndex) {
-        final priceText = 'Rp${(prices[i] / 1000).toStringAsFixed(0)}rb';
+        final priceText = 'Rp${formatRupiah(prices[i])}';
         final textSpan = TextSpan(
           text: priceText,
           style: TextStyle(
@@ -2130,7 +3115,7 @@ class _EnhancedLineChartPainter extends CustomPainter {
         );
         final textPainter = TextPainter(
           text: textSpan,
-          textDirection: TextDirection.ltr,
+          textDirection: ui.TextDirection.ltr,
         )..layout();
         textPainter.paint(
           canvas,
@@ -2155,6 +3140,11 @@ class _EnhancedLineChartPainter extends CustomPainter {
     final dx = end.dx - start.dx;
     final dy = end.dy - start.dy;
     final distance = math.sqrt(dx * dx + dy * dy);
+
+    if (distance <= 0) {
+      return;
+    }
+
     final unitDx = dx / distance;
     final unitDy = dy / distance;
 
@@ -2165,8 +3155,14 @@ class _EnhancedLineChartPainter extends CustomPainter {
       final endDistance = math.min(currentDistance + segmentLength, distance);
       if (draw) {
         canvas.drawLine(
-          Offset(start.dx + unitDx * currentDistance, start.dy + unitDy * currentDistance),
-          Offset(start.dx + unitDx * endDistance, start.dy + unitDy * endDistance),
+          Offset(
+            start.dx + unitDx * currentDistance,
+            start.dy + unitDy * currentDistance,
+          ),
+          Offset(
+            start.dx + unitDx * endDistance,
+            start.dy + unitDy * endDistance,
+          ),
           paint,
         );
       }
@@ -2221,8 +3217,6 @@ class _CommodityData {
     required this.days,
   });
 }
-
-
 
 class _MarketStore {
   final String name, category, distance;
@@ -2324,9 +3318,12 @@ class _NotificationSheet extends StatelessWidget {
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF007C3F).withOpacity(0.1),
+                  color: const Color(0xFF007C3F).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -2374,12 +3371,12 @@ class _NotifTile extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: item.isUnread
-            ? const Color(0xFF007C3F).withOpacity(0.05)
+            ? const Color(0xFF007C3F).withValues(alpha: 0.05)
             : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: item.isUnread
-              ? const Color(0xFF007C3F).withOpacity(0.15)
+              ? const Color(0xFF007C3F).withValues(alpha: 0.15)
               : Colors.grey.shade200,
         ),
       ),
@@ -2389,7 +3386,7 @@ class _NotifTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: item.iconColor.withOpacity(0.12),
+              color: item.iconColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(item.icon, color: item.iconColor, size: 20),
@@ -2432,4 +3429,11 @@ class _NotifTile extends StatelessWidget {
       ),
     );
   }
+}
+
+String formatRupiah(num number) {
+  return number.toString().replaceAllMapped(
+    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+    (Match m) => '${m[1]}.',
+  );
 }

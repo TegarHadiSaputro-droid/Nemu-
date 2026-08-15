@@ -9,6 +9,7 @@ import 'package:frontend/widgets/live_tracking_map.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:frontend/screens/home_screen.dart'; // sesuaikan path home_screen kamu
 
 // ─────────────────────────────────────────────
 //  Color Palette (sesuai AppColors Nemu)
@@ -68,6 +69,9 @@ class OrdersScreen extends StatefulWidget {
   @override
   State<OrdersScreen> createState() => _OrdersScreenState();
 }
+
+@override
+State<OrdersScreen> createState() => _OrdersScreenState();
 
 class _OrdersScreenState extends State<OrdersScreen>
     with TickerProviderStateMixin {
@@ -200,16 +204,16 @@ class _OrdersScreenState extends State<OrdersScreen>
         .doc(uid)
         .snapshots()
         .listen((snap) {
-      final status = snap.data()?['status'] as String?;
-      if (status == _lastKnownStatus) return;
-      _lastKnownStatus = status;
+          final status = snap.data()?['status'] as String?;
+          if (status == _lastKnownStatus) return;
+          _lastKnownStatus = status;
 
-      if (status == OrderStatus.diantar) {
-        _startSharingMyLocation(uid);
-      } else {
-        _stopSharingMyLocation();
-      }
-    });
+          if (status == OrderStatus.diantar) {
+            _startSharingMyLocation(uid);
+          } else {
+            _stopSharingMyLocation();
+          }
+        });
   }
 
   Future<void> _startSharingMyLocation(String orderDocId) async {
@@ -223,14 +227,16 @@ class _OrdersScreenState extends State<OrdersScreen>
           return; // nggak bisa share lokasi, biarin driver pakai alamat teks aja
         }
       }
-      _myLocationSub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 15, // update tiap gerak ~15m, hemat baterai & write
-        ),
-      ).listen((pos) {
-        OrderTrackingService.updateBuyerLiveLocation(orderDocId, pos);
-      });
+      _myLocationSub =
+          Geolocator.getPositionStream(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter:
+                  15, // update tiap gerak ~15m, hemat baterai & write
+            ),
+          ).listen((pos) {
+            OrderTrackingService.updateBuyerLiveLocation(orderDocId, pos);
+          });
     } catch (_) {
       // GPS pembeli nggak tersedia -- driver tetap bisa antar pakai alamat teks.
     }
@@ -242,11 +248,15 @@ class _OrdersScreenState extends State<OrdersScreen>
   }
 
   void _onActiveOrderChanged() {
-    if (mounted) setState(() => _activeOrder = OrdersManager.instance.activeOrder.value);
+    if (mounted)
+      setState(() => _activeOrder = OrdersManager.instance.activeOrder.value);
   }
 
   void _onHistoryChanged() {
-    if (mounted) setState(() => _orderHistory = List.of(OrdersManager.instance.history.value));
+    if (mounted)
+      setState(
+        () => _orderHistory = List.of(OrdersManager.instance.history.value),
+      );
   }
 
   @override
@@ -268,7 +278,10 @@ class _OrdersScreenState extends State<OrdersScreen>
     return StreamBuilder<DocumentSnapshot>(
       stream: uid == null
           ? const Stream.empty()
-          : FirebaseFirestore.instance.collection('simulated_orders').doc(uid).snapshots(),
+          : FirebaseFirestore.instance
+                .collection('simulated_orders')
+                .doc(uid)
+                .snapshots(),
       builder: (context, snapshot) {
         final data = snapshot.data?.data() as Map<String, dynamic>?;
         final status = data?['status'] as String?;
@@ -278,15 +291,20 @@ class _OrdersScreenState extends State<OrdersScreen>
         // Driver, 2=Diantar (driver menuju toko ATAU sudah bawa barang),
         // 3=Selesai.
         int currentStep = 1;
-        if (status == OrderStatus.menujuPenjual || status == OrderStatus.diantar) {
+        if (status == OrderStatus.menujuPenjual ||
+            status == OrderStatus.diantar) {
           currentStep = 2;
         } else if (status == OrderStatus.selesai) {
           currentStep = 3;
         }
 
         final driverUid = data?['driverUid'] as String?;
-        final driverLoc = LiveLatLng.fromMap(data?['driverLocation'] as Map<String, dynamic>?);
-        final sellerLoc = LiveLatLng.fromMap(data?['sellerLocation'] as Map<String, dynamic>?);
+        final driverLoc = LiveLatLng.fromMap(
+          data?['driverLocation'] as Map<String, dynamic>?,
+        );
+        final sellerLoc = LiveLatLng.fromMap(
+          data?['sellerLocation'] as Map<String, dynamic>?,
+        );
 
         final OrderHistoryItem? activeOrder = hasActiveOrder
             ? OrderHistoryItem(
@@ -373,7 +391,11 @@ class _OrdersScreenState extends State<OrdersScreen>
                       SliverToBoxAdapter(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                          child: _buildLiveTracker(activeOrder, currentStep, status),
+                          child: _buildLiveTracker(
+                            activeOrder,
+                            currentStep,
+                            status,
+                          ),
                         ),
                       ),
                       if (driverUid != null) ...[
@@ -559,7 +581,8 @@ class _OrdersScreenState extends State<OrdersScreen>
                                 ),
                               ),
                               Text(
-                                address?.text ?? 'Belum ada alamat, tap untuk isi',
+                                address?.text ??
+                                    'Belum ada alamat, tap untuk isi',
                                 style: _manrope(
                                   size: 12,
                                   weight: FontWeight.bold,
@@ -572,29 +595,29 @@ class _OrdersScreenState extends State<OrdersScreen>
                           ),
                         ),
                         Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _green,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        'Ubah',
-                        style: _manrope(
-                          size: 11,
-                          weight: FontWeight.bold,
-                          color: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _green,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            'Ubah',
+                            style: _manrope(
+                              size: 11,
+                              weight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -604,7 +627,11 @@ class _OrdersScreenState extends State<OrdersScreen>
   // ──────────────────────────────────────────
   //  LIVE TRACKER: Status Pengiriman (Tanpa Emoji)
   // ──────────────────────────────────────────
-  Widget _buildLiveTracker(OrderHistoryItem activeOrder, int currentStep, String? status) {
+  Widget _buildLiveTracker(
+    OrderHistoryItem activeOrder,
+    int currentStep,
+    String? status,
+  ) {
     final steps = [
       _TrackStep(icon: Icons.receipt_long_rounded, label: 'Diterima'),
       _TrackStep(icon: Icons.inventory_2_rounded, label: 'Diproses'),
@@ -768,72 +795,86 @@ class _OrdersScreenState extends State<OrdersScreen>
           ),
 
           const SizedBox(height: 16),
-          Builder(builder: (context) {
-            late final IconData icon;
-            late final String title;
-            late final String subtitle;
-            final infoColor = currentStep == 1 ? Colors.blue : _green;
+          Builder(
+            builder: (context) {
+              late final IconData icon;
+              late final String title;
+              late final String subtitle;
+              final infoColor = currentStep == 1 ? Colors.blue : _green;
 
-            switch (status) {
-              case OrderStatus.menungguDriver:
-                icon = Icons.search_rounded;
-                title = 'Menunggu Driver...';
-                subtitle = 'Sistem sedang mencarikan driver terdekat untuk pesananmu';
-                break;
-              case OrderStatus.menujuPenjual:
-                icon = Icons.storefront_rounded;
-                title = 'Driver menuju lokasi penjual';
-                subtitle = 'Driver sedang menjemput pesananmu di toko';
-                break;
-              case OrderStatus.diantar:
-                icon = Icons.two_wheeler_rounded;
-                title = 'Barang segera diantarkan!';
-                subtitle = 'Driver sudah bawa pesananmu, otw ke alamatmu';
-                break;
-              default:
-                icon = Icons.inventory_2_rounded;
-                title = 'Pesanan Anda sedang dikemas oleh pedagang';
-                subtitle = 'Estimasi siap: 5–10 menit lagi';
-            }
+              switch (status) {
+                case OrderStatus.menungguDriver:
+                  icon = Icons.search_rounded;
+                  title = 'Menunggu Driver...';
+                  subtitle =
+                      'Sistem sedang mencarikan driver terdekat untuk pesananmu';
+                  break;
+                case OrderStatus.menujuPenjual:
+                  icon = Icons.storefront_rounded;
+                  title = 'Driver menuju lokasi penjual';
+                  subtitle = 'Driver sedang menjemput pesananmu di toko';
+                  break;
+                case OrderStatus.diantar:
+                  icon = Icons.two_wheeler_rounded;
+                  title = 'Barang segera diantarkan!';
+                  subtitle = 'Driver sudah bawa pesananmu, otw ke alamatmu';
+                  break;
+                default:
+                  icon = Icons.inventory_2_rounded;
+                  title = 'Pesanan Anda sedang dikemas oleh pedagang';
+                  subtitle = 'Estimasi siap: 5–10 menit lagi';
+              }
 
-            return Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: infoColor.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: infoColor.withOpacity(0.2)),
-              ),
-              child: Row(
-                children: [
-                  Icon(icon, color: infoColor, size: 22),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: _manrope(size: 12, weight: FontWeight.bold, color: _dark),
-                        ),
-                        Text(
-                          subtitle,
-                          style: _manrope(size: 11, color: Colors.black54),
-                        ),
-                      ],
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: infoColor.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: infoColor.withOpacity(0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(icon, color: infoColor, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: _manrope(
+                              size: 12,
+                              weight: FontWeight.bold,
+                              color: _dark,
+                            ),
+                          ),
+                          Text(
+                            subtitle,
+                            style: _manrope(size: 11, color: Colors.black54),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  if (status == OrderStatus.menungguDriver)
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blue),
-                    )
-                  else
-                    const Icon(Icons.access_time_rounded, color: Colors.black38, size: 16),
-                ],
-              ),
-            );
-          }),
+                    if (status == OrderStatus.menungguDriver)
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.blue,
+                        ),
+                      )
+                    else
+                      const Icon(
+                        Icons.access_time_rounded,
+                        color: Colors.black38,
+                        size: 16,
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -844,7 +885,10 @@ class _OrdersScreenState extends State<OrdersScreen>
   // ──────────────────────────────────────────
   Widget _buildKurirCard(String driverUid) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('users').doc(driverUid).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(driverUid)
+          .snapshots(),
       builder: (context, snap) {
         final d = snap.data?.data();
         final name = (d?['name'] as String?) ?? 'Driver';
@@ -914,14 +958,21 @@ class _OrdersScreenState extends State<OrdersScreen>
                       border: Border.all(color: Colors.white, width: 2.5),
                       color: Colors.white.withOpacity(0.2),
                       image: photoUrl != null
-                          ? DecorationImage(image: NetworkImage(photoUrl), fit: BoxFit.cover)
+                          ? DecorationImage(
+                              image: NetworkImage(photoUrl),
+                              fit: BoxFit.cover,
+                            )
                           : null,
                     ),
                     child: photoUrl == null
                         ? Center(
                             child: Text(
                               name.isNotEmpty ? name[0].toUpperCase() : '?',
-                              style: _manrope(size: 22, weight: FontWeight.bold, color: Colors.white),
+                              style: _manrope(
+                                size: 22,
+                                weight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                           )
                         : null,
@@ -1049,7 +1100,10 @@ class _OrdersScreenState extends State<OrdersScreen>
     if (driverLoc == null) {
       return Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+        ),
         child: Row(
           children: [
             Icon(Icons.gps_not_fixed_rounded, size: 18, color: Colors.black38),
@@ -1074,7 +1128,9 @@ class _OrdersScreenState extends State<OrdersScreen>
         : null;
 
     final bool headingToBuyer = status == OrderStatus.diantar;
-    final LiveLatLng? destination = headingToBuyer ? (buyerLoc ?? sellerLoc) : sellerLoc;
+    final LiveLatLng? destination = headingToBuyer
+        ? (buyerLoc ?? sellerLoc)
+        : sellerLoc;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1082,7 +1138,11 @@ class _OrdersScreenState extends State<OrdersScreen>
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 4)),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
@@ -1092,7 +1152,10 @@ class _OrdersScreenState extends State<OrdersScreen>
             children: [
               const Icon(Icons.map_rounded, size: 16, color: _green),
               const SizedBox(width: 6),
-              Text('Lacak Driver', style: _manrope(size: 13, weight: FontWeight.bold)),
+              Text(
+                'Lacak Driver',
+                style: _manrope(size: 13, weight: FontWeight.bold),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -1393,23 +1456,27 @@ class _OrdersScreenState extends State<OrdersScreen>
                 border: Border.all(color: const Color(0xFFD35400), width: 3),
                 color: const Color(0xFFD35400).withOpacity(0.1),
                 image: photoUrl != null
-                    ? DecorationImage(image: NetworkImage(photoUrl), fit: BoxFit.cover)
+                    ? DecorationImage(
+                        image: NetworkImage(photoUrl),
+                        fit: BoxFit.cover,
+                      )
                     : null,
               ),
               child: photoUrl == null
                   ? Center(
                       child: Text(
                         name.isNotEmpty ? name[0].toUpperCase() : '?',
-                        style: _manrope(size: 32, weight: FontWeight.bold, color: const Color(0xFFD35400)),
+                        style: _manrope(
+                          size: 32,
+                          weight: FontWeight.bold,
+                          color: const Color(0xFFD35400),
+                        ),
                       ),
                     )
                   : null,
             ),
             const SizedBox(height: 12),
-            Text(
-              name,
-              style: _manrope(size: 18, weight: FontWeight.bold),
-            ),
+            Text(name, style: _manrope(size: 18, weight: FontWeight.bold)),
             Text(
               'Driver Nemu',
               style: _manrope(size: 12, color: Colors.black45),
@@ -1420,7 +1487,11 @@ class _OrdersScreenState extends State<OrdersScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _kurirStatBox(Icons.star_rounded, rating != null ? rating.toStringAsFixed(1) : '-', 'Rating'),
+                _kurirStatBox(
+                  Icons.star_rounded,
+                  rating != null ? rating.toStringAsFixed(1) : '-',
+                  'Rating',
+                ),
                 _kurirStatBox(
                   Icons.local_shipping_rounded,
                   '$deliveries',

@@ -10,17 +10,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:frontend/screens/home_screen.dart';
 
-const Color _cGreen  = Color(0xFF007C3F);
+const Color _cGreen = Color(0xFF007C3F);
 const Color _cYellow = Color(0xFFD9DF36);
-const Color _cDark   = Color(0xFF0F1B11);
-const Color _cSurf   = Color(0xFFF5F7F0);
+const Color _cDark = Color(0xFF0F1B11);
+const Color _cSurf = Color(0xFFF5F7F0);
 
 TextStyle _cs({
   double size = 14,
   FontWeight weight = FontWeight.normal,
   Color color = _cDark,
-}) =>
-    GoogleFonts.manrope(fontSize: size, fontWeight: weight, color: color);
+}) => GoogleFonts.manrope(fontSize: size, fontWeight: weight, color: color);
 
 String _cRupiah(int val) {
   final s = val.toString().split('').reversed.join();
@@ -59,9 +58,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   static const _paymentMethods = [
-    _PaymentMethod(icon: Icons.money_rounded, label: 'Bayar di Tempat (COD)', desc: 'Bayar saat barang tiba'),
-    _PaymentMethod(icon: Icons.account_balance_rounded, label: 'Transfer Bank', desc: 'BRI / BNI / Mandiri'),
-    _PaymentMethod(icon: Icons.wallet_rounded, label: 'E-Wallet', desc: 'GoPay / OVO / Dana'),
+    _PaymentMethod(
+      icon: Icons.money_rounded,
+      label: 'Bayar di Tempat (COD)',
+      desc: 'Bayar saat barang tiba',
+    ),
+    _PaymentMethod(
+      icon: Icons.account_balance_rounded,
+      label: 'Transfer Bank',
+      desc: 'BRI / BNI / Mandiri',
+    ),
+    _PaymentMethod(
+      icon: Icons.wallet_rounded,
+      label: 'E-Wallet',
+      desc: 'GoPay / OVO / Dana',
+    ),
   ];
 
   int get _subtotal => _cart.totalHarga;
@@ -70,13 +81,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (marketNames.isEmpty) return 0;
     return marketNames.fold<int>(0, (sum, m) => sum + _ongkirForMarket(m));
   }
+
   int get _total => _subtotal + _ongkir;
 
   @override
   void initState() {
     super.initState();
     // Default select first available driver
-    final firstAvailable = mockDrivers.firstWhere((d) => !d.sibuk, orElse: () => mockDrivers.first);
+    final firstAvailable = mockDrivers.firstWhere(
+      (d) => !d.sibuk,
+      orElse: () => mockDrivers.first,
+    );
     if (!firstAvailable.sibuk) {
       _selectedDriverId = firstAvailable.id;
     }
@@ -86,8 +101,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (_selectedDriverId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Silakan pilih driver pengantar terlebih dahulu',
-              style: _cs(size: 13, color: Colors.white)),
+          content: Text(
+            'Silakan pilih driver pengantar terlebih dahulu',
+            style: _cs(size: 13, color: Colors.white),
+          ),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
         ),
@@ -99,8 +116,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (address == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Isi alamat pengiriman dulu ya',
-              style: _cs(size: 13, color: Colors.white)),
+          content: Text(
+            'Isi alamat pengiriman dulu ya',
+            style: _cs(size: 13, color: Colors.white),
+          ),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
         ),
@@ -117,7 +136,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final items = _cart.items.value;
     final storeNames = items.map((i) => i.namaGerai).toSet().join(' + ');
     final marketNames = items.map((i) => i.namaMarket).toSet().join(' + ');
-    final itemsSummary = items.map((i) => '${i.produk.nama} x${i.qty}').join(', ');
+    final itemsSummary = items
+        .map((i) => '${i.produk.nama} x${i.qty}')
+        .join(', ');
     final order = OrderHistoryItem(
       id: 'ORD${DateTime.now().millisecondsSinceEpoch}',
       storeName: storeNames,
@@ -136,23 +157,36 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (uid != null) {
         String buyerName = 'Sobat Nemu';
         try {
-          final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .get();
           if (userDoc.exists) {
-            buyerName = userDoc.data()?['nickname'] ?? userDoc.data()?['name'] ?? 'Sobat Nemu';
+            buyerName =
+                userDoc.data()?['nickname'] ??
+                userDoc.data()?['name'] ??
+                'Sobat Nemu';
           }
         } catch (_) {}
 
-        await FirebaseFirestore.instance.collection('simulated_orders').doc(uid).set({
-          'id': order.id,
-          'buyerUid': uid,
-          'buyerName': buyerName,
-          'items': itemsSummary.isNotEmpty ? itemsSummary : 'Tomat Segar 1kg',
-          'totalPrice': _total,
-          'status': 'dikemas',
-          'storeName': storeNames.isNotEmpty ? storeNames : 'Gerai Bu Eko',
-          'marketName': marketNames.isNotEmpty ? marketNames : 'Pasar Sepinggan',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        await FirebaseFirestore.instance
+            .collection('simulated_orders')
+            .doc(uid)
+            .set({
+              'id': order.id,
+              'buyerUid': uid,
+              'buyerName': buyerName,
+              'items': itemsSummary.isNotEmpty
+                  ? itemsSummary
+                  : 'Tomat Segar 1kg',
+              'totalPrice': _total,
+              'status': 'dikemas',
+              'storeName': storeNames.isNotEmpty ? storeNames : 'Gerai Bu Eko',
+              'marketName': marketNames.isNotEmpty
+                  ? marketNames
+                  : 'Pasar Sepinggan',
+              'createdAt': FieldValue.serverTimestamp(),
+            });
       }
     } catch (e) {
       debugPrint('Firestore write error: $e');
@@ -188,7 +222,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         elevation: 0,
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _cDark, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: _cDark,
+            size: 20,
+          ),
         ),
         title: Text('Checkout', style: _cs(size: 18, weight: FontWeight.bold)),
         centerTitle: true,
@@ -218,8 +256,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
                       const SizedBox(height: 18),
                       _buildSectionTitle('Pilih Driver Pengantar'),
-                      Text('Geser untuk memilih driver yang tersedia',
-                          style: _cs(size: 11.5, color: Colors.black45)),
+                      Text(
+                        'Geser untuk memilih driver yang tersedia',
+                        style: _cs(size: 11.5, color: Colors.black45),
+                      ),
                       const SizedBox(height: 10),
                       _buildDriverSelectionList(),
 
@@ -260,7 +300,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
         ],
       ),
       child: Row(
@@ -274,8 +314,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
-              child: Text(item.produk.emoji,
-                  style: const TextStyle(fontSize: 28)),
+              child: Text(
+                item.produk.emoji,
+                style: const TextStyle(fontSize: 28),
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -284,15 +326,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.produk.nama,
-                    style: _cs(size: 13, weight: FontWeight.bold),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                Text('${item.namaMarket} • ${item.namaGerai}',
-                    style: _cs(size: 11, color: Colors.black45)),
+                Text(
+                  item.produk.nama,
+                  style: _cs(size: 13, weight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  '${item.namaMarket} • ${item.namaGerai}',
+                  style: _cs(size: 11, color: Colors.black45),
+                ),
                 const SizedBox(height: 4),
-                Text(_cRupiah(item.produk.hargaSekarang),
-                    style: _cs(size: 12, weight: FontWeight.w600, color: _cGreen)),
+                Text(
+                  _cRupiah(item.produk.hargaSekarang),
+                  style: _cs(size: 12, weight: FontWeight.w600, color: _cGreen),
+                ),
               ],
             ),
           ),
@@ -305,8 +353,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               }, item.qty <= 1),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Text('${item.qty}',
-                    style: _cs(size: 14, weight: FontWeight.bold)),
+                child: Text(
+                  '${item.qty}',
+                  style: _cs(size: 14, weight: FontWeight.bold),
+                ),
               ),
               _miniBtn(Icons.add_rounded, () {
                 _cart.ubahQty(item.produk.id, item.qty + 1);
@@ -321,10 +371,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   Widget _miniBtn(IconData icon, VoidCallback onTap, bool disabled) {
     return GestureDetector(
-      onTap: disabled ? null : () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
+      onTap: disabled
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              onTap();
+            },
       child: Container(
         width: 28,
         height: 28,
@@ -332,11 +384,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           color: disabled ? Colors.grey.shade100 : _cGreen.withOpacity(0.1),
           borderRadius: BorderRadius.circular(7),
           border: Border.all(
-              color: disabled ? Colors.grey.shade200 : _cGreen.withOpacity(0.25)),
+            color: disabled ? Colors.grey.shade200 : _cGreen.withOpacity(0.25),
+          ),
         ),
-        child: Icon(icon,
-            size: 15,
-            color: disabled ? Colors.grey.shade300 : _cGreen),
+        child: Icon(
+          icon,
+          size: 15,
+          color: disabled ? Colors.grey.shade300 : _cGreen,
+        ),
       ),
     );
   }
@@ -351,7 +406,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)
+              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
             ],
           ),
           child: Row(
@@ -362,16 +417,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   color: Colors.redAccent.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.location_on_rounded,
-                    color: Colors.redAccent, size: 20),
+                child: const Icon(
+                  Icons.location_on_rounded,
+                  color: Colors.redAccent,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(address != null ? 'Kirim ke Sini' : 'Belum ada alamat',
-                        style: _cs(size: 13, weight: FontWeight.bold)),
+                    Text(
+                      address != null ? 'Kirim ke Sini' : 'Belum ada alamat',
+                      style: _cs(size: 13, weight: FontWeight.bold),
+                    ),
                     Text(
                       address?.text ?? 'Tap "Ubah" untuk isi alamat pengiriman',
                       style: _cs(size: 11, color: Colors.black54),
@@ -390,8 +450,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     builder: (_) => const AddressEditorSheet(),
                   );
                 },
-                child: Text('Ubah',
-                    style: _cs(size: 12, weight: FontWeight.bold, color: _cGreen)),
+                child: Text(
+                  'Ubah',
+                  style: _cs(size: 12, weight: FontWeight.bold, color: _cGreen),
+                ),
               ),
             ],
           ),
@@ -439,7 +501,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     color: Colors.black.withOpacity(0.04),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
-                  )
+                  ),
                 ],
               ),
               child: Stack(
@@ -472,7 +534,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             size: 10,
                             color: isBusy
                                 ? Colors.grey.shade400
-                                : (isSelected ? Colors.white70 : Colors.black45),
+                                : (isSelected
+                                      ? Colors.white70
+                                      : Colors.black45),
                           ),
                         ),
                       ],
@@ -482,8 +546,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     const Positioned(
                       top: 6,
                       right: 6,
-                      child: Icon(Icons.check_circle_rounded,
-                          color: Colors.white, size: 18),
+                      child: Icon(
+                        Icons.check_circle_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                     ),
                 ],
               ),
@@ -513,7 +580,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             width: 1.5,
           ),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)
+            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6),
           ],
         ),
         child: Row(
@@ -526,21 +593,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     : Colors.grey.shade100,
                 shape: BoxShape.circle,
               ),
-              child: Icon(method.icon,
-                  color: selected ? _cGreen : Colors.grey.shade500, size: 20),
+              child: Icon(
+                method.icon,
+                color: selected ? _cGreen : Colors.grey.shade500,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(method.label,
-                      style: _cs(
-                          size: 13,
-                          weight: FontWeight.bold,
-                          color: selected ? _cGreen : _cDark)),
-                  Text(method.desc,
-                      style: _cs(size: 11, color: Colors.black45)),
+                  Text(
+                    method.label,
+                    style: _cs(
+                      size: 13,
+                      weight: FontWeight.bold,
+                      color: selected ? _cGreen : _cDark,
+                    ),
+                  ),
+                  Text(
+                    method.desc,
+                    style: _cs(size: 11, color: Colors.black45),
+                  ),
                 ],
               ),
             ),
@@ -573,7 +648,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
         ],
       ),
       child: Column(
@@ -587,14 +662,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           Row(
             children: [
-              Text('Total Pembayaran',
-                  style: _cs(size: 14, weight: FontWeight.bold)),
+              Text(
+                'Total Pembayaran',
+                style: _cs(size: 14, weight: FontWeight.bold),
+              ),
               const Spacer(),
-              Text(_cRupiah(_total),
-                  style: _cs(
-                      size: 18,
-                      weight: FontWeight.bold,
-                      color: _cGreen)),
+              Text(
+                _cRupiah(_total),
+                style: _cs(size: 18, weight: FontWeight.bold, color: _cGreen),
+              ),
             ],
           ),
         ],
@@ -607,8 +683,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       children: [
         Text(label, style: _cs(size: 13, color: Colors.black54)),
         const Spacer(),
-        Text(_cRupiah(amount),
-            style: _cs(size: 13, weight: FontWeight.w600)),
+        Text(_cRupiah(amount), style: _cs(size: 13, weight: FontWeight.w600)),
       ],
     );
   }
@@ -620,9 +695,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.07),
-              blurRadius: 16,
-              offset: const Offset(0, -4))
+            color: Colors.black.withOpacity(0.07),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
         ],
       ),
       child: Column(
@@ -632,9 +708,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('Total', style: _cs(size: 12, color: Colors.black45)),
-              Text(_cRupiah(_total),
-                  style:
-                      _cs(size: 16, weight: FontWeight.bold, color: _cGreen)),
+              Text(
+                _cRupiah(_total),
+                style: _cs(size: 16, weight: FontWeight.bold, color: _cGreen),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -655,9 +732,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ? []
                     : [
                         BoxShadow(
-                            color: _cGreen.withOpacity(0.4),
-                            blurRadius: 14,
-                            offset: const Offset(0, 5))
+                          color: _cGreen.withOpacity(0.4),
+                          blurRadius: 14,
+                          offset: const Offset(0, 5),
+                        ),
                       ],
               ),
               child: Center(
@@ -670,11 +748,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           strokeWidth: 2.5,
                         ),
                       )
-                    : Text('Pesan Sekarang',
+                    : Text(
+                        'Pesan Sekarang',
                         style: _cs(
-                            size: 15,
-                            weight: FontWeight.bold,
-                            color: Colors.white)),
+                          size: 15,
+                          weight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
               ),
             ),
           ),
@@ -690,10 +771,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         children: [
           const Text('🛒', style: TextStyle(fontSize: 60)),
           const SizedBox(height: 16),
-          Text('Keranjang kosong', style: _cs(size: 18, weight: FontWeight.bold)),
+          Text(
+            'Keranjang kosong',
+            style: _cs(size: 18, weight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
-          Text('Tambahkan produk dari pasar dulu yuk!',
-              style: _cs(size: 13, color: Colors.black45)),
+          Text(
+            'Tambahkan produk dari pasar dulu yuk!',
+            style: _cs(size: 13, color: Colors.black45),
+          ),
           const SizedBox(height: 24),
           GestureDetector(
             onTap: () => Navigator.pop(context),
@@ -703,11 +789,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 color: _cGreen,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Text('Belanja Sekarang',
-                  style: _cs(
-                      size: 14,
-                      weight: FontWeight.bold,
-                      color: Colors.white)),
+              child: Text(
+                'Belanja Sekarang',
+                style: _cs(
+                  size: 14,
+                  weight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ),
         ],
@@ -736,7 +825,9 @@ class _SuccessDialogState extends State<_SuccessDialog>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 500));
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
     _scale = CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut);
     _ctrl.forward();
   }
@@ -765,13 +856,18 @@ class _SuccessDialogState extends State<_SuccessDialog>
                   color: _cGreen,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check_rounded,
-                    color: Colors.white, size: 44),
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: Colors.white,
+                  size: 44,
+                ),
               ),
             ),
             const SizedBox(height: 20),
-            Text('Pesanan Berhasil!',
-                style: _cs(size: 20, weight: FontWeight.bold)),
+            Text(
+              'Pesanan Berhasil!',
+              style: _cs(size: 20, weight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             Text(
               'Pesananmu sedang diproses oleh pedagang.\nKamu bisa cek status di tab Pesanan.',
@@ -786,15 +882,19 @@ class _SuccessDialogState extends State<_SuccessDialog>
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                      colors: [Color(0xFF00A851), _cGreen]),
+                    colors: [Color(0xFF00A851), _cGreen],
+                  ),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Center(
-                  child: Text('Lihat Pesanan',
-                      style: _cs(
-                          size: 14,
-                          weight: FontWeight.bold,
-                          color: Colors.white)),
+                  child: Text(
+                    'Lihat Pesanan',
+                    style: _cs(
+                      size: 14,
+                      weight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -812,6 +912,9 @@ class _PaymentMethod {
   final IconData icon;
   final String label;
   final String desc;
-  const _PaymentMethod(
-      {required this.icon, required this.label, required this.desc});
+  const _PaymentMethod({
+    required this.icon,
+    required this.label,
+    required this.desc,
+  });
 }
