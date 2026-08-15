@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/models/cart_model.dart';
 import 'package:frontend/utils/ongkir.dart';
 import 'package:frontend/models/orders_manager.dart';
 import 'package:frontend/services/address_manager.dart';
 import 'package:frontend/screens/orders_screen.dart';
 
-// ─────────────────────────────────────────────
-//  Warna (konsisten dengan pasar_screen.dart & home_screen.dart)
-// ─────────────────────────────────────────────
 const Color _cGreen = Color(0xFF007C3F);
+const Color _cYellow = Color(0xFFD9DF36);
 const Color _cDark = Color(0xFF0F1B11);
-const Color _cSurf = Color(0xFFF7F8F7);
+const Color _cSurf = Color(0xFFF5F7F0);
 
 TextStyle _cs({
   double size = 14,
@@ -30,13 +30,6 @@ String _cRupiah(int value) {
   return 'Rp${buffer.toString()}';
 }
 
-class _PaymentMethod {
-  final IconData icon;
-  final String label;
-  final String desc;
-  const _PaymentMethod({required this.icon, required this.label, required this.desc});
-}
-
 // ─────────────────────────────────────────────
 //  CheckoutScreen
 // ─────────────────────────────────────────────
@@ -52,7 +45,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final TextEditingController _catatanCtrl = TextEditingController();
   int _selectedPayment = 0;
   String? _selectedDriverId;
-  bool _isPlacingOrder = false;
+  bool _ordered = false;
 
   // Ongkir dihitung dari 2 komponen: berat pesanan (per market) dan jarak
   // pengantaran (per market). Aturan lengkap ada di lib/utils/ongkir.dart.
@@ -103,9 +96,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   static const _paymentMethods = [
-    _PaymentMethod(icon: Icons.money_rounded, label: 'Bayar di Tempat (COD)', desc: 'Bayar saat barang tiba'),
-    _PaymentMethod(icon: Icons.account_balance_rounded, label: 'Transfer Bank', desc: 'BRI / BNI / Mandiri'),
-    _PaymentMethod(icon: Icons.wallet_rounded, label: 'E-Wallet', desc: 'GoPay / OVO / Dana'),
+    _PaymentMethod(
+      icon: Icons.money_rounded,
+      label: 'Bayar di Tempat (COD)',
+      desc: 'Bayar saat barang tiba',
+    ),
+    _PaymentMethod(
+      icon: Icons.account_balance_rounded,
+      label: 'Transfer Bank',
+      desc: 'BRI / BNI / Mandiri',
+    ),
+    _PaymentMethod(
+      icon: Icons.wallet_rounded,
+      label: 'E-Wallet',
+      desc: 'GoPay / OVO / Dana',
+    ),
   ];
 
   int get _subtotal => _cart.totalHarga;
@@ -116,24 +121,151 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return marketNames.fold<int>(0, (sum, m) => sum + _ongkirForMarket(m));
   }
 
+  int get _total => _subtotal + _ongkir;
+
   int get _ongkirBerat {
     final marketNames = _cart.items.value.map((i) => i.namaMarket).toSet();
-    if (marketNames.isEmpty) return 0;
-    return marketNames.fold<int>(0, (sum, m) => sum + _ongkirBeratForMarket(m));
+    return marketNames.fold<int>(
+      0,
+      (sum, m) => sum + _ongkirBeratForMarket(m),
+    );
   }
 
   int get _ongkirJarak {
     final marketNames = _cart.items.value.map((i) => i.namaMarket).toSet();
-    if (marketNames.isEmpty) return 0;
-    return marketNames.fold<int>(0, (sum, m) => sum + _ongkirJarakForMarket(m));
+    return marketNames.fold<int>(
+      0,
+      (sum, m) => sum + _ongkirJarakForMarket(m),
+    );
   }
 
-  int get _total => _subtotal + _ongkir;
-
   @override
-  void dispose() {
-    _catatanCtrl.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    // Default select first available driver
+    final firstAvailable = mockDrivers.firstWhere(
+      (d) => !d.sibuk,
+      orElse: () => mockDrivers.first,
+    );
+    if (!firstAvailable.sibuk) {
+      _selectedDriverId = firstAvailable.id;
+    }
+  }
+
+  void _pesan() async {
+    if (_selectedDriverId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Silakan pilih driver pengantar terlebih dahulu',
+            style: _cs(size: 13, color: Colors.white),
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final address = AddressManager.instance.address.value;
+    if (address == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Isi alamat pengiriman dulu ya',
+            style: _cs(size: 13, color: Colors.white),
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    HapticFeedback.heavyImpact();
+    setState(() => _ordered = true);
+
+    // Bikin ringkasan pesanan dari isi keranjang buat dikirim ke OrdersManager
+    // (dibaca orders_screen.dart). Kalau keranjang isinya dari beberapa
+    // gerai/pasar sekaligus, nama-namanya digabung.
+    final items = _cart.items.value;
+    final storeNames = items.map((i) => i.namaGerai).toSet().join(' + ');
+    final marketNames = items.map((i) => i.namaMarket).toSet().join(' + ');
+    final itemsSummary = items
+        .map((i) => '${i.produk.nama} x${i.qty}')
+        .join(', ');
+    final order = OrderHistoryItem(
+      id: 'ORD${DateTime.now().millisecondsSinceEpoch}',
+      storeName: storeNames,
+      marketName: marketNames,
+      date: DateTime.now().toIso8601String(),
+      items: itemsSummary,
+      totalPrice: _total,
+      statusLabel: 'Diproses',
+      statusColor: _cGreen,
+    );
+
+    // Simpan juga ke Firestore (collection simulated_orders) supaya bisa
+    // dibaca sisi penjual/driver di luar OrdersManager lokal.
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        String buyerName = 'Sobat Nemu';
+        try {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(uid)
+              .get();
+          if (userDoc.exists) {
+            buyerName =
+                userDoc.data()?['nickname'] ??
+                userDoc.data()?['name'] ??
+                'Sobat Nemu';
+          }
+        } catch (_) {}
+
+        await FirebaseFirestore.instance
+            .collection('simulated_orders')
+            .doc(uid)
+            .set({
+              'id': order.id,
+              'buyerUid': uid,
+              'buyerName': buyerName,
+              'items': itemsSummary.isNotEmpty
+                  ? itemsSummary
+                  : 'Tomat Segar 1kg',
+              'totalPrice': _total,
+              'status': 'dikemas',
+              'storeName': storeNames.isNotEmpty ? storeNames : 'Gerai Bu Eko',
+              'marketName': marketNames.isNotEmpty
+                  ? marketNames
+                  : 'Pasar Sepinggan',
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+      }
+    } catch (e) {
+      debugPrint('Firestore write error: $e');
+    }
+
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) {
+      OrdersManager.instance.placeOrder(order);
+      _cart.kosongkan();
+      _showSuccessDialog();
+    }
+  }
+
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _SuccessDialog(
+        onDone: () {
+          HomeScreen.navIndexNotifier.value = 4; // Switch to Tab Pesanan
+          Navigator.of(context).popUntil((r) => r.isFirst);
+        },
+      ),
+    );
   }
 
   @override
@@ -145,7 +277,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         elevation: 0,
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _cDark, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: _cDark,
+            size: 20,
+          ),
         ),
         title: Text('Checkout', style: _cs(size: 18, weight: FontWeight.bold)),
         centerTitle: true,
@@ -181,8 +317,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
                           const SizedBox(height: 18),
                           _buildSectionTitle('Pilih Driver Pengantar'),
-                          Text('Geser untuk memilih driver yang tersedia',
-                              style: _cs(size: 11.5, color: Colors.black45)),
+                          Text(
+                            'Geser untuk memilih driver yang tersedia',
+                            style: _cs(size: 11.5, color: Colors.black45),
+                          ),
                           const SizedBox(height: 10),
                           _buildDriverSelectionList(),
 
@@ -203,27 +341,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                     ),
                   ),
-                  _buildBottomBar(_total, items),
+                  _buildOrderButton(),
                 ],
               );
             },
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('🛒', style: TextStyle(fontSize: 48)),
-          const SizedBox(height: 12),
-          Text('Keranjang kosong', style: _cs(size: 16, weight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text('Yuk belanja dulu di pasar favoritmu', style: _cs(size: 13, color: Colors.black45)),
-        ],
       ),
     );
   }
@@ -239,60 +362,265 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
+        ],
       ),
       child: Row(
         children: [
-          Text(item.produk.emoji, style: const TextStyle(fontSize: 22)),
-          const SizedBox(width: 10),
+          // Emoji
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: _cGreen.withOpacity(0.07),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Text(
+                item.produk.emoji,
+                style: const TextStyle(fontSize: 28),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.produk.nama, style: _cs(size: 13, weight: FontWeight.w600)),
-                Text('${item.namaGerai} • ${item.namaMarket}', style: _cs(size: 10.5, color: Colors.black38)),
-                Text('${item.qty} x ${_cRupiah(item.produk.hargaSekarang)}/${item.produk.satuan}',
-                    style: _cs(size: 10.5, color: Colors.black45)),
+                Text(
+                  item.produk.nama,
+                  style: _cs(size: 13, weight: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  '${item.namaMarket} • ${item.namaGerai}',
+                  style: _cs(size: 11, color: Colors.black45),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _cRupiah(item.produk.hargaSekarang),
+                  style: _cs(size: 12, weight: FontWeight.w600, color: _cGreen),
+                ),
               ],
             ),
           ),
-          Text(_cRupiah(item.subtotal), style: _cs(size: 13, weight: FontWeight.bold)),
+          // Stepper
+          Row(
+            children: [
+              _miniBtn(Icons.remove_rounded, () {
+                _cart.ubahQty(item.produk.id, item.qty - 1);
+                setState(() {});
+              }, item.qty <= 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Text(
+                  '${item.qty}',
+                  style: _cs(size: 14, weight: FontWeight.bold),
+                ),
+              ),
+              _miniBtn(Icons.add_rounded, () {
+                _cart.ubahQty(item.produk.id, item.qty + 1);
+                setState(() {});
+              }, false),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _miniBtn(IconData icon, VoidCallback onTap, bool disabled) {
+    return GestureDetector(
+      onTap: disabled
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              onTap();
+            },
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: disabled ? Colors.grey.shade100 : _cGreen.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(
+            color: disabled ? Colors.grey.shade200 : _cGreen.withOpacity(0.25),
+          ),
+        ),
+        child: Icon(
+          icon,
+          size: 15,
+          color: disabled ? Colors.grey.shade300 : _cGreen,
+        ),
       ),
     );
   }
 
   Widget _buildAddressCard() {
-    final address = AddressManager.instance.address.value;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))],
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.location_on_rounded, size: 18, color: _cGreen),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              address?.text ?? 'Belum ada alamat dipilih',
-              style: _cs(size: 12.5, color: Colors.black87),
-            ),
+    return ValueListenableBuilder<DeliveryAddress?>(
+      valueListenable: AddressManager.instance.address,
+      builder: (context, address, _) {
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
+            ],
           ),
-          const Icon(Icons.chevron_right_rounded, size: 18, color: Colors.black38),
-        ],
-      ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.location_on_rounded,
+                  color: Colors.redAccent,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      address != null ? 'Kirim ke Sini' : 'Belum ada alamat',
+                      style: _cs(size: 13, weight: FontWeight.bold),
+                    ),
+                    Text(
+                      address?.text ?? 'Tap "Ubah" untuk isi alamat pengiriman',
+                      style: _cs(size: 11, color: Colors.black54),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const AddressEditorSheet(),
+                  );
+                },
+                child: Text(
+                  'Ubah',
+                  style: _cs(size: 12, weight: FontWeight.bold, color: _cGreen),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
+  // Horizontal list view of drivers
   Widget _buildDriverSelectionList() {
     // TODO: hubungkan ke sumber data driver yang sesungguhnya.
     return SizedBox(
-      height: 80,
-      child: Center(
-        child: Text('Belum ada driver tersedia', style: _cs(size: 12, color: Colors.black38)),
+      height: 90,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: mockDrivers.length,
+        itemBuilder: (_, i) {
+          final driver = mockDrivers[i];
+          final isSelected = _selectedDriverId == driver.id;
+          final isBusy = driver.sibuk;
+
+          return GestureDetector(
+            onTap: isBusy
+                ? null
+                : () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _selectedDriverId = driver.id);
+                  },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 110,
+              margin: const EdgeInsets.only(right: 10, bottom: 4),
+              decoration: BoxDecoration(
+                color: isBusy
+                    ? Colors.grey.shade100
+                    : (isSelected ? _cGreen : Colors.white),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isBusy
+                      ? Colors.grey.shade300
+                      : (isSelected ? _cGreen : Colors.transparent),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Stack(
+                children: [
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          driver.emoji,
+                          style: TextStyle(
+                            fontSize: 26,
+                            color: isBusy ? Colors.grey : null,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          driver.nama,
+                          style: _cs(
+                            size: 12,
+                            weight: FontWeight.bold,
+                            color: isBusy
+                                ? Colors.grey
+                                : (isSelected ? Colors.white : _cDark),
+                          ),
+                        ),
+                        Text(
+                          isBusy ? 'Sibuk' : '⭐ ${driver.rating}',
+                          style: _cs(
+                            size: 10,
+                            color: isBusy
+                                ? Colors.grey.shade400
+                                : (isSelected
+                                      ? Colors.white70
+                                      : Colors.black45),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isSelected && !isBusy)
+                    const Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Icon(
+                        Icons.check_circle_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -307,19 +635,47 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: selected ? _cGreen : Colors.transparent, width: 1.5),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))],
+          border: Border.all(
+            color: selected ? _cGreen : Colors.transparent,
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6),
+          ],
         ),
         child: Row(
           children: [
-            Icon(method.icon, size: 20, color: selected ? _cGreen : Colors.black45),
-            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: selected
+                    ? _cGreen.withOpacity(0.1)
+                    : Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                method.icon,
+                color: selected ? _cGreen : Colors.grey.shade500,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(method.label, style: _cs(size: 12.5, weight: FontWeight.w600)),
-                  Text(method.desc, style: _cs(size: 10.5, color: Colors.black45)),
+                  Text(
+                    method.label,
+                    style: _cs(
+                      size: 13,
+                      weight: FontWeight.bold,
+                      color: selected ? _cGreen : _cDark,
+                    ),
+                  ),
+                  Text(
+                    method.desc,
+                    style: _cs(size: 11, color: Colors.black45),
+                  ),
                 ],
               ),
             ),
@@ -340,8 +696,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10, offset: const Offset(0, 3))],
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -379,9 +737,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           Row(
             children: [
-              Text('Total Pembayaran', style: _cs(size: 14, weight: FontWeight.bold)),
+              Text(
+                'Total Pembayaran',
+                style: _cs(size: 14, weight: FontWeight.bold),
+              ),
               const Spacer(),
-              Text(_cRupiah(_total), style: _cs(size: 18, weight: FontWeight.bold, color: _cGreen)),
+              Text(
+                _cRupiah(_total),
+                style: _cs(size: 18, weight: FontWeight.bold, color: _cGreen),
+              ),
             ],
           ),
         ],
@@ -399,12 +763,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  // Baris per item pesanan (nama produk x qty -> harga), ditampilkan di
-  // paling atas Ringkasan Biaya supaya user bisa cross-check pesanannya
-  // sebelum bayar.
   Widget _itemSummaryRow(CartItem item) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: Text(
@@ -414,7 +774,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        const SizedBox(width: 8),
         Text(
           _cRupiah(item.produk.hargaSekarang * item.qty),
           style: _cs(size: 12.5, weight: FontWeight.w600),
@@ -423,128 +782,259 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  // Baris ongkir (berat / jarak) + keterangan singkat nempel di bawahnya,
-  // biar user langsung ngerti kenapa angkanya segitu tanpa harus lihat
-  // box info terpisah.
   Widget _summaryRowWithNote({
     required IconData icon,
     required String label,
     required int amount,
     required String note,
   }) {
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(icon, size: 14, color: Colors.black38),
-            const SizedBox(width: 6),
-            Text(label, style: _cs(size: 13, color: Colors.black54)),
-            const Spacer(),
-            Text(_cRupiah(amount), style: _cs(size: 13, weight: FontWeight.w600)),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Padding(
-          padding: const EdgeInsets.only(left: 20),
-          child: Text(
-            note,
-            style: _cs(size: 10.5, color: Colors.black38, weight: FontWeight.w500),
+        Icon(icon, size: 14, color: Colors.black38),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: _cs(size: 13, color: Colors.black54)),
+              const SizedBox(height: 2),
+              Text(note, style: _cs(size: 10.5, color: Colors.black38)),
+            ],
           ),
         ),
+        Text(_cRupiah(amount), style: _cs(size: 13, weight: FontWeight.w600)),
       ],
     );
   }
 
-  Widget _buildBottomBar(int totalBayar, List<CartItem> items) {
+  Widget _buildOrderButton() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, -3))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.07),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
       ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Total Bayar', style: _cs(size: 10, color: Colors.black45)),
-                  Text(_cRupiah(totalBayar), style: _cs(size: 16, weight: FontWeight.bold, color: _cGreen)),
-                ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Total', style: _cs(size: 12, color: Colors.black45)),
+              Text(
+                _cRupiah(_total),
+                style: _cs(size: 16, weight: FontWeight.bold, color: _cGreen),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: _ordered ? null : _pesan,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: _ordered
+                      ? [Colors.grey.shade400, Colors.grey.shade300]
+                      : [const Color(0xFF00A851), _cGreen],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: _ordered
+                    ? []
+                    : [
+                        BoxShadow(
+                          color: _cGreen.withOpacity(0.4),
+                          blurRadius: 14,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+              ),
+              child: Center(
+                child: _ordered
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : Text(
+                        'Pesan Sekarang',
+                        style: _cs(
+                          size: 15,
+                          weight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
               ),
             ),
-            const SizedBox(width: 12),
-            ElevatedButton(
-              onPressed: _isPlacingOrder ? null : () => _handlePlaceOrder(items),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _cGreen,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmpty() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('🛒', style: TextStyle(fontSize: 60)),
+          const SizedBox(height: 16),
+          Text(
+            'Keranjang kosong',
+            style: _cs(size: 18, weight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tambahkan produk dari pasar dulu yuk!',
+            style: _cs(size: 13, color: Colors.black45),
+          ),
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(
+                color: _cGreen,
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: _isPlacingOrder
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : Text('Buat Pesanan', style: _cs(size: 13, weight: FontWeight.bold, color: Colors.white)),
+              child: Text(
+                'Belanja Sekarang',
+                style: _cs(
+                  size: 14,
+                  weight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Success Dialog
+// ─────────────────────────────────────────────
+class _SuccessDialog extends StatefulWidget {
+  final VoidCallback onDone;
+  const _SuccessDialog({required this.onDone});
+
+  @override
+  State<_SuccessDialog> createState() => _SuccessDialogState();
+}
+
+class _SuccessDialogState extends State<_SuccessDialog>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _scale = CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut);
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ScaleTransition(
+              scale: _scale,
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: const BoxDecoration(
+                  color: _cGreen,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_rounded,
+                  color: Colors.white,
+                  size: 44,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'Pesanan Berhasil!',
+              style: _cs(size: 20, weight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Pesananmu sedang diproses oleh pedagang.\nKamu bisa cek status di tab Pesanan.',
+              textAlign: TextAlign.center,
+              style: _cs(size: 13, color: Colors.black54),
+            ),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: widget.onDone,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF00A851), _cGreen],
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Center(
+                  child: Text(
+                    'Lihat Pesanan',
+                    style: _cs(
+                      size: 14,
+                      weight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  Future<void> _handlePlaceOrder(List<CartItem> items) async {
-    setState(() => _isPlacingOrder = true);
-    HapticFeedback.mediumImpact();
-
-    try {
-      final orderCodes = await OrdersManager.instance.placeOrder(
-        items: items,
-        catatan: _catatanCtrl.text.trim(),
-        ongkirPerGerai: _ongkir,
-      );
-
-      CartManager.instance.kosongkan();
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            orderCodes.length > 1
-                ? '${orderCodes.length} pesanan berhasil dibuat!'
-                : 'Pesanan ${orderCodes.first} berhasil dibuat!',
-            style: _cs(size: 12, color: Colors.white),
-          ),
-          backgroundColor: _cGreen,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const OrdersScreen()),
-        (route) => route.isFirst,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isPlacingOrder = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal membuat pesanan: $e', style: _cs(size: 12, color: Colors.white)),
-          backgroundColor: Colors.red.shade500,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-    }
-  }
+// ─────────────────────────────────────────────
+//  Data class
+// ─────────────────────────────────────────────
+class _PaymentMethod {
+  final IconData icon;
+  final String label;
+  final String desc;
+  const _PaymentMethod({
+    required this.icon,
+    required this.label,
+    required this.desc,
+  });
 }

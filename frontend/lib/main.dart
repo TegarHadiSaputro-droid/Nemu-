@@ -25,9 +25,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   // Wajib dipanggil sebelum runApp() karena beberapa halaman (mis.
   // seller_langganan_screen.dart) pakai DateFormat(..., 'id_ID').
   // Tanpa ini, DateFormat lempar LocaleDataException saat pertama
@@ -62,7 +60,7 @@ class MyApp extends StatelessWidget {
           },
         ),
       ),
-      home: const AuthGate(),
+      home: const LoginScreen(),
     );
   }
 }
@@ -125,7 +123,8 @@ class AuthGate extends StatelessWidget {
                 return const _SplashScreen();
               }
 
-              final roles = roleSnap.data?.data()?['roles'] as Map<String, dynamic>?;
+              final roles =
+                  roleSnap.data?.data()?['roles'] as Map<String, dynamic>?;
               final isDriver = (roles?['driver'] as bool?) ?? false;
               final isSeller = (roles?['seller'] as bool?) ?? false;
 
@@ -181,7 +180,10 @@ class LandingPage extends StatelessWidget {
             const Positioned.fill(child: BackgroundDecoration()),
             SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 24,
+                ),
                 child: Column(
                   children: [
                     const Spacer(flex: 3),
