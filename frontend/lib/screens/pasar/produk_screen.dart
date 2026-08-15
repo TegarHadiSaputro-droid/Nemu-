@@ -84,7 +84,14 @@ class _ProdukDetailScreenState extends State<ProdukDetailScreen>
 
   void _addToCart() {
     HapticFeedback.mediumImpact();
-    _cart.tambah(widget.produk, _qty, widget.gerai.nama, widget.namaMarket);
+    _cart.tambah(
+      widget.produk,
+      _qty,
+      widget.gerai.nama,
+      widget.namaMarket,
+      geraiId: widget.gerai.id,
+      sellerId: widget.gerai.sellerId ?? widget.gerai.id,
+    );
     _bounceCtrl.reset();
     _bounceCtrl.forward();
     ScaffoldMessenger.of(context).showSnackBar(
