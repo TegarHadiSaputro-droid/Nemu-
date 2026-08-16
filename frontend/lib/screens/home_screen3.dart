@@ -1024,17 +1024,7 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
         const SizedBox(height: 8),
         ...visible.map((doc) {
           final data = doc.data();
-          final storeName = (data['storeName'] as String?) ??
-              (data['store_name'] as String?) ??
-              (data['namaGerai'] as String?) ??
-              'Toko';
-          final itemsText = (data['itemsSummary'] as String?) ??
-              (data['items'] is String ? data['items'] as String : '') ??
-              '';
-          final deliveryAddress = (data['alamatPengiriman'] as String?) ??
-              (data['address'] as String?) ??
-              (data['deliveryAddress'] as String?) ??
-              '';
+          final deliveryAddress = (data['deliveryAddress'] as String?) ?? '';
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(14),
@@ -1046,16 +1036,15 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        storeName,
+                        (data['storeName'] as String?) ?? 'Toko',
                         style: _md(size: 12, weight: FontWeight.bold),
                       ),
-                      if (itemsText.isNotEmpty)
-                        Text(
-                          itemsText,
-                          style: _md(size: 10.5, color: Colors.black54),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      Text(
+                        (data['items'] as String?) ?? '',
+                        style: _md(size: 10.5, color: Colors.black54),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       if (deliveryAddress.isNotEmpty) ...[
                         const SizedBox(height: 3),
                         Row(
@@ -1106,25 +1095,14 @@ class _IncomingRequestDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data = doc.data();
-    final storeName = (data['storeName'] as String?) ??
-        (data['store_name'] as String?) ??
-        (data['namaGerai'] as String?) ??
-        'Toko';
-    final marketName = (data['marketName'] as String?) ??
-        (data['market_type'] as String?) ??
-        (data['namaMarket'] as String?) ??
-        '';
-    final items = (data['itemsSummary'] as String?) ??
-        (data['items'] is String ? data['items'] as String : '') ??
-        '';
-    final totalPrice = (data['totalPrice'] as num?)?.toInt() ??
-        (data['total_price'] as num?)?.toInt() ??
-        (data['totalHarga'] as num?)?.toInt() ??
-        0;
-    final deliveryAddress = (data['alamatPengiriman'] as String?) ??
-        (data['address'] as String?) ??
-        (data['deliveryAddress'] as String?) ??
-        '';
+    final storeName = (data['storeName'] as String?) ?? 'Toko';
+    final marketName = (data['marketName'] as String?) ?? '';
+    final items = (data['items'] as String?) ?? '';
+    final totalPrice = (data['totalPrice'] as num?)?.toInt() ?? 0;
+    // TODO: konfirmasi nama field alamat pembeli yang sebenarnya di
+    // order_tracking_service.dart / skema dokumen 'orders' -- 'deliveryAddress'
+    // masih tebakan mengikuti pola storeName/marketName/buyerName.
+    final deliveryAddress = (data['deliveryAddress'] as String?) ?? '';
 
     return Dialog(
       backgroundColor: Colors.white,
