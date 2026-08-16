@@ -288,12 +288,15 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
         final data = snapshot.data?.data();
         final roles = data?['roles'] as Map<String, dynamic>?;
 
+        final isSeller = (data?['is_seller'] as bool?) ?? (roles?['seller'] as bool?) ?? false;
+        final isDriver = (data?['is_driver'] as bool?) ?? (roles?['driver'] as bool?) ?? false;
+
         return _buildContent(
           context,
           userName: (data?['name'] as String?) ?? 'Nama Pengguna',
           photoUrl: data?['photoUrl'] as String?,
-          isSeller: (roles?['seller'] as bool?) ?? false,
-          isDriver: (roles?['driver'] as bool?) ?? false,
+          isSeller: isSeller,
+          isDriver: isDriver,
           rating: (data?['sellerRating'] as num?)?.toDouble(),
         );
       },
@@ -553,6 +556,9 @@ Future<void> _debugMakeSeller(BuildContext context) async {
     final batch = firestore.batch();
 
     batch.update(userRef, {
+      'is_seller': true,
+      'is_driver': false,
+      'is_buyer': false,
       'roles.seller': true,
       'roles.driver': false,
       'roles.buyer': false,
@@ -579,14 +585,6 @@ Future<void> _debugMakeSeller(BuildContext context) async {
       ),
     );
 
-    // Navigasikan lewat AuthGate (bukan langsung ke HomeScreen2), supaya
-    // layar Driver/Pembeli yang sedang aktif (kalau ada) di-unmount total
-    // DULU sebelum AuthGate membaca ulang role dan menentukan tujuan.
-    // Kalau langsung push ke HomeScreen2 di sini, ada race condition:
-    // layar lama (mis. HomeScreen3) bisa sempat rebuild sendiri lewat
-    // StreamBuilder-nya dan menampilkan layar "Akses Ditolak" sekilas
-    // sebelum navigasi manual ini sempat jalan. Pola sama seperti
-    // _logout() di logout_page.dart.
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const AuthGate()),
       (route) => false,
@@ -601,21 +599,19 @@ Future<void> _debugMakeSeller(BuildContext context) async {
 
 // ---------------------------------------------------------------------------
 // DEBUG ONLY — set roles.driver jadi true, DAN eksplisit matikan
-// roles.seller & roles.buyer supaya cuma satu role yang aktif dalam satu
-// waktu (role eksklusif, bukan ditambah-tambah). Kalau sebelumnya user
-// ini pernah jadi Penjual, dokumen di collection "seller" TIDAK dihapus
-// di sini (data gerai tetap aman) — cuma badge/akses aktifnya yang
-// dipindah ke Driver. Pakai set(merge: true) dengan struktur nested map
-// supaya tetap aman meski field 'roles' belum pernah ada di dokumen user.
-// StreamBuilder di _ProfileHeader otomatis nangkep perubahan roles ini.
+// roles.seller & roles.buyer
 // ---------------------------------------------------------------------------
 Future<void> _debugMakeDriver(BuildContext context) async {
   final uid = FirebaseAuth.instance.currentUser?.uid;
   if (uid == null) return;
 
   try {
-    await FirebaseFirestore.instance.collection('users').doc(uid).set(
+    final firestore = FirebaseFirestore.instance;
+    await firestore.collection('users').doc(uid).set(
       {
+        'is_driver': true,
+        'is_buyer': false,
+        'is_seller': false,
         'roles': {
           'buyer': false,
           'seller': false,
@@ -634,8 +630,6 @@ Future<void> _debugMakeDriver(BuildContext context) async {
       ),
     );
 
-    // Navigasikan lewat AuthGate (bukan langsung ke HomeScreen3) — lihat
-    // penjelasan lengkap di komentar serupa pada _debugMakeSeller().
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const AuthGate()),
       (route) => false,
@@ -715,6 +709,9 @@ Future<void> _resetToBuyer(BuildContext context) async {
     batch.set(
       firestore.collection('users').doc(uid),
       {
+        'is_buyer': true,
+        'is_seller': false,
+        'is_driver': false,
         'roles': {'buyer': true, 'seller': false, 'driver': false},
         'sellerRating': FieldValue.delete(),
         'driverStatus': FieldValue.delete(),

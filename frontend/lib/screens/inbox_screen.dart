@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:frontend/services/driver_service.dart';
-import 'package:frontend/screens/login_screen.dart';
 
 const Color _ibGreen = Color(0xFF007C3F);
 const Color _ibDark = Color(0xFF0F1B11);
@@ -17,13 +16,6 @@ TextStyle _ib({
 
 // ─────────────────────────────────────────────
 //  Notifikasi sistem (statis)
-//  Dulu tinggal di home_screen.dart sebagai _NotificationSheet (bottom
-//  sheet terpisah dari InboxScreen). Sekarang digabung ke sini supaya
-//  cuma ada SATU pintu masuk "Pesan & Notifikasi" -- lebih gampang
-//  ditemukan user, nggak bikin bingung ada 2 kotak pesan beda tempat.
-//  Masih statis/mock (belum dari backend) -- kalau nanti notifikasi
-//  sistem sudah beneran datang dari Firestore/backend, tinggal ganti
-//  list ini jadi hasil query, struktur tile-nya nggak perlu berubah.
 // ─────────────────────────────────────────────
 class _SystemNotifItem {
   final IconData icon;
@@ -41,24 +33,10 @@ class _SystemNotifItem {
 
 const List<_SystemNotifItem> _systemNotifs = [
   _SystemNotifItem(
-    icon: Icons.local_shipping_rounded,
-    iconColor: Color(0xFFFF7B00),
-    title: 'Pesanan dikirim!',
-    sub: 'Pak Budi sedang mengantar pesananmu • 2 mnt lalu',
-    isUnread: true,
-  ),
-  _SystemNotifItem(
-    icon: Icons.check_circle_rounded,
-    iconColor: Color(0xFF007C3F),
-    title: 'Pesanan dikonfirmasi',
-    sub: 'Lapak Sari menerima pesananmu • 15 mnt lalu',
-    isUnread: true,
-  ),
-  _SystemNotifItem(
     icon: Icons.campaign_rounded,
     iconColor: Color(0xFF0071FF),
     title: 'Promo hari ini!',
-    sub: 'Ongkir flat Rp2.000 untuk semua pesanan • 1 jam lalu',
+    sub: 'Ongkir hemat dan produk segar dari pasar terdekat • 1 jam lalu',
     isUnread: false,
   ),
   _SystemNotifItem(
@@ -80,7 +58,9 @@ class InboxScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid;
+    final email = user?.email?.trim().toLowerCase();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F0),
@@ -101,67 +81,147 @@ class InboxScreen extends StatelessWidget {
                   .collection('users')
                   .doc(uid)
                   .collection('inbox')
-                  .orderBy('createdAt', descending: true)
                   .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: _ibGreen));
-                }
+              builder: (context, userInboxSnap) {
+                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: (email == null || email.isEmpty)
+                      ? null
+                      : FirebaseFirestore.instance
+                          .collection('driver_invitations')
+                          .where('driver_email', isEqualTo: email)
+                          .snapshots(),
+                  builder: (context, driverInvitesSnap) {
+                    if (userInboxSnap.connectionState == ConnectionState.waiting &&
+                        driverInvitesSnap.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: _ibGreen));
+                    }
 
-                final docs = snapshot.data?.docs ?? [];
-                if (docs.isEmpty && _systemNotifs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    final userInboxDocs = userInboxSnap.data?.docs ?? [];
+                    final driverInviteDocs = driverInvitesSnap.data?.docs ?? [];
+
+                    // Gabungkan dan deduplikasi notifikasi
+                    final items = <_CombinedInboxItem>[];
+                    final seenInvitationIds = <String>{};
+
+                    // 1. Tambahkan dari driver_invitations (prioritas tinggi)
+                    for (final doc in driverInviteDocs) {
+                      final data = doc.data();
+                      final invId = (data['invitation_id'] as String?) ?? doc.id;
+                      seenInvitationIds.add(invId);
+                      seenInvitationIds.add(doc.id);
+
+                      final storeName = (data['seller_store_name'] as String?) ?? 'Penjual';
+                      final sellerId = (data['seller_id'] as String?) ?? '';
+                      final status = (data['status'] as String?) ?? 'pending';
+
+                      items.add(_CombinedInboxItem(
+                        id: doc.id,
+                        invitationId: invId,
+                        type: 'driver_invite',
+                        title: 'Undangan Driver Resmi',
+                        message: '$storeName mengundang Anda untuk menjadi Driver resmi.',
+                        status: status,
+                        storeName: storeName,
+                        sellerId: sellerId,
+                        driverEmail: (data['driver_email'] as String?) ?? email,
+                        isUnread: status == 'pending',
+                        createdAt: data['created_at'] ?? data['createdAt'],
+                        isDriverInvitationDoc: true,
+                        docRef: doc.reference,
+                      ));
+                    }
+
+                    // 2. Tambahkan dari users/{uid}/inbox
+                    for (final doc in userInboxDocs) {
+                      final data = doc.data();
+                      final invId = (data['invitation_id'] as String?) ?? doc.id;
+                      final type = data['type'] as String? ?? '';
+
+                      if (type == 'driver_invite' && (seenInvitationIds.contains(invId) || seenInvitationIds.contains(doc.id))) {
+                        // Sudah ditangani lewat driver_invitations
+                        continue;
+                      }
+
+                      items.add(_CombinedInboxItem(
+                        id: doc.id,
+                        invitationId: invId,
+                        type: type,
+                        title: (data['title'] as String?) ?? (type == 'driver_invite' ? 'Undangan Driver' : ''),
+                        message: (data['message'] as String?) ?? '',
+                        status: (data['status'] as String?) ?? 'pending',
+                        storeName: (data['storeName'] as String?) ?? (data['seller_store_name'] as String?) ?? '',
+                        sellerId: (data['seller_id'] as String?) ?? (data['fromUid'] as String?) ?? '',
+                        driverEmail: (data['driver_email'] as String?) ?? email,
+                        isUnread: (data['read'] as bool?) == false,
+                        createdAt: data['createdAt'] ?? data['created_at'],
+                        isDriverInvitationDoc: false,
+                        docRef: doc.reference,
+                        proofPhotoUrl: data['proofPhotoUrl'] as String?,
+                      ));
+                    }
+
+                    // Urutkan berdasarkan waktu descending
+                    items.sort((a, b) {
+                      final timeA = a.createdAt is Timestamp ? (a.createdAt as Timestamp).toDate() : DateTime.fromMillisecondsSinceEpoch(0);
+                      final timeB = b.createdAt is Timestamp ? (b.createdAt as Timestamp).toDate() : DateTime.fromMillisecondsSinceEpoch(0);
+                      return timeB.compareTo(timeA);
+                    });
+
+                    if (items.isEmpty && _systemNotifs.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.mail_outline_rounded, size: 48, color: Colors.grey.shade300),
+                            const SizedBox(height: 12),
+                            Text('Belum ada pesan', style: _ib(size: 13, color: Colors.black45)),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return ListView(
+                      padding: const EdgeInsets.all(16),
                       children: [
-                        Icon(Icons.mail_outline_rounded, size: 48, color: Colors.grey.shade300),
-                        const SizedBox(height: 12),
-                        Text('Belum ada pesan', style: _ib(size: 13, color: Colors.black45)),
+                        if (items.isNotEmpty) ...[
+                          Row(
+                            children: [
+                              Container(
+                                width: 4,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: _ibGreen,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Pesan & Undangan',
+                                style: _ib(size: 13, weight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          ...items.map((item) => _InboxTile(item: item)),
+                        ],
+                        if (items.isNotEmpty && _systemNotifs.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(child: Divider(color: Colors.grey.shade300)),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 10),
+                                child: Text('Notifikasi Lainnya', style: _ib(size: 11, color: Colors.black38)),
+                              ),
+                              Expanded(child: Divider(color: Colors.grey.shade300)),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        ..._systemNotifs.map((n) => _SystemNotifTile(item: n)),
                       ],
-                    ),
-                  );
-                }
-
-                return ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    if (docs.isNotEmpty) ...[
-                      Row(
-                        children: [
-                          Container(
-                            width: 4,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color: _ibGreen,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Pesan & Update Pesanan',
-                            style: _ib(size: 13, weight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      ...docs.map((doc) => _InboxTile(doc: doc)),
-                    ],
-                    if (docs.isNotEmpty && _systemNotifs.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(child: Divider(color: Colors.grey.shade300)),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            child: Text('Notifikasi Lainnya', style: _ib(size: 11, color: Colors.black38)),
-                          ),
-                          Expanded(child: Divider(color: Colors.grey.shade300)),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    ..._systemNotifs.map((n) => _SystemNotifTile(item: n)),
-                  ],
+                    );
+                  },
                 );
               },
             ),
@@ -169,9 +229,43 @@ class InboxScreen extends StatelessWidget {
   }
 }
 
+class _CombinedInboxItem {
+  final String id;
+  final String invitationId;
+  final String type;
+  final String title;
+  final String message;
+  final String status;
+  final String storeName;
+  final String sellerId;
+  final String? driverEmail;
+  final bool isUnread;
+  final dynamic createdAt;
+  final bool isDriverInvitationDoc;
+  final DocumentReference docRef;
+  final String? proofPhotoUrl;
+
+  _CombinedInboxItem({
+    required this.id,
+    required this.invitationId,
+    required this.type,
+    required this.title,
+    required this.message,
+    required this.status,
+    required this.storeName,
+    required this.sellerId,
+    required this.driverEmail,
+    required this.isUnread,
+    required this.createdAt,
+    required this.isDriverInvitationDoc,
+    required this.docRef,
+    this.proofPhotoUrl,
+  });
+}
+
 class _InboxTile extends StatefulWidget {
-  final QueryDocumentSnapshot<Map<String, dynamic>> doc;
-  const _InboxTile({required this.doc});
+  final _CombinedInboxItem item;
+  const _InboxTile({required this.item});
 
   @override
   State<_InboxTile> createState() => _InboxTileState();
@@ -184,29 +278,51 @@ class _InboxTileState extends State<_InboxTile> {
     setState(() => _busy = true);
     try {
       if (accept) {
-        await DriverService.acceptDriverInvite(widget.doc.id);
+        await DriverService.acceptDriverInvite(
+          widget.item.id,
+          sellerId: widget.item.sellerId,
+          driverInvitationDocId: widget.item.invitationId,
+        );
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Selamat! Akun Anda kini aktif sebagai Driver.',
+              style: _ib(size: 12, color: Colors.white, weight: FontWeight.bold),
+            ),
+            backgroundColor: _ibGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+
+        // Tutup InboxScreen agar user langsung melihat HomeScreen3 yang sudah dirender real-time
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      } else {
+        await DriverService.declineDriverInvite(
+          widget.item.id,
+          driverInvitationDocId: widget.item.invitationId,
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Berhasil jadi Driver! Silakan login ulang.'),
+            SnackBar(
+              content: Text('Undangan driver ditolak.', style: _ib(size: 12, color: Colors.white)),
+              backgroundColor: Colors.red.shade600,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           );
-          await Future.delayed(const Duration(milliseconds: 800));
         }
-        if (mounted) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-            (route) => false,
-          );
-        }
-        return;
-      } else {
-        await DriverService.declineDriverInvite(widget.doc.id);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal: $e', style: _ib(size: 12, color: Colors.white))),
+          SnackBar(
+            content: Text('Gagal: $e', style: _ib(size: 12, color: Colors.white)),
+            backgroundColor: Colors.red.shade600,
+          ),
         );
       }
     } finally {
@@ -215,21 +331,20 @@ class _InboxTileState extends State<_InboxTile> {
   }
 
   void _markAsRead() {
-    final isUnread = (widget.doc.data()['read'] as bool?) == false;
-    if (isUnread) {
-      widget.doc.reference.update({'read': true}).catchError((_) {});
+    if (widget.item.isUnread && !widget.item.isDriverInvitationDoc) {
+      widget.item.docRef.update({'read': true}).catchError((_) {});
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final data = widget.doc.data();
-    final type = data['type'] as String? ?? '';
-    final title = (data['title'] as String?) ?? '';
-    final message = (data['message'] as String?) ?? '';
-    final status = (data['status'] as String?) ?? 'pending';
-    final isUnread = (data['read'] as bool?) == false;
-    final createdAt = data['createdAt'] ?? data['created_at'];
+    final item = widget.item;
+    final type = item.type;
+    final title = item.title;
+    final message = item.message;
+    final status = item.status;
+    final isUnread = item.isUnread;
+    final createdAt = item.createdAt;
 
     String timeLabel = '';
     if (createdAt is Timestamp) {
@@ -259,12 +374,16 @@ class _InboxTileState extends State<_InboxTile> {
       icon = Icons.cancel_rounded;
       iconColor = Colors.redAccent;
       bgColor = Colors.redAccent.withOpacity(0.12);
+    } else if (type == 'order_delivered') {
+      icon = Icons.done_all_rounded;
+      iconColor = _ibGreen;
+      bgColor = _ibGreen.withOpacity(0.12);
     } else if (type == 'order_update') {
       icon = Icons.local_shipping_rounded;
       iconColor = const Color(0xFFFF7B00);
       bgColor = const Color(0xFFFF7B00).withOpacity(0.12);
     } else if (type == 'driver_invite') {
-      icon = Icons.local_shipping_rounded;
+      icon = Icons.two_wheeler_rounded;
       iconColor = _ibGreen;
       bgColor = _ibGreen.withOpacity(0.12);
     } else {
@@ -273,22 +392,28 @@ class _InboxTileState extends State<_InboxTile> {
       bgColor = _ibGreen.withOpacity(0.12);
     }
 
+    final isPendingInvite = type == 'driver_invite' && status == 'pending';
+
     return GestureDetector(
       onTap: _markAsRead,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isUnread ? _ibGreen.withOpacity(0.04) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          color: isPendingInvite
+              ? _ibGreen.withOpacity(0.04)
+              : (isUnread ? _ibGreen.withOpacity(0.03) : Colors.white),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isUnread ? _ibGreen.withOpacity(0.25) : Colors.grey.shade200,
-            width: isUnread ? 1.2 : 1.0,
+            color: isPendingInvite
+                ? _ibGreen.withOpacity(0.35)
+                : (isUnread ? _ibGreen.withOpacity(0.2) : Colors.grey.shade200),
+            width: isPendingInvite ? 1.5 : 1.0,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 6,
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
@@ -300,49 +425,43 @@ class _InboxTileState extends State<_InboxTile> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
-                  child: Icon(icon, color: iconColor, size: 18),
+                  child: Icon(icon, color: iconColor, size: 20),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (title.isNotEmpty) ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                title,
-                                style: _ib(size: 13, weight: FontWeight.bold),
-                              ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title.isNotEmpty ? title : 'Pemberitahuan',
+                              style: _ib(size: 13.5, weight: FontWeight.bold),
                             ),
-                            if (timeLabel.isNotEmpty)
-                              Text(
-                                timeLabel,
-                                style: _ib(size: 10, color: Colors.black38),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 3),
-                      ],
+                          ),
+                          if (timeLabel.isNotEmpty)
+                            Text(
+                              timeLabel,
+                              style: _ib(size: 10.5, color: Colors.black38),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
                       Text(
                         message,
                         style: _ib(
-                          size: 12,
-                          color: title.isNotEmpty ? Colors.black87 : _ibDark,
-                          weight: title.isNotEmpty ? FontWeight.normal : FontWeight.w600,
+                          size: 12.5,
+                          color: isPendingInvite ? Colors.black87 : Colors.black54,
+                          weight: isPendingInvite ? FontWeight.w600 : FontWeight.normal,
                         ),
                       ),
-                      if (title.isEmpty && timeLabel.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(timeLabel, style: _ib(size: 10, color: Colors.black38)),
-                      ],
                     ],
                   ),
                 ),
-                if (isUnread)
+                if (isUnread && !isPendingInvite)
                   Container(
                     width: 8,
                     height: 8,
@@ -351,48 +470,100 @@ class _InboxTileState extends State<_InboxTile> {
                   ),
               ],
             ),
-            if (type == 'driver_invite' && status == 'pending') ...[
-              const SizedBox(height: 12),
+            if (isPendingInvite) ...[
+              const SizedBox(height: 14),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _busy ? null : () => _respond(false),
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        foregroundColor: Colors.red.shade600,
+                        side: BorderSide(color: Colors.red.shade300),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: Text('Tolak', style: _ib(size: 12, weight: FontWeight.bold, color: Colors.black54)),
+                      child: Text('Tolak', style: _ib(size: 12, weight: FontWeight.bold, color: Colors.red.shade600)),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: ElevatedButton(
+                    flex: 2,
+                    child: ElevatedButton.icon(
                       onPressed: _busy ? null : () => _respond(true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _ibGreen,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: _busy
+                      icon: _busy
                           ? const SizedBox(
                               width: 14,
                               height: 14,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : Text('Terima', style: _ib(size: 12, weight: FontWeight.bold, color: Colors.white)),
+                          : const Icon(Icons.check_rounded, size: 16, color: Colors.white),
+                      label: Text(
+                        'Terima Undangan',
+                        style: _ib(size: 12, weight: FontWeight.bold, color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _ibGreen,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
                     ),
                   ),
                 ],
               ),
             ] else if (type == 'driver_invite' && status != 'pending') ...[
-              const SizedBox(height: 6),
-              Text(
-                status == 'accepted' ? 'Diterima' : 'Ditolak',
-                style: _ib(
-                  size: 11,
-                  weight: FontWeight.w600,
-                  color: status == 'accepted' ? _ibGreen : Colors.red.shade400,
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (status == 'accepted' ? _ibGreen : Colors.red.shade600).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  status == 'accepted' ? '✓ Undangan Diterima' : '✕ Undangan Ditolak',
+                  style: _ib(
+                    size: 11,
+                    weight: FontWeight.bold,
+                    color: status == 'accepted' ? _ibGreen : Colors.red.shade600,
+                  ),
+                ),
+              ),
+            ] else if (type == 'order_delivered') ...[
+              // Tampilkan foto bukti pengiriman jika ada
+              if (item.proofPhotoUrl != null && item.proofPhotoUrl!.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(
+                    item.proofPhotoUrl!,
+                    height: 120,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 60,
+                      color: Colors.grey.shade100,
+                      child: const Center(child: Icon(Icons.broken_image_outlined, color: Colors.grey)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '📷 Foto bukti pengiriman oleh driver',
+                  style: _ib(size: 10.5, color: Colors.black45),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _ibGreen.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '✅ Pesanan selesai diantarkan',
+                  style: _ib(size: 11, weight: FontWeight.bold, color: _ibGreen),
                 ),
               ),
             ],
@@ -404,9 +575,7 @@ class _InboxTileState extends State<_InboxTile> {
 }
 
 // ─────────────────────────────────────────────
-//  _SystemNotifTile — tile notifikasi sistem (statis, bukan dari inbox
-//  Firestore). Sengaja dibuat mirip _InboxTile di atas biar visualnya
-//  konsisten walau sumber datanya beda.
+//  _SystemNotifTile
 // ─────────────────────────────────────────────
 class _SystemNotifTile extends StatelessWidget {
   final _SystemNotifItem item;

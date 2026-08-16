@@ -83,12 +83,55 @@ class OrderTrackingService {
       // GPS toko gagal diambil (izin ditolak / mati)
     }
 
+    // Baca dokumen order terlebih dahulu agar bisa menyalin deliveryAddress,
+    // buyerName, dan items ke dalam field yang dibaca sisi Driver.
+    final existingSnap = await _orders.doc(orderDocId).get();
+    final existing = existingSnap.data() ?? {};
+
+    final deliveryAddress = (existing['alamatPengiriman'] as String?) ??
+        (existing['address'] as String?) ??
+        (existing['deliveryAddress'] as String?) ??
+        '';
+    final buyerName = (existing['buyerName'] as String?) ??
+        (existing['buyer_name'] as String?) ??
+        'Pembeli';
+    final itemsDetail = existing['items'];
+    final itemsSummary = (existing['itemsSummary'] as String?) ?? '';
+    // Buat string ringkas untuk ditampilkan di card driver
+    final itemsString = itemsSummary.isNotEmpty
+        ? itemsSummary
+        : (itemsDetail is List && itemsDetail.isNotEmpty
+            ? itemsDetail
+                .take(3)
+                .map((e) {
+                  final m = e as Map<String, dynamic>?;
+                  if (m == null) return '';
+                  final name = (m['product_name'] as String?) ?? (m['nama'] as String?) ?? '';
+                  final qty = (m['quantity'] as num?)?.toInt() ?? (m['qty'] as num?)?.toInt() ?? 0;
+                  return '$name x$qty';
+                })
+                .where((s) => s.isNotEmpty)
+                .join(', ')
+            : '');
+    final totalPrice = (existing['totalHarga'] as num?)?.toInt() ??
+        (existing['totalPrice'] as num?)?.toInt() ??
+        (existing['total_price'] as num?)?.toInt() ?? 0;
+    final sellerId = (existing['sellerId'] as String?) ??
+        (existing['seller_id'] as String?) ??
+        _auth.currentUser?.uid ?? '';
+
     await orderRef(orderDocId).update({
       'status': OrderStatus.menungguDriver,
       'statusLabel': 'Mencari Driver',
       'sellerUid': _auth.currentUser?.uid,
       'storeName': storeName,
       'marketName': marketName,
+      // Salin data order ke field yang dibaca sisi Driver
+      'deliveryAddress': deliveryAddress,
+      'buyerName': buyerName,
+      'items': itemsString,
+      'totalPrice': totalPrice,
+      'sellerId': sellerId,
       if (sellerLocation != null) 'sellerLocation': sellerLocation,
       'driverUid': null,
       'driverName': null,
@@ -100,7 +143,7 @@ class OrderTrackingService {
 
   // ── DRIVER ───────────────────────────────────────────────────────
 
-  /// Permintaan yang masih terbuka (belum ada driver yang ambil).
+  /// Permintaan yang masih terbuka (status: menunggu_driver).
   static Stream<QuerySnapshot<Map<String, dynamic>>> watchOpenRequests() {
     return _orders
         .where('status', isEqualTo: OrderStatus.menungguDriver)
@@ -173,10 +216,18 @@ class OrderTrackingService {
     final uid = _auth.currentUser?.uid;
     final batch = _db.batch();
 
+    // Baca order untuk ambil info pembeli & kode
+    final orderSnap = await _orders.doc(orderDocId).get();
+    final orderData = orderSnap.data() ?? {};
+    final buyerId = (orderData['buyerId'] as String?) ?? (orderData['buyer_id'] as String?);
+    final orderCode = (orderData['orderCode'] as String?) ?? orderDocId;
+    final storeName = (orderData['storeName'] as String?) ?? 'Toko';
+
     batch.update(orderRef(orderDocId), {
       'status': OrderStatus.selesai,
       'statusLabel': 'Selesai',
       'proofPhotoUrl': proofPhotoUrl,
+      'completedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
       'updated_at': FieldValue.serverTimestamp(),
     });
@@ -189,8 +240,29 @@ class OrderTrackingService {
       );
     }
 
+    // Kirim notifikasi ke inbox pembeli bahwa pesanan sudah terkirim
+    if (buyerId != null && buyerId.isNotEmpty) {
+      final inboxRef = _db
+          .collection('users')
+          .doc(buyerId)
+          .collection('inbox')
+          .doc();
+      batch.set(inboxRef, {
+        'type': 'order_delivered',
+        'title': 'Pesanan Terkirim! 🎉',
+        'message': 'Pesanan $orderCode dari $storeName telah diantar dan diselesaikan oleh driver. '
+            'Terima kasih sudah belanja di Nemu!',
+        'orderId': orderDocId,
+        'orderCode': orderCode,
+        'proofPhotoUrl': proofPhotoUrl,
+        'read': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+
     await batch.commit();
   }
+
 
   // ── PEMBELI ──────────────────────────────────────────────────────
 

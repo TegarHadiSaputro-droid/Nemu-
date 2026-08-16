@@ -313,9 +313,28 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
   }
 
   void _listenOpenRequests() {
+    final linkedSellerId = _driverData?['linked_seller_id'] as String?;
     _openRequestsSub = OrderTrackingService.watchOpenRequests().listen((snap) {
       if (!mounted) return;
-      setState(() => _openRequests = snap.docs);
+      // Filter di memori agar aman dari composite index dan variasi nama field seller
+      final unassigned = snap.docs.where((doc) {
+        final data = doc.data();
+        if (data['driverUid'] != null) return false;
+        if (linkedSellerId != null && linkedSellerId.isNotEmpty) {
+          final sId = (data['sellerId'] as String?) ??
+              (data['seller_id'] as String?) ??
+              (data['owner_id'] as String?) ??
+              (data['sellerUid'] as String?) ??
+              (data['storeId'] as String?) ??
+              (data['store_id'] as String?);
+          if (sId != null && sId.isNotEmpty && sId != linkedSellerId) {
+            return false;
+          }
+        }
+        return true;
+      }).toList();
+
+      setState(() => _openRequests = unassigned);
       _maybeShowRequestPopup();
     });
   }
@@ -529,8 +548,57 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
     final order = _activeOrderDoc;
     if (order == null || _submittingComplete) return;
 
+    // Tampilkan pilihan sumber foto (Kamera / Galeri)
+    final ImageSource? source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(height: 16),
+              Text('Foto Bukti Pengantaran', style: _md(size: 15, weight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('Lampirkan foto bukti bahwa pesanan telah sampai ke pembeli.', style: _md(size: 11.5, color: Colors.black54), textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: _drGreen.withOpacity(0.12), shape: BoxShape.circle),
+                  child: const Icon(Icons.camera_alt_rounded, color: _drGreen),
+                ),
+                title: Text('Ambil Foto (Kamera)', style: _md(size: 13, weight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: _drBlue.withOpacity(0.12), shape: BoxShape.circle),
+                  child: const Icon(Icons.photo_library_rounded, color: _drBlue),
+                ),
+                title: Text('Pilih dari Galeri', style: _md(size: 13, weight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
     final picker = ImagePicker();
-    final XFile? photo = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+    final XFile? photo = await picker.pickImage(source: source, imageQuality: 80);
     if (photo == null) return; // driver batal foto
 
     setState(() => _submittingComplete = true);
@@ -548,8 +616,10 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Pesanan selesai! Terima kasih sudah mengantar.', style: _md(size: 12, color: Colors.white)),
+            content: Text('Pesanan selesai! Terima kasih sudah mengantar.', style: _md(size: 12, color: Colors.white, weight: FontWeight.bold)),
             backgroundColor: _drGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
@@ -764,9 +834,13 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
     final status = data['status'] as String? ?? OrderStatus.menujuPenjual;
     final storeName = data['storeName'] as String? ?? 'Toko';
     final marketName = data['marketName'] as String? ?? '';
-    final buyerName = data['buyerName'] as String? ?? 'Pembeli';
-    final items = data['items'] as String? ?? '';
-    final deliveryAddress = (data['deliveryAddress'] as String?) ?? '';
+    final buyerName = (data['buyerName'] as String?) ?? (data['buyer_name'] as String?) ?? 'Pembeli';
+    final items = (data['items'] as String?) ?? (data['itemsSummary'] as String?) ?? '';
+    // Baca deliveryAddress dengan fallback ke alamatPengiriman / address
+    final deliveryAddress = (data['deliveryAddress'] as String?) ??
+        (data['alamatPengiriman'] as String?) ??
+        (data['address'] as String?) ??
+        '';
 
     final sellerLoc = LiveLatLng.fromMap(data['sellerLocation'] as Map<String, dynamic>?);
     final buyerLiveLoc = LiveLatLng.fromMap(data['buyerLiveLocation'] as Map<String, dynamic>?);
@@ -824,22 +898,40 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
             const SizedBox(height: 4),
             Text(items, style: _md(size: 11, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
           ],
-          if (!headingToStore && deliveryAddress.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.location_on_rounded, size: 14, color: Colors.redAccent),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    deliveryAddress,
-                    style: _md(size: 11.5, color: Colors.black54),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+          if (deliveryAddress.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFB),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.location_on_rounded, size: 16, color: Colors.redAccent),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Alamat Tujuan ($buyerName):',
+                          style: _md(size: 10.5, weight: FontWeight.bold, color: Colors.black54),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          deliveryAddress,
+                          style: _md(size: 11.5, color: Colors.black87),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
           const SizedBox(height: 12),
@@ -1097,12 +1189,16 @@ class _IncomingRequestDialog extends StatelessWidget {
     final data = doc.data();
     final storeName = (data['storeName'] as String?) ?? 'Toko';
     final marketName = (data['marketName'] as String?) ?? '';
-    final items = (data['items'] as String?) ?? '';
-    final totalPrice = (data['totalPrice'] as num?)?.toInt() ?? 0;
-    // TODO: konfirmasi nama field alamat pembeli yang sebenarnya di
-    // order_tracking_service.dart / skema dokumen 'orders' -- 'deliveryAddress'
-    // masih tebakan mengikuti pola storeName/marketName/buyerName.
-    final deliveryAddress = (data['deliveryAddress'] as String?) ?? '';
+    final buyerName = (data['buyerName'] as String?) ?? (data['buyer_name'] as String?) ?? 'Pembeli';
+    final items = (data['items'] as String?) ?? (data['itemsSummary'] as String?) ?? '';
+    final totalPrice = (data['totalPrice'] as num?)?.toInt() ??
+        (data['totalHarga'] as num?)?.toInt() ??
+        (data['total_price'] as num?)?.toInt() ??
+        0;
+    final deliveryAddress = (data['deliveryAddress'] as String?) ??
+        (data['alamatPengiriman'] as String?) ??
+        (data['address'] as String?) ??
+        '';
 
     return Dialog(
       backgroundColor: Colors.white,
@@ -1126,27 +1222,44 @@ class _IncomingRequestDialog extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text('$storeName${marketName.isNotEmpty ? ' • $marketName' : ''}', style: _md(size: 13, weight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text(items, style: _md(size: 11.5, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
+            if (items.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(items, style: _md(size: 11.5, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
+            ],
             if (deliveryAddress.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.location_on_rounded, size: 14, color: Colors.redAccent),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      deliveryAddress,
-                      style: _md(size: 11, color: Colors.black54),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.location_on_rounded, size: 16, color: Colors.redAccent),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Alamat Pengantaran ($buyerName):', style: _md(size: 10.5, weight: FontWeight.bold, color: Colors.black54)),
+                          const SizedBox(height: 2),
+                          Text(
+                            deliveryAddress,
+                            style: _md(size: 11.5, color: Colors.black87),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text('Total: Rp$totalPrice', style: _md(size: 13, weight: FontWeight.bold, color: _drGreen)),
             const SizedBox(height: 18),
             Row(

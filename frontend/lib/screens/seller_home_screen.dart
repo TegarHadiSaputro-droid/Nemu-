@@ -163,26 +163,51 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     if (uid == null) return;
 
     _driversSub = FirebaseFirestore.instance
-        .collectionGroup('inbox')
-        .where('type', isEqualTo: 'driver_invite')
+        .collection('driver_invitations')
+        .where('seller_id', isEqualTo: uid)
         .where('status', isEqualTo: 'accepted')
-        .where('fromUid', isEqualTo: uid)
         .snapshots()
         .listen((snap) async {
       final drivers = await Future.wait(snap.docs.map((doc) async {
-        final driverUid = doc.reference.parent.parent?.id;
-        if (driverUid == null) return null;
+        final data = doc.data();
+        final driverEmail = (data['driver_email'] as String?) ?? '';
+        final driverUid = data['accepted_by_uid'] as String?;
 
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(driverUid)
-            .get();
-        final data = userDoc.data();
+        if (driverUid != null && driverUid.isNotEmpty) {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(driverUid)
+              .get();
+          final uData = userDoc.data();
+          if (uData != null) {
+            return _SellerDriver(
+              name: (uData['name'] as String?) ?? (uData['nickname'] as String?) ?? 'Driver',
+              email: (uData['email'] as String?) ?? driverEmail,
+              photoUrl: uData['photoUrl'] as String?,
+            );
+          }
+        }
+
+        if (driverEmail.isNotEmpty) {
+          final uSnap = await FirebaseFirestore.instance
+              .collection('users')
+              .where('email', isEqualTo: driverEmail)
+              .limit(1)
+              .get();
+          if (uSnap.docs.isNotEmpty) {
+            final uData = uSnap.docs.first.data();
+            return _SellerDriver(
+              name: (uData['name'] as String?) ?? (uData['nickname'] as String?) ?? 'Driver',
+              email: (uData['email'] as String?) ?? driverEmail,
+              photoUrl: uData['photoUrl'] as String?,
+            );
+          }
+        }
 
         return _SellerDriver(
-          name: (data?['name'] as String?) ?? 'Driver',
-          email: (data?['email'] as String?) ?? '-',
-          photoUrl: data?['photoUrl'] as String?,
+          name: 'Driver',
+          email: driverEmail.isNotEmpty ? driverEmail : '-',
+          photoUrl: null,
         );
       }));
 
@@ -2820,16 +2845,15 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
     }
   }
 
-  Future<void> _confirmInvite(QueryDocumentSnapshot<Map<String, dynamic>> user) async {
-    final name = (user.data()['name'] as String?) ?? 'Pengguna';
-
+  Future<void> _confirmInviteByEmail(String email, {String? name}) async {
+    final displayName = name ?? email;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Tambahkan Driver?', style: _ms(size: 16, weight: FontWeight.bold)),
+        title: Text('Undang Driver?', style: _ms(size: 16, weight: FontWeight.bold)),
         content: Text(
-          'Ingin menambahkan akun ini sebagai driver?\n\n$name',
+          'Kirim undangan resmi driver ke akun:\n\n$displayName',
           style: _ms(size: 13, color: Colors.black54),
         ),
         actions: [
@@ -2843,7 +2867,7 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
               backgroundColor: _selGreen,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: Text('Ya, Tambahkan', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
+            child: Text('Kirim Undangan', style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white)),
           ),
         ],
       ),
@@ -2852,11 +2876,11 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
     if (confirmed != true) return;
 
     try {
-      await DriverService.sendDriverInvite(targetUid: user.id, storeName: widget.storeName);
+      await DriverService.sendDriverInviteByEmail(email: email, storeName: widget.storeName);
       if (!mounted) return;
-      setState(() => _invitedThisSession.add(user.id));
+      setState(() => _invitedThisSession.add(email));
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Undangan terkirim ke $name', style: _ms(size: 12, color: Colors.white)),
+        content: Text('Undangan driver berhasil dikirim ke $email', style: _ms(size: 12, color: Colors.white)),
         backgroundColor: _selGreen,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -2872,8 +2896,30 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
     }
   }
 
+  Future<void> _confirmInvite(QueryDocumentSnapshot<Map<String, dynamic>> user) async {
+    final name = (user.data()['name'] as String?) ?? 'Pengguna';
+    final email = (user.data()['email'] as String?) ?? '';
+
+    if (email.isNotEmpty) {
+      await _confirmInviteByEmail(email, name: name);
+    } else {
+      await DriverService.sendDriverInvite(targetUid: user.id, storeName: widget.storeName);
+      if (!mounted) return;
+      setState(() => _invitedThisSession.add(user.id));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Undangan terkirim ke $name', style: _ms(size: 12, color: Colors.white)),
+        backgroundColor: _selGreen,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final queryText = _searchCtrl.text.trim();
+    final isEmailQuery = queryText.contains('@') && queryText.contains('.');
+
     return DraggableScrollableSheet(
       initialChildSize: 0.75,
       minChildSize: 0.5,
@@ -2896,13 +2942,14 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
                   children: [
                     Text('Tambah Driver', style: _ms(size: 17, weight: FontWeight.bold)),
                     const SizedBox(height: 4),
-                    Text('Cari akun berdasarkan nama atau email untuk diundang jadi driver',
+                    Text('Masukkan email atau cari nama pengguna untuk mengundang menjadi driver gerai',
                         style: _ms(size: 11, color: Colors.black45)),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _searchCtrl,
+                      keyboardType: TextInputType.emailAddress,
                       decoration: InputDecoration(
-                        hintText: 'Nama atau email...',
+                        hintText: 'Ketik email (mis. player...@gmail.com)...',
                         hintStyle: _ms(size: 13, color: Colors.black38),
                         prefixIcon: const Icon(Icons.search_rounded, color: Colors.black38),
                         filled: true,
@@ -2914,6 +2961,43 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
                         contentPadding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
+                    if (isEmailQuery && !_results.any((r) => (r.data()['email'] as String?)?.toLowerCase() == queryText.toLowerCase())) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _selGreen.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _selGreen.withValues(alpha: 0.25)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.mark_email_read_rounded, color: _selGreen, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Kirim ke email ini', style: _ms(size: 12, weight: FontWeight.bold, color: _selGreen)),
+                                  Text(queryText, style: _ms(size: 11, color: Colors.black54), overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => _confirmInviteByEmail(queryText),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _selGreen,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                              child: Text('Kirim', style: _ms(size: 11.5, weight: FontWeight.bold, color: Colors.white)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -2928,7 +3012,7 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
                                 children: [
                                   Icon(Icons.person_search_rounded, size: 40, color: Colors.grey.shade300),
                                   const SizedBox(height: 10),
-                                  Text('Tidak ada akun yang cocok', style: _ms(size: 11, color: Colors.black38)),
+                                  Text('Ketik email atau nama akun calon driver', style: _ms(size: 11, color: Colors.black38)),
                                 ],
                               ),
                             ),
@@ -2942,7 +3026,7 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
                               final data = doc.data();
                               final name = (data['name'] as String?) ?? 'Pengguna';
                               final email = (data['email'] as String?) ?? '-';
-                              final alreadyInvited = _invitedThisSession.contains(doc.id);
+                              final alreadyInvited = _invitedThisSession.contains(doc.id) || _invitedThisSession.contains(email);
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 10),
                                 child: Row(
@@ -2973,7 +3057,7 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
                                               backgroundColor: _selGreen.withValues(alpha: 0.1),
                                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                             ),
-                                            child: Text('Tambahkan', style: _ms(size: 11.5, weight: FontWeight.bold, color: _selGreen)),
+                                            child: Text('Undang', style: _ms(size: 11.5, weight: FontWeight.bold, color: _selGreen)),
                                           ),
                                   ],
                                 ),
