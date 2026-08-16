@@ -619,21 +619,32 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   child: Icon(Icons.receipt_long_rounded, size: 14, color: badgeColor),
                 ),
                 const SizedBox(width: 8),
-                Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: badgeColor)),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: badgeColor.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
-                  ),
+                Expanded(
                   child: Text(
-                    badgeLabel,
-                    style: _ms(
-                      size: 9,
-                      weight: FontWeight.bold,
-                      color: badgeColor,
+                    orderId,
+                    style: _ms(size: 12, weight: FontWeight.bold, color: badgeColor),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      badgeLabel,
+                      style: _ms(
+                        size: 9,
+                        weight: FontWeight.bold,
+                        color: badgeColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
@@ -659,51 +670,58 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                 const SizedBox(height: 6),
                 Text(items, style: _ms(size: 11, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text('Total: Rp${StoreService.formatRupiah(totalPrice)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
-                    const Spacer(),
-                    if (isPackaging)
-                      ElevatedButton(
-                        onPressed: () async {
-                          HapticFeedback.mediumImpact();
-                          await OrderTrackingService.markReadyForDriver(
-                            orderDocId: doc.id,
-                            storeName: _storeName,
-                            marketName: _marketType,
-                          );
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Pesanan $orderId diserahkan ke driver...', style: _ms(size: 12, color: Colors.white)),
-                              backgroundColor: _selGreen,
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _selAmber,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text('Selesai Mengemas / Serahkan Kurir', style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white)),
-                      )
-                    else if (status == OrderStatus.menungguDriver)
-                      Row(
-                        children: [
-                          const SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: _selOrange),
+                Text('Total: Rp${StoreService.formatRupiah(totalPrice)}', style: _ms(size: 14, weight: FontWeight.bold, color: _selGreen)),
+                const SizedBox(height: 8),
+                if (isPackaging)
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        HapticFeedback.mediumImpact();
+                        await OrderTrackingService.markReadyForDriver(
+                          orderDocId: doc.id,
+                          storeName: _storeName,
+                          marketName: _marketType,
+                        );
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Pesanan $orderId diserahkan ke driver...', style: _ms(size: 12, color: Colors.white)),
+                            backgroundColor: _selGreen,
                           ),
-                          const SizedBox(width: 8),
-                          Text('Menunggu driver...', style: _ms(size: 11, weight: FontWeight.w600, color: _selOrange)),
-                        ],
-                      )
-                    else ...[
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _selAmber,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        'Selesai Mengemas / Serahkan Kurir',
+                        textAlign: TextAlign.center,
+                        style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
+                  )
+                else if (status == OrderStatus.menungguDriver)
+                  Row(
+                    children: [
+                      const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: _selOrange),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('Menunggu driver...', style: _ms(size: 11, weight: FontWeight.w600, color: _selOrange)),
+                    ],
+                  )
+                else
+                  Row(
+                    children: [
                       if (driverName != null)
                         Expanded(
                           child: Text(
@@ -713,6 +731,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                      if (driverName != null && driverLoc != null) const SizedBox(width: 8),
                       if (driverLoc != null)
                         OutlinedButton.icon(
                           onPressed: () => _showTrackDriverSheet(
@@ -732,8 +751,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                           ),
                         ),
                     ],
-                  ],
-                ),
+                  ),
               ],
             ),
           ),

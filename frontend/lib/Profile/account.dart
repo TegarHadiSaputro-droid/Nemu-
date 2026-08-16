@@ -26,8 +26,7 @@ import 'Kelola Toko/kelola_toko_page.dart';
 import 'Pusat Bantuan/pusat_bantuan_page.dart';
 import 'Favorite/favorite_gerai_page.dart'; // TODO: sesuaikan path jika Profile bukan folder yang tepat
 import '../settings/setting_page.dart'; // TODO: sesuaikan path jika lokasi setting_page.dart berbeda
-import '../screens/home_screen.dart';
-import '../screens/home_screen2.dart'; // TODO: sesuaikan path jika lokasi home_screen2.dart berbeda
+import '/main.dart'; // untuk AuthGate — sesuaikan path kalau struktur foldermu beda
 
 
 // ---------------------------------------------------------------------------
@@ -207,6 +206,12 @@ class AccountPage extends StatelessWidget {
                           label: 'Jadikan Penjual (Debug Dev Only)',
                           customColor: Colors.teal,
                           onTap: () => _debugMakeSeller(context),
+                        ),
+                        _MenuItemData(
+                          icon: Icons.delivery_dining,
+                          label: 'Jadikan Driver (Debug Dev Only)',
+                          customColor: Colors.indigo,
+                          onTap: () => _debugMakeDriver(context),
                         ),
                         _MenuItemData(
                           icon: Icons.bug_report,
@@ -547,7 +552,11 @@ Future<void> _debugMakeSeller(BuildContext context) async {
     // AuthService — kalau salah satu gagal, dua-duanya di-rollback.
     final batch = firestore.batch();
 
-    batch.update(userRef, {'roles.seller': true});
+    batch.update(userRef, {
+      'roles.seller': true,
+      'roles.driver': false,
+      'roles.buyer': false,
+    });
 
     final sellerRef = firestore.collection('seller').doc(uid);
     batch.set(sellerRef, {
@@ -570,17 +579,71 @@ Future<void> _debugMakeSeller(BuildContext context) async {
       ),
     );
 
-    // Navigasikan layar pengguna secara langsung ke home_screen2.dart
-    // (tampilan Penjual), sama seperti _resetToBuyer() mengarahkan
-    // balik ke home_screen.dart (tampilan Pembeli).
+    // Navigasikan lewat AuthGate (bukan langsung ke HomeScreen2), supaya
+    // layar Driver/Pembeli yang sedang aktif (kalau ada) di-unmount total
+    // DULU sebelum AuthGate membaca ulang role dan menentukan tujuan.
+    // Kalau langsung push ke HomeScreen2 di sini, ada race condition:
+    // layar lama (mis. HomeScreen3) bisa sempat rebuild sendiri lewat
+    // StreamBuilder-nya dan menampilkan layar "Akses Ditolak" sekilas
+    // sebelum navigasi manual ini sempat jalan. Pola sama seperti
+    // _logout() di logout_page.dart.
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const HomeScreen2()),
+      MaterialPageRoute(builder: (context) => const AuthGate()),
       (route) => false,
     );
   } catch (e) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Gagal set ke penjual: $e')),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DEBUG ONLY — set roles.driver jadi true, DAN eksplisit matikan
+// roles.seller & roles.buyer supaya cuma satu role yang aktif dalam satu
+// waktu (role eksklusif, bukan ditambah-tambah). Kalau sebelumnya user
+// ini pernah jadi Penjual, dokumen di collection "seller" TIDAK dihapus
+// di sini (data gerai tetap aman) — cuma badge/akses aktifnya yang
+// dipindah ke Driver. Pakai set(merge: true) dengan struktur nested map
+// supaya tetap aman meski field 'roles' belum pernah ada di dokumen user.
+// StreamBuilder di _ProfileHeader otomatis nangkep perubahan roles ini.
+// ---------------------------------------------------------------------------
+Future<void> _debugMakeDriver(BuildContext context) async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid == null) return;
+
+  try {
+    await FirebaseFirestore.instance.collection('users').doc(uid).set(
+      {
+        'roles': {
+          'buyer': false,
+          'seller': false,
+          'driver': true,
+        },
+        'driverStatus': 'offline',
+      },
+      SetOptions(merge: true),
+    );
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Role berhasil di-set ke Driver'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    // Navigasikan lewat AuthGate (bukan langsung ke HomeScreen3) — lihat
+    // penjelasan lengkap di komentar serupa pada _debugMakeSeller().
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const AuthGate()),
+      (route) => false,
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Gagal set ke driver: $e')),
     );
   }
 }
@@ -652,8 +715,9 @@ Future<void> _resetToBuyer(BuildContext context) async {
     batch.set(
       firestore.collection('users').doc(uid),
       {
-        'roles': {'seller': false, 'driver': false},
+        'roles': {'buyer': true, 'seller': false, 'driver': false},
         'sellerRating': FieldValue.delete(),
+        'driverStatus': FieldValue.delete(),
       },
       SetOptions(merge: true),
     );
@@ -668,9 +732,12 @@ Future<void> _resetToBuyer(BuildContext context) async {
       ),
     );
 
-    // Navigasikan layar pengguna secara langsung kembali ke home_screen.dart (tampilan Pembeli)
+    // Navigasikan lewat AuthGate (bukan langsung ke HomeScreen) — lihat
+    // penjelasan lengkap di komentar serupa pada _debugMakeSeller().
+    // Ini yang memperbaiki bug "sempat kelihatan layar Akses Ditolak"
+    // waktu reset dipencet dari dalam HomeScreen3 (tab Driver).
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      MaterialPageRoute(builder: (context) => const AuthGate()),
       (route) => false,
     );
   } catch (e) {

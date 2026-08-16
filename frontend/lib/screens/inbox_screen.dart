@@ -21,9 +21,11 @@ TextStyle _ib({
 //  sheet terpisah dari InboxScreen). Sekarang digabung ke sini supaya
 //  cuma ada SATU pintu masuk "Pesan & Notifikasi" -- lebih gampang
 //  ditemukan user, nggak bikin bingung ada 2 kotak pesan beda tempat.
-//  Masih statis/mock (belum dari backend) -- kalau nanti notifikasi
-//  sistem sudah beneran datang dari Firestore/backend, tinggal ganti
-//  list ini jadi hasil query, struktur tile-nya nggak perlu berubah.
+//
+//  Sengaja dikosongin -- akun baru belum punya notifikasi sistem apa pun.
+//  Kalau nanti notifikasi sistem beneran datang dari Firestore/backend,
+//  tinggal isi list ini dari hasil query, struktur tile-nya nggak perlu
+//  berubah.
 // ─────────────────────────────────────────────
 class _SystemNotifItem {
   final IconData icon;
@@ -39,36 +41,7 @@ class _SystemNotifItem {
   });
 }
 
-const List<_SystemNotifItem> _systemNotifs = [
-  _SystemNotifItem(
-    icon: Icons.local_shipping_rounded,
-    iconColor: Color(0xFFFF7B00),
-    title: 'Pesanan dikirim!',
-    sub: 'Pak Budi sedang mengantar pesananmu • 2 mnt lalu',
-    isUnread: true,
-  ),
-  _SystemNotifItem(
-    icon: Icons.check_circle_rounded,
-    iconColor: Color(0xFF007C3F),
-    title: 'Pesanan dikonfirmasi',
-    sub: 'Lapak Sari menerima pesananmu • 15 mnt lalu',
-    isUnread: true,
-  ),
-  _SystemNotifItem(
-    icon: Icons.campaign_rounded,
-    iconColor: Color(0xFF0071FF),
-    title: 'Promo hari ini!',
-    sub: 'Ongkir flat Rp2.000 untuk semua pesanan • 1 jam lalu',
-    isUnread: false,
-  ),
-  _SystemNotifItem(
-    icon: Icons.star_rounded,
-    iconColor: Color(0xFFF5A623),
-    title: 'Beri ulasan',
-    sub: 'Bagaimana pesananmu kemarin? Beri bintang yuk! • 1 hari lalu',
-    isUnread: false,
-  ),
-];
+const List<_SystemNotifItem> _systemNotifs = [];
 
 // ─────────────────────────────────────────────
 //  InboxScreen
@@ -299,7 +272,9 @@ class _InboxTileState extends State<_InboxTile> {
 // ─────────────────────────────────────────────
 //  _SystemNotifTile — tile notifikasi sistem (statis, bukan dari inbox
 //  Firestore). Sengaja dibuat mirip _InboxTile di atas biar visualnya
-//  konsisten walau sumber datanya beda.
+//  konsisten walau sumber datanya beda. Tetap disimpan walau
+//  _systemNotifs kosong, biar gampang dipakai lagi begitu ada sumber
+//  data notifikasi sistem beneran.
 // ─────────────────────────────────────────────
 class _SystemNotifTile extends StatelessWidget {
   final _SystemNotifItem item;
