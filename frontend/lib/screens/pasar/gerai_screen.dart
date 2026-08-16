@@ -270,6 +270,14 @@ class _GeraiScreenState extends State<GeraiScreen> {
         (data['is_active'] as bool?) ??
         true;
 
+    // ── Rating akumulasi (ratingSum / ratingCount ditulis dari
+    // orders_screen.dart tiap kali pembeli kasih/ubah rating) ──
+    final ratingCount = (data['ratingCount'] as num?)?.toInt() ?? 0;
+    final ratingAvgRaw = (data['ratingAvg'] as num?)?.toDouble();
+    final ratingSum = (data['ratingSum'] as num?)?.toDouble();
+    final ratingAvg = ratingAvgRaw ??
+        (ratingCount > 0 && ratingSum != null ? ratingSum / ratingCount : null);
+
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -286,8 +294,8 @@ class _GeraiScreenState extends State<GeraiScreen> {
         emoji: '🏪',
         name: name,
         description: description,
-        rating: null,
-        ulasan: null,
+        rating: ratingCount > 0 ? ratingAvg : null,
+        ulasan: ratingCount > 0 ? ratingCount : null,
         badge: 'Nemu+',
         isOpen: isOpen,
       ),
@@ -395,9 +403,9 @@ class _GeraiScreenState extends State<GeraiScreen> {
                       children: [
                         const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 14),
                         const SizedBox(width: 3),
-                        Text(rating.toString(), style: _gs(size: 12, weight: FontWeight.bold)),
+                        Text(rating.toStringAsFixed(1), style: _gs(size: 12, weight: FontWeight.bold)),
                         const SizedBox(width: 4),
-                        Text('($ulasan Ulasan)', style: _gs(size: 10, color: Colors.black38)),
+                        Text('($ulasan Penilaian)', style: _gs(size: 10, color: Colors.black38)),
                       ],
                     )
                   else
