@@ -227,20 +227,72 @@ class OrdersManager {
     return _ordersRef.where('buyer_id', isEqualTo: uid).snapshots();
   }
 
-  /// Stream pesanan pending untuk toko seller
+  /// Membangun filter OR yang mencocokkan storeId/sellerUid di semua
+  /// kemungkinan nama field milik toko (store_id, seller_id, owner_id,
+  /// storeId, sellerId) -- skema lama & baru tercampur di koleksi 'orders'.
+  Filter? _buildStoreFilter(String storeId, String? sellerUid) {
+    final ids = <String>{
+      if (storeId.isNotEmpty) storeId,
+      if (sellerUid != null && sellerUid.isNotEmpty) sellerUid,
+    };
+    if (ids.isEmpty) return null;
+
+    final fieldNames = [
+      'store_id',
+      'seller_id',
+      'owner_id',
+      'storeId',
+      'sellerId',
+    ];
+
+    final filters = <Filter>[
+      for (final id in ids)
+        for (final field in fieldNames) Filter(field, isEqualTo: id),
+    ];
+
+    Filter orGroup = filters.first;
+    for (int i = 1; i < filters.length; i++) {
+      orGroup = Filter.or(orGroup, filters[i]);
+    }
+    return orGroup;
+  }
+
+  /// Stream pesanan pending (menunggu konfirmasi) khusus milik toko seller.
+  /// FIX: sebelumnya method ini mengembalikan _ordersRef.snapshots() tanpa
+  /// filter apa pun, sehingga order dari SEMUA toko ikut tampil di layar
+  /// seller manapun ("Pesanan Masuk" jadi campur aduk). Sekarang difilter
+  /// berdasarkan storeId/sellerUid (lintas nama field) DAN status pending.
   Stream<QuerySnapshot<Map<String, dynamic>>> pendingOrdersForStoreStream(
     String storeId, {
     String? sellerUid,
   }) {
-    return _ordersRef.snapshots();
+    final storeFilter = _buildStoreFilter(storeId, sellerUid);
+    if (storeFilter == null) return const Stream.empty();
+
+    return _ordersRef
+        .where(Filter.and(
+          storeFilter,
+          Filter('status', whereIn: kPendingStatuses),
+        ))
+        .snapshots();
   }
 
-  /// Stream pesanan yang sedang diproses untuk toko seller
+  /// Stream pesanan yang sedang diproses (termasuk sudah diserahkan ke
+  /// driver, belum selesai) khusus milik toko seller. Sama seperti di atas,
+  /// sekarang benar-benar difilter per toko, bukan mengembalikan semua order.
   Stream<QuerySnapshot<Map<String, dynamic>>> processingOrdersForStoreStream(
     String storeId, {
     String? sellerUid,
   }) {
-    return _ordersRef.snapshots();
+    final storeFilter = _buildStoreFilter(storeId, sellerUid);
+    if (storeFilter == null) return const Stream.empty();
+
+    return _ordersRef
+        .where(Filter.and(
+          storeFilter,
+          Filter('status', whereIn: kProcessingStatuses),
+        ))
+        .snapshots();
   }
 
   /// Penjual Menerima Pesanan: update status ke 'diproses' & kirim notifikasi ke buyer inbox
