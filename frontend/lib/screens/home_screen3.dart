@@ -36,6 +36,7 @@ import 'package:frontend/services/order_tracking_service.dart';
 import 'package:frontend/widgets/live_tracking_map.dart';
 import 'package:frontend/Profile/account.dart';
 import 'package:frontend/widgets/bottom_navbar.dart';
+import '/main.dart'; // untuk AuthGate — sesuaikan path kalau struktur foldermu beda
 
 // ─────────────────────────────────────────────
 //  Warna Palette (konsisten dengan seller_home_screen.dart / home_screen.dart)
@@ -101,9 +102,17 @@ class _HomeScreen3State extends State<HomeScreen3> with TickerProviderStateMixin
         final isDriver = (roles?['driver'] as bool?) ?? false;
 
         if (!isDriver) {
-          return const _DriverAccessDenied(
-            message: 'Halaman ini cuma bisa diakses akun yang sudah berlabel Driver.',
-          );
+          // TIDAK menampilkan layar statis "Akses Ditolak" lagi -- itu
+          // penyebab bug stuck permanen. Begitu Firestore ditulis (mis.
+          // dari tombol debug di account.dart), cache lokal Firestore
+          // ke-update duluan sebelum network round-trip selesai, sehingga
+          // StreamBuilder ini bisa langsung rebuild dan MEMBONGKAR context
+          // AccountPage SEBELUM baris Navigator.pushAndRemoveUntil() manual
+          // di account.dart sempat dieksekusi (context.mounted jadi false,
+          // navigasi dibatalkan begitu saja, user nyangkut di sini selamanya).
+          // Sekarang HALAMAN INI sendiri yang tanggung jawab pindah ke
+          // AuthGate begitu isDriver == false, apa pun penyebabnya.
+          return const _AutoRedirectAway();
         }
 
         final userName = (data?['name'] as String?) ?? 'Driver';
@@ -1294,6 +1303,50 @@ class _IncomingRequestDialog extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auto-redirect kalau roles.driver berubah jadi false SAAT user masih di
+// halaman ini (misal lewat tombol debug di account.dart, atau role dicabut
+// admin selagi app kebuka). Lihat penjelasan lengkap di komentar pemanggil
+// widget ini (build() method di atas) soal kenapa TIDAK lagi menampilkan
+// layar statis _DriverAccessDenied untuk kasus ini.
+// ---------------------------------------------------------------------------
+class _AutoRedirectAway extends StatefulWidget {
+  const _AutoRedirectAway();
+
+  @override
+  State<_AutoRedirectAway> createState() => _AutoRedirectAwayState();
+}
+
+class _AutoRedirectAwayState extends State<_AutoRedirectAway> {
+  bool _navigated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // addPostFrameCallback supaya navigasi terjadi SETELAH frame build ini
+    // selesai -- tidak boleh manggil Navigator langsung di initState/build
+    // karena widget tree masih dalam proses dibangun di titik itu.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_navigated || !mounted) return;
+      _navigated = true;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const AuthGate()),
+        (route) => false,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Splash sebentar selama proses redirect -- biasanya cuma kelihatan
+    // sepersekian detik, jadi user tidak akan sempat lihat pesan error apa pun.
+    return const Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(child: CircularProgressIndicator(color: _drGreen)),
     );
   }
 }
