@@ -5,6 +5,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 class OrderStatus {
@@ -75,12 +76,13 @@ class OrderTrackingService {
     try {
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
+          accuracy: LocationAccuracy.low,
+          timeLimit: Duration(seconds: 2),
         ),
-      );
+      ).timeout(const Duration(seconds: 2));
       sellerLocation = {'lat': pos.latitude, 'lng': pos.longitude};
     } catch (_) {
-      // GPS toko gagal diambil (izin ditolak / mati)
+      // GPS toko fallback jika tidak tersedia / dimatikan
     }
 
     // Baca dokumen order terlebih dahulu agar bisa menyalin deliveryAddress,
@@ -139,23 +141,42 @@ class OrderTrackingService {
       'updatedAt': FieldValue.serverTimestamp(),
       'updated_at': FieldValue.serverTimestamp(),
     });
+
+    // Kirim notifikasi ke inbox pembeli
+    final buyerId = (existing['buyerId'] as String?) ?? (existing['buyer_id'] as String?);
+    final orderCode = (existing['orderCode'] as String?) ?? orderDocId;
+    if (buyerId != null && buyerId.isNotEmpty) {
+      try {
+        await _db
+            .collection('users')
+            .doc(buyerId)
+            .collection('inbox')
+            .add({
+          'type': 'order_update',
+          'title': 'Pesanan Siap Diantar 🛵',
+          'message': 'Pesanan $orderCode dari $storeName sudah selesai dikemas dan siap dijemput oleh driver.',
+          'orderId': orderDocId,
+          'orderCode': orderCode,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+    }
   }
 
   // ── DRIVER ───────────────────────────────────────────────────────
 
   /// Permintaan yang masih terbuka (status: menunggu_driver).
   static Stream<QuerySnapshot<Map<String, dynamic>>> watchOpenRequests() {
-    return _orders
-        .where('status', isEqualTo: OrderStatus.menungguDriver)
-        .snapshots();
+    return _orders.snapshots();
   }
 
   /// Pesanan yang lagi ditangani driver yang sedang login (fase jemput ATAU antar).
   static Stream<QuerySnapshot<Map<String, dynamic>>> watchMyActiveDelivery() {
     final uid = _auth.currentUser?.uid;
+    if (uid == null) return const Stream.empty();
     return _orders
         .where('driverUid', isEqualTo: uid)
-        .where('status', whereIn: [OrderStatus.menujuPenjual, OrderStatus.diantar])
         .snapshots();
   }
 
@@ -168,25 +189,41 @@ class OrderTrackingService {
     if (uid == null) return false;
     final ref = orderRef(orderDocId);
     try {
-      return await _db.runTransaction<bool>((tx) async {
-        final snap = await tx.get(ref);
-        final data = snap.data();
-        if (data == null) return false;
-        if (data['status'] != OrderStatus.menungguDriver ||
-            data['driverUid'] != null) {
-          return false;
-        }
-        tx.update(ref, {
-          'status': OrderStatus.menujuPenjual,
-          'statusLabel': 'Driver Menuju Toko',
-          'driverUid': uid,
-          'driverName': driverName,
-          'updatedAt': FieldValue.serverTimestamp(),
-          'updated_at': FieldValue.serverTimestamp(),
-        });
-        return true;
+      final snap = await ref.get();
+      final data = snap.data();
+      if (data == null) return false;
+
+      // Jika sudah ada driver lain yang mengambil pesanan ini
+      final existingDriver = data['driverUid'] as String?;
+      if (existingDriver != null && existingDriver.isNotEmpty && existingDriver != uid) {
+        return false;
+      }
+
+      await ref.update({
+        'status': OrderStatus.menujuPenjual,
+        'statusLabel': 'Driver Menuju Toko',
+        'driverUid': uid,
+        'driverName': driverName.isNotEmpty ? driverName : 'Driver',
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
       });
-    } catch (_) {
+
+      // Update lokasi driver
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.low,
+            timeLimit: Duration(seconds: 2),
+          ),
+        ).timeout(const Duration(seconds: 2));
+        await ref.update({
+          'driverLocation': LiveLatLng(lat: pos.latitude, lng: pos.longitude).toMap(),
+        });
+      } catch (_) {}
+
+      return true;
+    } catch (e) {
+      debugPrint('Error acceptOrder: $e');
       return false;
     }
   }
@@ -211,7 +248,7 @@ class OrderTrackingService {
   /// Driver selesaikan pesanan
   static Future<void> completeDelivery(
     String orderDocId,
-    String proofPhotoUrl,
+    String? proofPhotoUrl,
   ) async {
     final uid = _auth.currentUser?.uid;
     final batch = _db.batch();
@@ -223,14 +260,18 @@ class OrderTrackingService {
     final orderCode = (orderData['orderCode'] as String?) ?? orderDocId;
     final storeName = (orderData['storeName'] as String?) ?? 'Toko';
 
-    batch.update(orderRef(orderDocId), {
+    final updateData = <String, dynamic>{
       'status': OrderStatus.selesai,
       'statusLabel': 'Selesai',
-      'proofPhotoUrl': proofPhotoUrl,
       'completedAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
       'updated_at': FieldValue.serverTimestamp(),
-    });
+    };
+    if (proofPhotoUrl != null) {
+      updateData['proofPhotoUrl'] = proofPhotoUrl;
+    }
+
+    batch.update(orderRef(orderDocId), updateData);
 
     if (uid != null) {
       batch.set(
@@ -254,7 +295,7 @@ class OrderTrackingService {
             'Terima kasih sudah belanja di Nemu!',
         'orderId': orderDocId,
         'orderCode': orderCode,
-        'proofPhotoUrl': proofPhotoUrl,
+        if (proofPhotoUrl != null) 'proofPhotoUrl': proofPhotoUrl,
         'read': false,
         'createdAt': FieldValue.serverTimestamp(),
       });

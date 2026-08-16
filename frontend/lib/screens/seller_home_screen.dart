@@ -80,6 +80,9 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   List<_SellerDriver> _assignedDrivers = [];
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _driversSub;
 
+  // ── ID pesanan yang sedang proses penyerahan ke driver ──
+  final Set<String> _submittingHandoverOrderIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -283,11 +286,9 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                         _buildEmptyStoreCard(),
                       const SizedBox(height: 16),
 
-                      // 2. Alert Pesanan Baru (real-time dari Firestore)
-                      if (_storeId != null) ...[
-                        _buildOrderAlertSection(),
-                        const SizedBox(height: 20),
-                      ],
+                      // 2. Alert Pesanan Masuk & Diproses (real-time dari Firestore)
+                      _buildOrderAlertSection(),
+                      const SizedBox(height: 20),
 
                       // 3. Quick Actions
                       if (_storeId != null) ...[
@@ -534,8 +535,6 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   // ──────────────────────────────────────────
   Widget _buildOrderAlertSection() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (_storeId == null && uid == null) return const SizedBox.shrink();
-
     final queryStoreId = _storeId ?? uid ?? '';
 
     return Column(
@@ -561,10 +560,34 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           return const SizedBox.shrink();
         }
         if (snapshot.hasError) {
+          debugPrint('Error pendingOrdersStream: ${snapshot.error}');
           return const SizedBox.shrink();
         }
 
-        final docs = snapshot.data?.docs ?? [];
+        final allDocs = snapshot.data?.docs ?? [];
+        final validIds = <String>{
+          if (storeId.isNotEmpty) storeId,
+          if (uid != null && uid.isNotEmpty) uid,
+        };
+
+        // Filter di memori agar bebas dari masalah missing composite index Firestore
+        final docs = allDocs.where((doc) {
+          final data = doc.data();
+          final status = (data['status'] as String?) ?? '';
+          if (!kPendingStatuses.contains(status)) return false;
+
+          final sId = (data['sellerId'] as String?) ??
+              (data['seller_id'] as String?) ??
+              (data['owner_id'] as String?) ??
+              (data['storeId'] as String?) ??
+              (data['store_id'] as String?) ??
+              (data['sellerUid'] as String?);
+
+          if (validIds.isNotEmpty && sId != null && sId.isNotEmpty && !validIds.contains(sId)) {
+            return false;
+          }
+          return true;
+        }).toList();
 
         if (docs.isEmpty) {
           return _buildEmptyOrderState();
@@ -618,7 +641,36 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
         sellerUid: uid,
       ),
       builder: (context, snapshot) {
-        final docs = snapshot.data?.docs ?? [];
+        if (snapshot.hasError) {
+          debugPrint('Error processingOrdersStream: ${snapshot.error}');
+          return const SizedBox.shrink();
+        }
+
+        final allDocs = snapshot.data?.docs ?? [];
+        final validIds = <String>{
+          if (storeId.isNotEmpty) storeId,
+          if (uid != null && uid.isNotEmpty) uid,
+        };
+
+        // Filter di memori
+        final docs = allDocs.where((doc) {
+          final data = doc.data();
+          final status = (data['status'] as String?) ?? '';
+          if (!kProcessingStatuses.contains(status)) return false;
+
+          final sId = (data['sellerId'] as String?) ??
+              (data['seller_id'] as String?) ??
+              (data['owner_id'] as String?) ??
+              (data['storeId'] as String?) ??
+              (data['store_id'] as String?) ??
+              (data['sellerUid'] as String?);
+
+          if (validIds.isNotEmpty && sId != null && sId.isNotEmpty && !validIds.contains(sId)) {
+            return false;
+          }
+          return true;
+        }).toList();
+
         if (docs.isEmpty) return const SizedBox.shrink();
 
         return Column(
@@ -639,6 +691,18 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   'Sedang Diproses',
                   style: _ms(size: 13, weight: FontWeight.bold, color: Colors.white),
                 ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${docs.length}',
+                    style: _ms(size: 10, weight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -648,6 +712,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
       },
     );
   }
+
 
   Widget _buildEmptyOrderState() {
     return Container(
@@ -977,60 +1042,64 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     final itemsSummary = (data['itemsSummary'] as String?) ?? '';
     final totalPrice = (data['total_price'] as num?)?.toInt() ??
         (data['totalPrice'] as num?)?.toInt() ?? 0;
+    final alamatPengiriman = (data['alamatPengiriman'] as String?) ??
+        (data['address'] as String?) ??
+        (data['deliveryAddress'] as String?) ??
+        '';
     final status = data['status'] as String? ?? kStatusAccepted;
 
-    // Info driver yang sudah ditugaskan ke pesanan ini (kalau ada). Nama
-    // field 'driverName'/'driverLocation'/'sellerLocation' ngikutin pola
-    // yang dipakai home_screen3.dart (sisi Driver) buat baca dokumen order
-    // yang sama -- lihat data['sellerLocation']/data['buyerLiveLocation']
-    // di sana.
     final driverName = data['driverName'] as String?;
     final driverLoc = LiveLatLng.fromMap(data['driverLocation'] as Map<String, dynamic>?);
     final sellerLoc = LiveLatLng.fromMap(data['sellerLocation'] as Map<String, dynamic>?);
 
-    // FIX: sebelumnya "isPackaging" (yang nge-gate tombol "Serahkan Kurir")
-    // dicek lewat `status == kStatusDikemas` -- konstanta itu didefinisikan
-    // di orders_manager.dart dan kalau string yang ditulis
-    // OrdersManager.acceptOrder() ternyata beda dari kStatusDikemas (atau
-    // acceptOrder() nulis status lain dulu sebelum "dikemas"), tombolnya
-    // nggak akan pernah muncul -- order nyangkut selamanya di sini dan
-    // TIDAK PERNAH nyampe status 'menunggu_driver', jadi driver
-    // (home_screen3.dart) nggak pernah lihat apa-apa.
-    //
-    // Diganti jadi dicek dari KONDISI, bukan dari string status yang persis:
-    // order ini butuh tombol "Serahkan Kurir" kalau dia BELUM ada driver
-    // yang ditugaskan DAN belum masuk antrian pencarian driver
-    // (OrderStatus.menungguDriver, dari order_tracking_service.dart --
-    // satu sumber kebenaran status order lintas role). Ini tetap benar
-    // apa pun nilai persis kStatusAccepted/kStatusDikemas di orders_manager.dart.
-    final belumAdaDriver = driverName == null &&
-        status != OrderStatus.menungguDriver &&
-        status != OrderStatus.menujuPenjual &&
-        status != OrderStatus.diantar &&
-        status != OrderStatus.selesai;
-    final isPackaging = belumAdaDriver;
+    final isHandingOver = _submittingHandoverOrderIds.contains(doc.id);
+
+    // Kategori status pesanan
+    final bool isPreparing = (status == kStatusDiproses ||
+            status == kStatusAccepted ||
+            status == kStatusDikemas ||
+            status == 'processing') &&
+        driverName == null;
+    final bool isWaitingDriver = (status == OrderStatus.menungguDriver ||
+            status == 'menunggu_driver') &&
+        driverName == null;
 
     Color badgeColor;
     String badgeLabel;
-    if (isPackaging) {
+    IconData badgeIcon;
+
+    if (isPreparing) {
       badgeColor = _selAmber;
-      badgeLabel = '📦 Dikemas';
+      badgeLabel = 'Sedang Disiapkan Toko';
+      badgeIcon = Icons.inventory_2_rounded;
+    } else if (isWaitingDriver) {
+      badgeColor = _selOrange;
+      badgeLabel = 'Menunggu Driver Mengambil';
+      badgeIcon = Icons.two_wheeler_rounded;
+    } else if (status == OrderStatus.menujuPenjual) {
+      badgeColor = const Color(0xFF0071FF);
+      badgeLabel = 'Driver Menuju Toko';
+      badgeIcon = Icons.delivery_dining_rounded;
+    } else if (status == OrderStatus.diantar) {
+      badgeColor = _selGreen;
+      badgeLabel = 'Sedang Diantar ke Pembeli';
+      badgeIcon = Icons.rocket_launch_rounded;
     } else {
       badgeColor = _selGreen;
-      badgeLabel = '✅ Diterima';
+      badgeLabel = 'Selesai';
+      badgeIcon = Icons.check_circle_rounded;
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: badgeColor.withValues(alpha: 0.35)),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: badgeColor.withValues(alpha: 0.35), width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
             offset: const Offset(0, 3),
           ),
         ],
@@ -1038,138 +1107,298 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: badgeColor)),
-                    const SizedBox(height: 2),
-                    Text(buyerName, style: _ms(size: 11, color: Colors.black54)),
-                    if (itemsSummary.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        itemsSummary,
-                        style: _ms(size: 10.5, color: Colors.black38),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: badgeColor.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(badgeLabel, style: _ms(size: 9, weight: FontWeight.bold, color: badgeColor)),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    StoreService.formatRupiahFull(totalPrice),
-                    style: _ms(size: 13, weight: FontWeight.bold, color: _selGreen),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (isPackaging)
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  HapticFeedback.mediumImpact();
-                  await OrderTrackingService.markReadyForDriver(
-                    orderDocId: doc.id,
-                    storeName: _storeName,
-                    marketName: _marketType,
-                  );
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Pesanan $orderId diserahkan ke driver...', style: _ms(size: 12, color: Colors.white)),
-                      backgroundColor: _selGreen,
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _selAmber,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: Text(
-                  'Selesai Mengemas / Serahkan Kurir',
-                  textAlign: TextAlign.center,
-                  style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white),
-                ),
-              ),
-            )
-          else if (status == OrderStatus.menungguDriver)
-            Row(
+          // Header order
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: badgeColor.withValues(alpha: 0.08),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(17)),
+            ),
+            child: Row(
               children: [
-                const SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: _selOrange),
-                ),
+                Icon(badgeIcon, size: 15, color: badgeColor),
                 const SizedBox(width: 8),
-                Text('Menunggu driver...', style: _ms(size: 11, weight: FontWeight.w600, color: _selOrange)),
-              ],
-            )
-          else
-            // CATATAN: baris nama driver di bawah ini direkonstruksi ulang --
-            // versi aslinya sempat ketiban konten lain pas proses merge
-            // (git salah nyocokin dua baris beda yang formatnya mirip),
-            // jadi teks/style persisnya mungkin beda dari desain awal.
-            // Fungsinya tetap sama: nunjukin driver yang ditugaskan +
-            // tombol buat lacak posisinya.
-            Row(
-              children: [
-                const Icon(Icons.two_wheeler_rounded, size: 15, color: _selGreen),
-                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    driverName != null ? 'Driver: $driverName' : 'Menunggu info driver...',
-                    style: _ms(size: 11, weight: FontWeight.w600, color: Colors.black54),
+                    orderId,
+                    style: _ms(size: 12.5, weight: FontWeight.bold, color: badgeColor),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (driverName != null && driverLoc != null) const SizedBox(width: 8),
-                if (driverLoc != null)
-                  OutlinedButton.icon(
-                    onPressed: () => _showTrackDriverSheet(
-                      driverLoc: driverLoc,
-                      destination: sellerLoc,
-                      destinationLabel: 'Toko Kamu',
-                    ),
-                    icon: const Icon(Icons.map_rounded, size: 15),
-                    label: Text('Lacak Driver', style: _ms(size: 11, weight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _selGreen,
-                      side: BorderSide(color: _selGreen.withValues(alpha: 0.4)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
                   ),
+                  child: Text(badgeLabel, style: _ms(size: 9.5, weight: FontWeight.bold, color: badgeColor)),
+                ),
               ],
             ),
+          ),
+
+          // Body info
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.person_rounded, size: 14, color: Colors.black45),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(buyerName, style: _ms(size: 12, weight: FontWeight.w600)),
+                    ),
+                    Text(
+                      StoreService.formatRupiahFull(totalPrice),
+                      style: _ms(size: 13, weight: FontWeight.bold, color: _selGreen),
+                    ),
+                  ],
+                ),
+                if (itemsSummary.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    itemsSummary,
+                    style: _ms(size: 11, color: Colors.black54),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (alamatPengiriman.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.location_on_rounded, size: 13, color: Colors.redAccent),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          alamatPengiriman,
+                          style: _ms(size: 10.5, color: Colors.black45),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+
+                const SizedBox(height: 12),
+                const Divider(height: 1, color: Color(0xFFF0F0F0)),
+                const SizedBox(height: 12),
+
+                // ── ACTION AREA ──
+                if (isPreparing) ...[
+                  // KOTAK KONTROL PENJUALAN: Sedang Menyiapkan -> Serahkan ke Driver
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _selAmber.withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _selAmber.withValues(alpha: 0.25)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: _selAmber.withValues(alpha: 0.18),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.shopping_bag_outlined, color: _selAmber, size: 16),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Proses Penjualan: Menyiapkan Barang',
+                                    style: _ms(size: 12, weight: FontWeight.bold, color: _selDark),
+                                  ),
+                                  Text(
+                                    'Jika produk sudah selesai dikemas, serahkan ke driver untuk pengantaran.',
+                                    style: _ms(size: 10.5, color: Colors.black54),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: isHandingOver
+                                ? null
+                                : () => _handoverToDriver(doc.id, orderId),
+                            icon: isHandingOver
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.two_wheeler_rounded, size: 16, color: Colors.white),
+                            label: Text(
+                              isHandingOver
+                                  ? 'Menyerahkan ke Driver...'
+                                  : 'Selesai Dikemas → Serahkan ke Driver',
+                              style: _ms(size: 11.5, weight: FontWeight.bold, color: Colors.white),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _selGreen,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (isWaitingDriver) ...[
+                  // KOTAK MENUNGGU DRIVER
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _selOrange.withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _selOrange.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2.2, color: _selOrange),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Pesanan Diserahkan ke Driver 🛵',
+                                style: _ms(size: 12, weight: FontWeight.bold, color: _selOrange),
+                              ),
+                              Text(
+                                _assignedDrivers.isNotEmpty
+                                    ? 'Menunggu respon driver toko (${_assignedDrivers.map((d) => d.name).join(', ')})...'
+                                    : 'Menunggu driver mengambil pesanan dari dashboard driver...',
+                                style: _ms(size: 10.5, color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  // DRIVER AKTIF
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _selGreen.withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _selGreen.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: _selGreen.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.two_wheeler_rounded, size: 16, color: _selGreen),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                driverName != null ? 'Driver: $driverName' : 'Driver Ditemukan',
+                                style: _ms(size: 12, weight: FontWeight.bold, color: _selGreen),
+                              ),
+                              Text(
+                                status == OrderStatus.menujuPenjual
+                                    ? 'Driver sedang menuju tokomu untuk mengambil barang.'
+                                    : 'Barang sudah diambil & sedang diantar ke pembeli.',
+                                style: _ms(size: 10.5, color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (driverLoc != null)
+                          OutlinedButton.icon(
+                            onPressed: () => _showTrackDriverSheet(
+                              driverLoc: driverLoc,
+                              destination: sellerLoc,
+                              destinationLabel: 'Toko Kamu',
+                            ),
+                            icon: const Icon(Icons.map_rounded, size: 14),
+                            label: Text('Lacak', style: _ms(size: 11, weight: FontWeight.bold)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _selGreen,
+                              side: BorderSide(color: _selGreen.withValues(alpha: 0.4)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _handoverToDriver(String docId, String orderId) async {
+    HapticFeedback.mediumImpact();
+    setState(() => _submittingHandoverOrderIds.add(docId));
+    try {
+      await OrderTrackingService.markReadyForDriver(
+        orderDocId: docId,
+        storeName: _storeName,
+        marketName: _marketType,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Pesanan $orderId berhasil diserahkan ke Driver! 🛵',
+            style: _ms(size: 12, color: Colors.white, weight: FontWeight.bold),
+          ),
+          backgroundColor: _selGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menyerahkan pesanan: $e', style: _ms(size: 12, color: Colors.white)),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _submittingHandoverOrderIds.remove(docId));
+    }
   }
 
   Future<void> _acceptOrder(

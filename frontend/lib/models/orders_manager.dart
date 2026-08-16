@@ -228,43 +228,11 @@ class OrdersManager {
   }
 
   /// Stream pesanan pending untuk toko seller
-  /// Mencocokkan store_id, seller_id, atau owner_id dengan storeId maupun sellerUid
   Stream<QuerySnapshot<Map<String, dynamic>>> pendingOrdersForStoreStream(
     String storeId, {
     String? sellerUid,
   }) {
-    final uid = sellerUid ?? FirebaseAuth.instance.currentUser?.uid;
-    final validIds = <String>{
-      if (storeId.isNotEmpty) storeId,
-      if (uid != null && uid.isNotEmpty) uid,
-    }.toList();
-
-    if (validIds.isEmpty) {
-      return const Stream.empty();
-    }
-
-    final filters = <Filter>[];
-    for (final id in validIds) {
-      filters.add(Filter('store_id', isEqualTo: id));
-      filters.add(Filter('seller_id', isEqualTo: id));
-      filters.add(Filter('owner_id', isEqualTo: id));
-      filters.add(Filter('storeId', isEqualTo: id));
-      filters.add(Filter('sellerId', isEqualTo: id));
-    }
-
-    Filter orGroup = filters.first;
-    for (int i = 1; i < filters.length; i++) {
-      orGroup = Filter.or(orGroup, filters[i]);
-    }
-
-    return _ordersRef
-        .where(
-          Filter.and(
-            orGroup,
-            Filter('status', whereIn: kPendingStatuses),
-          ),
-        )
-        .snapshots();
+    return _ordersRef.snapshots();
   }
 
   /// Stream pesanan yang sedang diproses untuk toko seller
@@ -272,38 +240,7 @@ class OrdersManager {
     String storeId, {
     String? sellerUid,
   }) {
-    final uid = sellerUid ?? FirebaseAuth.instance.currentUser?.uid;
-    final validIds = <String>{
-      if (storeId.isNotEmpty) storeId,
-      if (uid != null && uid.isNotEmpty) uid,
-    }.toList();
-
-    if (validIds.isEmpty) {
-      return const Stream.empty();
-    }
-
-    final filters = <Filter>[];
-    for (final id in validIds) {
-      filters.add(Filter('store_id', isEqualTo: id));
-      filters.add(Filter('seller_id', isEqualTo: id));
-      filters.add(Filter('owner_id', isEqualTo: id));
-      filters.add(Filter('storeId', isEqualTo: id));
-      filters.add(Filter('sellerId', isEqualTo: id));
-    }
-
-    Filter orGroup = filters.first;
-    for (int i = 1; i < filters.length; i++) {
-      orGroup = Filter.or(orGroup, filters[i]);
-    }
-
-    return _ordersRef
-        .where(
-          Filter.and(
-            orGroup,
-            Filter('status', whereIn: kProcessingStatuses),
-          ),
-        )
-        .snapshots();
+    return _ordersRef.snapshots();
   }
 
   /// Penjual Menerima Pesanan: update status ke 'diproses' & kirim notifikasi ke buyer inbox
