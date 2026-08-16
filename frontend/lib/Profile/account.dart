@@ -253,12 +253,15 @@ class _ProfileHeaderState extends State<_ProfileHeader> {
         final data = snapshot.data?.data();
         final roles = data?['roles'] as Map<String, dynamic>?;
 
+        final isSeller = (data?['is_seller'] as bool?) ?? (roles?['seller'] as bool?) ?? false;
+        final isDriver = (data?['is_driver'] as bool?) ?? (roles?['driver'] as bool?) ?? false;
+
         return _buildContent(
           context,
           userName: (data?['name'] as String?) ?? 'Nama Pengguna',
           photoUrl: data?['photoUrl'] as String?,
-          isSeller: (roles?['seller'] as bool?) ?? false,
-          isDriver: (roles?['driver'] as bool?) ?? false,
+          isSeller: isSeller,
+          isDriver: isDriver,
           rating: (data?['sellerRating'] as num?)?.toDouble(),
         );
       },

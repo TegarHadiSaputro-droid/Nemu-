@@ -414,7 +414,17 @@ class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
             if (canBuy)
               GestureDetector(
                 onTap: () {
-                  _cart.tambah(tempProduk, 1, storeName, marketSection);
+                  final ownerId = (data['owner_id'] as String?) ??
+                      (widget.storeData['owner_id'] as String?) ??
+                      widget.storeId;
+                  _cart.tambah(
+                    tempProduk,
+                    1,
+                    storeName,
+                    marketSection,
+                    geraiId: widget.storeId,
+                    sellerId: ownerId,
+                  );
                   setState(() {});
                   HapticFeedback.selectionClick();
                   ScaffoldMessenger.of(context).showSnackBar(

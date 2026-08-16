@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/models/cart_model.dart';
 import 'package:frontend/screens/pasar/gerai_screen.dart';
+import 'package:frontend/services/store_service.dart';
 
 // ─────────────────────────────────────────────
 //  Warna
@@ -291,19 +293,39 @@ class _PasarScreenState extends State<PasarScreen> {
               ),
 
               // ── Badge jumlah gerai di pojok kiri atas ──
+              // Dulu cuma ngitung market.gerai.length (data statis) --
+              // gerai yang didaftarkan lewat Nemu+ (collection 'stores' di
+              // Firestore) nggak pernah ikut kehitung, walau sudah muncul
+              // beneran di GeraiScreen. Sekarang digabung: statis +
+              // Firestore, pakai StoreService.matchesMarket yang sama
+              // persis dipakai gerai_screen.dart, biar angkanya konsisten
+              // dengan yang beneran ditampilkan begitu pasar ini dibuka.
               Positioned(
                 top: 12,
                 left: 12,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: accent.withOpacity(0.92),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '${market.gerai.length} Gerai',
-                    style: _ms(size: 10, weight: FontWeight.bold, color: Colors.white),
-                  ),
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: StoreService.allActiveStoresStream(),
+                  builder: (context, snapshot) {
+                    final firestoreCount = (snapshot.data?.docs ?? [])
+                        .where((doc) => StoreService.matchesMarket(
+                              doc.data() as Map<String, dynamic>,
+                              marketId: market.id,
+                              marketNama: market.nama,
+                            ))
+                        .length;
+                    final totalGerai = market.gerai.length + firestoreCount;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: accent.withOpacity(0.92),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '$totalGerai Gerai',
+                        style: _ms(size: 10, weight: FontWeight.bold, color: Colors.white),
+                      ),
+                    );
+                  },
                 ),
               ),
 

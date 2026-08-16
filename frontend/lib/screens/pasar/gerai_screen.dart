@@ -28,9 +28,8 @@ class GeraiScreen extends StatefulWidget {
   State<GeraiScreen> createState() => _GeraiScreenState();
 }
 
-class _GeraiScreenState extends State<GeraiScreen> with SingleTickerProviderStateMixin {
+class _GeraiScreenState extends State<GeraiScreen> {
   String _query = '';
-  int _selectedTab = 0; // 0: Daftar Gerai, 1: Katalog Produk Live
   final CartManager _cart = CartManager.instance;
 
   List<PasarGerai> get _filteredStaticGerai => widget.market.gerai
@@ -59,13 +58,9 @@ class _GeraiScreenState extends State<GeraiScreen> with SingleTickerProviderStat
                 children: [
                   _buildHeader(),
                   _buildSearchBar(),
-                  const SizedBox(height: 10),
-                  _buildTabSelector(),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Expanded(
-                    child: _selectedTab == 0
-                        ? _buildGeraList()
-                        : _buildLiveMarketProductsList(),
+                    child: _buildGeraList(),
                   ),
                 ],
               ),
@@ -107,7 +102,7 @@ class _GeraiScreenState extends State<GeraiScreen> with SingleTickerProviderStat
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  'Katalog Belanja & Gerai Pasar',
+                  'Daftar Gerai & Toko Pasar',
                   style: _gs(size: 12, color: _gDark.withValues(alpha: 0.7)),
                 ),
               ],
@@ -137,7 +132,7 @@ class _GeraiScreenState extends State<GeraiScreen> with SingleTickerProviderStat
           onChanged: (v) => setState(() => _query = v),
           style: _gs(size: 14),
           decoration: InputDecoration(
-            hintText: _selectedTab == 0 ? 'Cari warung / gerai...' : 'Cari produk di pasar ini...',
+            hintText: 'Cari warung / gerai...',
             hintStyle: _gs(size: 13, color: Colors.black38),
             prefixIcon: const Icon(Icons.search_rounded, color: _gGreen, size: 20),
             border: InputBorder.none,
@@ -148,101 +143,8 @@ class _GeraiScreenState extends State<GeraiScreen> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildTabSelector() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() => _selectedTab = 0);
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: _selectedTab == 0 ? Colors.white : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: _selectedTab == 0
-                        ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 6)]
-                        : [],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.storefront_rounded,
-                        size: 16,
-                        color: _selectedTab == 0 ? _gGreen : _gDark.withValues(alpha: 0.6),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Daftar Gerai',
-                        style: _gs(
-                          size: 12,
-                          weight: _selectedTab == 0 ? FontWeight.bold : FontWeight.w600,
-                          color: _selectedTab == 0 ? _gGreen : _gDark.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  setState(() => _selectedTab = 1);
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: _selectedTab == 1 ? Colors.white : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: _selectedTab == 1
-                        ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 6)]
-                        : [],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.bolt_rounded,
-                        size: 16,
-                        color: _selectedTab == 1 ? _gGreen : _gDark.withValues(alpha: 0.6),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Produk Live',
-                        style: _gs(
-                          size: 12,
-                          weight: _selectedTab == 1 ? FontWeight.bold : FontWeight.w600,
-                          color: _selectedTab == 1 ? _gGreen : _gDark.withValues(alpha: 0.7),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ─────────────────────────────────────────────
-  //  TAB 1: DAFTAR GERAI (Statis + Firestore Real-Time)
+  //  DAFTAR GERAI (Statis + Firestore Real-Time)
   // ─────────────────────────────────────────────
   Widget _buildGeraList() {
     return StreamBuilder<QuerySnapshot>(
@@ -255,6 +157,20 @@ class _GeraiScreenState extends State<GeraiScreen> with SingleTickerProviderStat
 
         final filteredFirestore = firestoreDocs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
+
+          // Cocokkan dulu dengan pasar yang sedang dibuka -- tanpa ini,
+          // SEMUA gerai dari SEMUA pasar bakal numpuk muncul di halaman
+          // pasar manapun, karena allActiveStoresStream() sengaja tidak
+          // memfilter market di sisi server (lihat catatan di
+          // StoreService.allActiveStoresStream).
+          if (!StoreService.matchesMarket(
+            data,
+            marketId: widget.market.id,
+            marketNama: widget.market.nama,
+          )) {
+            return false;
+          }
+
           final name = (data['store_name'] as String? ?? '').toLowerCase();
           final desc = (data['description'] as String? ?? '').toLowerCase();
           final q = _query.toLowerCase();
@@ -302,230 +218,6 @@ class _GeraiScreenState extends State<GeraiScreen> with SingleTickerProviderStat
               ...staticGerai.map((g) => _buildStaticGeraiCard(g)),
             ],
           ],
-        );
-      },
-    );
-  }
-
-  // ─────────────────────────────────────────────
-  //  TAB 2: KATALOG PRODUK LIVE (StreamBuilder where market_type == selectedMarket)
-  // ─────────────────────────────────────────────
-  Widget _buildLiveMarketProductsList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('products')
-          .where('market_type', isEqualTo: widget.market.nama)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: _gGreen));
-        }
-
-        if (snapshot.hasError) {
-          return Center(
-            child: Text('Gagal memuat produk: ${snapshot.error}', style: _gs(size: 12, color: Colors.red)),
-          );
-        }
-
-        final docs = snapshot.data?.docs ?? [];
-        final filteredDocs = docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          final name = (data['product_name'] as String? ?? '').toLowerCase();
-          final q = _query.toLowerCase();
-          return name.contains(q);
-        }).toList();
-
-        if (filteredDocs.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('🥬', style: TextStyle(fontSize: 44)),
-                  const SizedBox(height: 12),
-                  Text('Belum Ada Produk di Pasar Ini', style: _gs(size: 15, weight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Penjual di ${widget.market.nama} belum menambahkan produk barang dagangan.',
-                    style: _gs(size: 12, color: Colors.black45),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
-          itemCount: filteredDocs.length,
-          itemBuilder: (ctx, i) {
-            final doc = filteredDocs[i];
-            final data = doc.data() as Map<String, dynamic>;
-            final storeId = data['store_id'] as String? ?? '';
-            return _buildLiveProductTile(doc.id, storeId, data);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildLiveProductTile(String productId, String storeId, Map<String, dynamic> data) {
-    final name = data['product_name'] as String? ?? 'Produk';
-    final icon = data['category'] as String? ?? '🛒';
-    final price = (data['price'] as num?)?.toInt() ?? 0;
-    final stock = (data['stock'] as num?)?.toInt() ?? 0;
-    final isOutOfStock = stock <= 0;
-
-    // Stream status buka/tutup toko pemilik produk
-    return StreamBuilder<DocumentSnapshot>(
-      stream: StoreService.storeStream(storeId),
-      builder: (context, storeSnap) {
-        final storeData = storeSnap.data?.data() as Map<String, dynamic>?;
-        final storeName = storeData?['store_name'] as String? ?? 'Gerai Nemu+';
-        final isStoreOpen = (storeData?['is_open'] as bool?) ??
-            (storeData?['isOpen'] as bool?) ??
-            (storeData?['is_active'] as bool?) ??
-            true;
-
-        final bool canBuy = isStoreOpen && !isOutOfStock;
-
-        final tempProduk = PasarProduk(
-          id: productId,
-          nama: name,
-          emoji: icon,
-          satuan: 'unit',
-          hargaKemarin: price,
-          hargaSekarang: price,
-          deskripsi: '',
-        );
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              )
-            ],
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 68,
-                height: 68,
-                decoration: BoxDecoration(
-                  color: _gGreen.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(icon, style: const TextStyle(fontSize: 34)),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            name,
-                            style: _gs(size: 14, weight: FontWeight.bold),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        // Status Toko Buka / Tutup Badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: isStoreOpen ? Colors.green.shade50 : Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: isStoreOpen ? Colors.green.shade200 : Colors.red.shade200,
-                            ),
-                          ),
-                          child: Text(
-                            isStoreOpen ? '🟢 Buka' : '🔴 Tutup',
-                            style: _gs(
-                              size: 8.5,
-                              weight: FontWeight.bold,
-                              color: isStoreOpen ? _gGreen : Colors.red.shade600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      storeName,
-                      style: _gs(size: 11, color: Colors.black54),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                          StoreService.formatRupiah(price),
-                          style: _gs(size: 13, weight: FontWeight.bold, color: _gGreen),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          isOutOfStock ? '• Habis' : '• Stok: $stock',
-                          style: _gs(
-                            size: 10,
-                            color: isOutOfStock ? Colors.red.shade600 : Colors.black45,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Tombol Tambah ke Keranjang
-              GestureDetector(
-                onTap: canBuy
-                    ? () {
-                        HapticFeedback.selectionClick();
-                        _cart.tambah(tempProduk, 1, storeName, widget.market.nama);
-                        setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('$name ditambahkan ke keranjang ✓', style: _gs(size: 12, color: Colors.white)),
-                          backgroundColor: _gGreen,
-                          duration: const Duration(seconds: 1),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          margin: const EdgeInsets.fromLTRB(16, 0, 16, 80),
-                        ));
-                      }
-                    : null,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: canBuy ? _gGreen : Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: canBuy
-                      ? const Icon(Icons.add, color: Colors.white, size: 20)
-                      : Text(
-                          !isStoreOpen ? 'Toko Tutup' : 'Habis',
-                          style: _gs(size: 9.5, weight: FontWeight.bold, color: Colors.grey.shade600),
-                        ),
-                ),
-              ),
-            ],
-          ),
         );
       },
     );

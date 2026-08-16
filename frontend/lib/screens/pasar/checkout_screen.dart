@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:frontend/models/cart_model.dart';
 import 'package:frontend/utils/ongkir.dart';
-import 'package:frontend/models/orders_manager.dart';
 import 'package:frontend/services/address_manager.dart';
-import 'package:frontend/screens/orders_screen.dart';
+import 'package:frontend/services/order_tracking_service.dart';
 import 'package:frontend/screens/home_screen.dart';
 import 'package:frontend/widgets/address_editor_sheet.dart';
 
@@ -44,7 +45,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final CartManager _cart = CartManager.instance;
   final TextEditingController _catatanCtrl = TextEditingController();
   int _selectedPayment = 0;
-  String? _selectedDriverId;
+  // Satu driver dipilih PER GERAI (bukan satu driver untuk seluruh
+  // keranjang) -- karena tiap gerai/toko jadi sub-pesanan terpisah yang
+  // dikirim ke pemilik pasarnya masing-masing, jadi wajar tiap gerai
+  // juga diantar oleh drivernya sendiri-sendiri.
+  final Map<String, String> _selectedDriverByGerai = {};
+
+  // Driver ASLI (dari store_drivers, bukan mock) per gerai -- key-nya
+  // group.key, isinya dokumen driver yang sellerUid-nya cocok sama
+  // group.sellerId. Diisi async di _loadDriversForGroups().
+  final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> _driversByGerai = {};
+  final Set<String> _loadingDriversForGerai = {};
+
   bool _ordered = false;
 
   // Ongkir dihitung dari 2 komponen: berat pesanan (per market) dan jarak
@@ -139,25 +151,103 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────
+  //  Pengelompokan keranjang per gerai
+  // ─────────────────────────────────────────────
+  // Satu "order" di Firestore = satu gerai (biar tiap pemilik pasar/seller
+  // cuma nerima pesanan miliknya sendiri, dan tiap gerai bisa diantar oleh
+  // driver yang berbeda-beda). Kalau keranjang isinya dari beberapa gerai
+  // sekaligus (termasuk beberapa gerai dalam satu pasar yang sama), tiap
+  // gerai dipecah jadi grupnya sendiri di sini.
+  List<_GeraiGroup> get _geraiGroups {
+    final items = _cart.items.value;
+    final Map<String, _GeraiGroup> groups = {};
+    for (final item in items) {
+      final key = item.geraiId ?? '${item.namaMarket}|${item.namaGerai}';
+      final group = groups.putIfAbsent(
+        key,
+        () => _GeraiGroup(
+          key: key,
+          geraiId: item.geraiId,
+          namaGerai: item.namaGerai,
+          namaMarket: item.namaMarket,
+          sellerId: item.sellerId,
+        ),
+      );
+      group.items.add(item);
+    }
+    return groups.values.toList();
+  }
+
+  /// Ongkir per market dibagi rata ke tiap gerai yang berbagi market yang
+  /// sama (sisa pembagian ditambahkan ke gerai terakhir supaya totalnya
+  /// tetap pas dengan `_ongkirForMarket`).
+  Map<String, int> _ongkirShareByGeraiKey(List<_GeraiGroup> groups) {
+    final Map<String, int> share = {};
+    final byMarket = <String, List<_GeraiGroup>>{};
+    for (final g in groups) {
+      byMarket.putIfAbsent(g.namaMarket, () => []).add(g);
+    }
+    byMarket.forEach((marketName, groupsInMarket) {
+      final totalOngkir = _ongkirForMarket(marketName);
+      final base = totalOngkir ~/ groupsInMarket.length;
+      final remainder = totalOngkir - (base * groupsInMarket.length);
+      for (var i = 0; i < groupsInMarket.length; i++) {
+        share[groupsInMarket[i].key] = base + (i == groupsInMarket.length - 1 ? remainder : 0);
+      }
+    });
+    return share;
+  }
+
   @override
   void initState() {
     super.initState();
-    // Default select first available driver
-    final firstAvailable = mockDrivers.firstWhere(
-      (d) => !d.sibuk,
-      orElse: () => mockDrivers.first,
-    );
-    if (!firstAvailable.sibuk) {
-      _selectedDriverId = firstAvailable.id;
+    _loadDriversForGroups();
+  }
+
+  // Ambil driver ASLI per gerai dari collection store_drivers (yang
+  // diisi otomatis waktu seorang driver terima undangan -- lihat
+  // DriverService.acceptDriverInvite). Gerai tanpa sellerId (mock/statis,
+  // belum daftar lewat onboarding penjual) dilewati -- belum ada sistem
+  // driver buat gerai kayak gitu.
+  Future<void> _loadDriversForGroups() async {
+    final groups = _geraiGroups;
+    for (final group in groups) {
+      final sellerId = group.sellerId;
+      if (sellerId == null || _driversByGerai.containsKey(group.key)) continue;
+
+      setState(() => _loadingDriversForGerai.add(group.key));
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('store_drivers')
+            .where('sellerUid', isEqualTo: sellerId)
+            .get();
+        if (!mounted) return;
+        setState(() {
+          _driversByGerai[group.key] = snap.docs;
+          _loadingDriversForGerai.remove(group.key);
+          // Auto-pilih driver pertama kalau ada & belum ada yang dipilih,
+          // supaya UX-nya tetap sama kayak sebelumnya (langsung ada
+          // pilihan default begitu halaman dibuka).
+          if (snap.docs.isNotEmpty && _selectedDriverByGerai[group.key] == null) {
+            _selectedDriverByGerai[group.key] = snap.docs.first.id;
+          }
+        });
+      } catch (e) {
+        debugPrint('Gagal ambil daftar driver untuk ${group.namaGerai}: $e');
+        if (!mounted) return;
+        setState(() => _loadingDriversForGerai.remove(group.key));
+      }
     }
   }
 
   void _pesan() async {
-    if (_selectedDriverId == null) {
+    final groups = _geraiGroups;
+    if (groups.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Silakan pilih driver pengantar terlebih dahulu',
+            'Keranjang belanja kamu masih kosong.',
             style: _cs(size: 13, color: Colors.white),
           ),
           backgroundColor: Colors.redAccent,
@@ -168,11 +258,58 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     final address = AddressManager.instance.address.value;
-    if (address == null) {
+    if (address == null || address.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Isi alamat pengiriman dulu ya',
+            'Silakan isi alamat pengiriman terlebih dahulu ya.',
+            style: _cs(size: 13, color: Colors.white),
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Isi Alamat',
+            textColor: _cYellow,
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => const AddressEditorSheet(),
+              );
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Kamu harus login dulu untuk memesan.',
+            style: _cs(size: 13, color: Colors.white),
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Driver hanya divalidasi jika gerai memiliki driver terdaftar
+    final missingDriverFor = groups.where((g) {
+      final hasDrivers = (_driversByGerai[g.key] ?? []).isNotEmpty;
+      return hasDrivers && _selectedDriverByGerai[g.key] == null;
+    }).toList();
+
+    if (missingDriverFor.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Pilih driver pengantar untuk ${missingDriverFor.map((g) => g.namaGerai).join(', ')} dulu ya',
             style: _cs(size: 13, color: Colors.white),
           ),
           backgroundColor: Colors.redAccent,
@@ -185,15 +322,102 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     HapticFeedback.heavyImpact();
     setState(() => _ordered = true);
 
-    // OrdersManager.placeOrder() yang menulis pesanan ke Firestore
-    // (collection 'orders'), dikelompokkan otomatis per gerai/sellerId
-    // supaya tiap seller cuma menerima order miliknya sendiri.
     final catatan = _catatanCtrl.text.trim();
+    final ongkirShare = _ongkirShareByGeraiKey(groups);
+    final orderTimestamp = DateTime.now().millisecondsSinceEpoch;
+    final groupOrderId = FirebaseFirestore.instance.collection('orders').doc().id;
+
+    String buyerName = 'Sobat Nemu';
     try {
-      await OrdersManager.instance.placeOrder(
-        items: _cart.items.value,
-        catatan: catatan.isEmpty ? null : catatan,
-      );
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        buyerName = (userDoc.data()?['nickname'] as String?) ??
+            (userDoc.data()?['name'] as String?) ??
+            buyerName;
+      }
+    } catch (_) {}
+
+    // Tulis SATU dokumen order per gerai ke Firestore collection 'orders'
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      final ordersRef = FirebaseFirestore.instance.collection('orders');
+
+      for (var i = 0; i < groups.length; i++) {
+        final group = groups[i];
+        final subtotal = group.items.fold<int>(0, (s, it) => s + it.subtotal);
+        final ongkir = ongkirShare[group.key] ?? 0;
+        final itemsSummary =
+            group.items.map((it) => '${it.produk.nama} x${it.qty}').join(', ');
+        final driverId = _selectedDriverByGerai[group.key];
+        final orderCode = 'ORD$orderTimestamp${i.toString().padLeft(2, '0')}';
+
+        final itemsDetail = group.items
+            .map((c) => {
+                  'product_id': c.produk.id,
+                  'produkId': c.produk.id,
+                  'product_name': c.produk.nama,
+                  'nama': c.produk.nama,
+                  'satuan': c.produk.satuan,
+                  'quantity': c.qty,
+                  'qty': c.qty,
+                  'price': c.produk.hargaSekarang,
+                  'hargaSatuan': c.produk.hargaSekarang,
+                  'subtotal': c.subtotal,
+                })
+            .toList();
+
+        final sellerId = group.sellerId ?? group.geraiId ?? '';
+        final storeId = group.geraiId ?? group.sellerId ?? '';
+
+        final docRef = ordersRef.doc();
+        final data = <String, dynamic>{
+          'orderId': docRef.id,
+          'order_id': docRef.id,
+          'orderCode': orderCode,
+          'groupOrderId': groupOrderId,
+          'buyerId': uid,
+          'buyer_id': uid,
+          'buyerName': buyerName,
+          'buyer_name': buyerName,
+          'sellerId': sellerId,
+          'seller_id': sellerId,
+          'owner_id': sellerId,
+          'storeId': storeId,
+          'store_id': storeId,
+          'namaGerai': group.namaGerai,
+          'store_name': group.namaGerai,
+          'namaMarket': group.namaMarket,
+          'market_type': group.namaMarket,
+          'items': itemsDetail,
+          'itemsSummary': itemsSummary.isNotEmpty ? itemsSummary : '-',
+          'subtotal': subtotal,
+          'subtotalProduk': subtotal,
+          'ongkir': ongkir,
+          'totalHarga': subtotal + ongkir,
+          'totalPrice': subtotal + ongkir,
+          'total_price': subtotal + ongkir,
+          'alamatPengiriman': address.text,
+          'address': address.text,
+          'driverUid': driverId,
+          'paymentMethod': _paymentMethods[_selectedPayment].label,
+          'catatan': catatan.isEmpty ? null : catatan,
+          'status': 'menunggu',
+          'statusLabel': 'Menunggu Konfirmasi',
+          'timestamp': FieldValue.serverTimestamp(),
+          'created_at': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updated_at': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        if (group.geraiId != null) {
+          data['gerai_id'] = group.geraiId;
+        }
+        batch.set(docRef, data);
+      }
+
+      await batch.commit();
     } catch (e) {
       debugPrint('Gagal membuat pesanan: $e');
       if (mounted) {
@@ -201,7 +425,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Gagal membuat pesanan, coba lagi ya',
+              'Gagal membuat pesanan: $e',
               style: _cs(size: 13, color: Colors.white),
             ),
             backgroundColor: Colors.redAccent,
@@ -212,7 +436,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 1));
     if (mounted) {
       _cart.kosongkan();
       _showSuccessDialog();
@@ -279,14 +503,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           const SizedBox(height: 10),
                           _buildAddressCard(),
 
-                          const SizedBox(height: 18),
-                          _buildSectionTitle('Pilih Driver Pengantar'),
-                          Text(
-                            'Geser untuk memilih driver yang tersedia',
-                            style: _cs(size: 11.5, color: Colors.black45),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildDriverSelectionList(),
+                          // DIMATIKAN SEMENTARA: "Pilih Driver Pengantar" tadinya
+                          // nampilin daftar driver dari collection 'store_drivers'
+                          // (diisi lewat alur undangan penjual->driver yang belum
+                          // ada implementasinya di kode ini -- DriverService.
+                          // acceptDriverInvite belum ditemukan). Karena
+                          // collection itu praktis selalu kosong, seksi ini cuma
+                          // nampilin UI kosong ke buyer.
+                          //
+                          // Penugasan driver yang BENAR-BENAR jalan sekarang
+                          // otomatis lewat marketplace terbuka: begitu penjual
+                          // pencet "Serahkan Kurir" (seller_home_screen.dart),
+                          // OrderTrackingService.markReadyForDriver() bikin order
+                          // masuk antrian (status 'menunggu_driver') yang bisa
+                          // di-terima driver mana pun yang online (home_screen3.dart)
+                          // -- bahkan kalau ada driverUid yang kepilih di sini,
+                          // markReadyForDriver() bakal NULL-in lagi field itu.
+                          // Jadi seksi ini nggak berpengaruh & cuma bikin bingung.
+                          //
+                          // Kalau nanti alur undangan driver-per-toko itu jadi
+                          // dibangun beneran, aktifkan lagi baris di bawah ini:
+                          //
+                          // const SizedBox(height: 18),
+                          // _buildSectionTitle('Pilih Driver Pengantar'),
+                          // Text(
+                          //   'Tiap gerai diantar oleh drivernya masing-masing',
+                          //   style: _cs(size: 11.5, color: Colors.black45),
+                          // ),
+                          // const SizedBox(height: 10),
+                          // ..._geraiGroups.map(_buildDriverSelectionForGerai),
 
                           const SizedBox(height: 18),
                           _buildSectionTitle('Metode Pembayaran'),
@@ -489,39 +734,91 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  // Horizontal list view of drivers
-  Widget _buildDriverSelectionList() {
-    // TODO: hubungkan ke sumber data driver yang sesungguhnya.
+  // Satu baris pemilihan driver per gerai -- diberi label nama gerai
+  // supaya jelas driver mana yang mengantar gerai yang mana.
+  Widget _buildDriverSelectionForGerai(_GeraiGroup group) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            group.namaGerai,
+            style: _cs(size: 12.5, weight: FontWeight.bold, color: _cGreen),
+          ),
+          const SizedBox(height: 6),
+          _buildDriverSelectionList(group),
+        ],
+      ),
+    );
+  }
+
+  // Horizontal list view of drivers, khusus untuk satu gerai. Sekarang
+  // pakai data ASLI dari store_drivers (bukan mockDrivers) -- CATATAN:
+  // belum ada konsep "sibuk" buat driver asli, jadi semua driver yang
+  // terdaftar di toko itu ditampilkan sebagai bisa dipilih.
+  Widget _buildDriverSelectionList(_GeraiGroup group) {
+    if (group.sellerId == null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+        child: Text(
+          'Gerai ini belum terhubung ke sistem driver Nemu.',
+          style: _cs(size: 11.5, color: Colors.black45),
+        ),
+      );
+    }
+
+    if (_loadingDriversForGerai.contains(group.key)) {
+      return const SizedBox(
+        height: 90,
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2, color: _cGreen),
+          ),
+        ),
+      );
+    }
+
+    final drivers = _driversByGerai[group.key] ?? const [];
+    if (drivers.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+        child: Text(
+          'Toko ini belum punya driver terdaftar.',
+          style: _cs(size: 11.5, color: Colors.black45),
+        ),
+      );
+    }
+
     return SizedBox(
       height: 90,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: mockDrivers.length,
+        itemCount: drivers.length,
         itemBuilder: (_, i) {
-          final driver = mockDrivers[i];
-          final isSelected = _selectedDriverId == driver.id;
-          final isBusy = driver.sibuk;
+          final doc = drivers[i];
+          final data = doc.data();
+          final driverId = doc.id;
+          final driverName = (data['driverName'] as String?) ?? 'Driver';
+          final photoUrl = data['driverPhotoUrl'] as String?;
+          final isSelected = _selectedDriverByGerai[group.key] == driverId;
 
           return GestureDetector(
-            onTap: isBusy
-                ? null
-                : () {
-                    HapticFeedback.selectionClick();
-                    setState(() => _selectedDriverId = driver.id);
-                  },
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _selectedDriverByGerai[group.key] = driverId);
+            },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 110,
               margin: const EdgeInsets.only(right: 10, bottom: 4),
               decoration: BoxDecoration(
-                color: isBusy
-                    ? Colors.grey.shade100
-                    : (isSelected ? _cGreen : Colors.white),
+                color: isSelected ? _cGreen : Colors.white,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isBusy
-                      ? Colors.grey.shade300
-                      : (isSelected ? _cGreen : Colors.transparent),
+                  color: isSelected ? _cGreen : Colors.transparent,
                   width: 1.5,
                 ),
                 boxShadow: [
@@ -532,55 +829,37 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ),
                 ],
               ),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          driver.emoji,
-                          style: TextStyle(
-                            fontSize: 26,
-                            color: isBusy ? Colors.grey : null,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          driver.nama,
-                          style: _cs(
-                            size: 12,
-                            weight: FontWeight.bold,
-                            color: isBusy
-                                ? Colors.grey
-                                : (isSelected ? Colors.white : _cDark),
-                          ),
-                        ),
-                        Text(
-                          isBusy ? 'Sibuk' : '⭐ ${driver.rating}',
-                          style: _cs(
-                            size: 10,
-                            color: isBusy
-                                ? Colors.grey.shade400
-                                : (isSelected
-                                      ? Colors.white70
-                                      : Colors.black45),
-                          ),
-                        ),
-                      ],
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: Colors.white,
+                      backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                          ? NetworkImage(photoUrl)
+                          : null,
+                      child: (photoUrl == null || photoUrl.isEmpty)
+                          ? Text(
+                              driverName.isNotEmpty ? driverName[0].toUpperCase() : '?',
+                              style: _cs(size: 14, weight: FontWeight.bold, color: _cGreen),
+                            )
+                          : null,
                     ),
-                  ),
-                  if (isSelected && !isBusy)
-                    const Positioned(
-                      top: 6,
-                      right: 6,
-                      child: Icon(
-                        Icons.check_circle_rounded,
-                        color: Colors.white,
-                        size: 18,
+                    const SizedBox(height: 6),
+                    Text(
+                      driverName,
+                      style: _cs(
+                        size: 12,
+                        weight: FontWeight.bold,
+                        color: isSelected ? Colors.white : _cDark,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
                     ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -992,6 +1271,23 @@ class _SuccessDialogState extends State<_SuccessDialog>
 // ─────────────────────────────────────────────
 //  Data class
 // ─────────────────────────────────────────────
+class _GeraiGroup {
+  final String key;
+  final String? geraiId;
+  final String namaGerai;
+  final String namaMarket;
+  final String? sellerId;
+  final List<CartItem> items = [];
+
+  _GeraiGroup({
+    required this.key,
+    required this.geraiId,
+    required this.namaGerai,
+    required this.namaMarket,
+    required this.sellerId,
+  });
+}
+
 class _PaymentMethod {
   final IconData icon;
   final String label;

@@ -10,6 +10,7 @@ import 'home_screen.dart';
 import 'home_screen2.dart';
 import 'home_screen3.dart';
 import '../utils/page_transitions.dart';
+import '../main.dart';
 
 /// ============================================================
 /// LOGIN SCREEN (halaman "Masuk" terpisah dari registrasi)
@@ -65,13 +66,9 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
 
-        Navigator.pushReplacement(
-          context,
-          slideRoute(
-            isDriver
-                ? const HomeScreen3()
-                : (isSeller ? const HomeScreen2() : const HomeScreen()),
-          ),
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const AuthGate()),
+          (route) => false,
         );
       }
     } on FirebaseAuthException catch (e) {

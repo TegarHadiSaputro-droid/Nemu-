@@ -59,6 +59,9 @@ class AuthService {
       'bio': '',
       'email': email,
       'phone': phone,
+      'is_buyer': true,
+      'is_seller': false,
+      'is_driver': false,
       'roles': {
         'buyer': true,
         'seller': false,
@@ -215,10 +218,10 @@ class AuthService {
     if (data == null) return false;
  
     final roles = data['roles'] as Map<String, dynamic>?;
-    return roles?['seller'] == true;
+    return (data['is_seller'] as bool?) ?? (roles?['seller'] == true);
   }
 
-  /// Sama seperti isSeller(), tapi cek roles.driver. Dipakai login_screen.dart
+  /// Sama seperti isSeller(), tapi cek roles.driver / is_driver. Dipakai login_screen.dart
   /// buat nentuin redirect ke HomeScreen3 (dashboard Driver).
   static Future<bool> isDriver() async {
     final user = _auth.currentUser;
@@ -229,7 +232,7 @@ class AuthService {
     if (data == null) return false;
 
     final roles = data['roles'] as Map<String, dynamic>?;
-    return roles?['driver'] == true;
+    return (data['is_driver'] as bool?) ?? (roles?['driver'] == true);
   }
  
   /// Versi stream dari isSeller(), untuk halaman yang perlu langsung
@@ -247,7 +250,7 @@ class AuthService {
       final data = snapshot.data();
       if (data == null) return false;
       final roles = data['roles'] as Map<String, dynamic>?;
-      return roles?['seller'] == true;
+      return (data['is_seller'] as bool?) ?? (roles?['seller'] == true);
     });
   }
  

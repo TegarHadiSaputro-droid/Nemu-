@@ -60,17 +60,22 @@ class MyApp extends StatelessWidget {
           },
         ),
       ),
-      home: const LoginScreen(),
+      home: const AuthGate(),
     );
   }
 }
 
 /// ============================================================
 /// AUTH GATE
-/// Menentukan halaman pertama yang tampil berdasarkan status login.
-/// Firebase Auth sendiri sudah otomatis menyimpan sesi login di device,
-/// jadi authStateChanges() akan langsung mengembalikan user yang sudah
-/// login sebelumnya tanpa perlu login ulang setiap buka aplikasi.
+/// Menentukan halaman utama yang tampil berdasarkan status login & role.
+/// StreamBuilder mendengarkan users/{uid} secara realtime:
+/// - is_driver == true -> HomeScreen3 (Dashboard Driver)
+/// - is_seller == true -> HomeScreen2 (Dashboard Penjual)
+/// - default -> HomeScreen (Dashboard Pembeli)
+///
+/// Begitu user menerima undangan driver di InboxScreen, dokumen Firestore
+/// terupdate (is_driver = true) dan AuthGate seketika merender ulang ke HomeScreen3
+/// secara real-time tanpa perlu restart app atau login ulang!
 /// ============================================================
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -80,38 +85,13 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Masih ngecek status login ke Firebase, tampilkan splash sebentar.
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const _SplashScreen();
         }
 
         final user = snapshot.data;
-
-        // PENTING: user yang emailnya belum diverifikasi dianggap SAMA
-        // SEPERTI belum login di sini. Ini menutup race condition dengan
-        // AuthService.register() -- createUserWithEmailAndPassword()
-        // langsung memicu authStateChanges() (walau email belum
-        // diverifikasi) SEBELUM register() sempat signOut() user itu lagi.
-        // Tanpa cek ini, AuthGate akan sempat merender HomeScreen di
-        // celah balapan tersebut, dan HomeScreen.initState() langsung
-        // memicu popup "Nama panggilan Anda?" -- padahal harusnya user
-        // belum boleh masuk sama sekali sebelum verifikasi + login manual
-        // lewat LoginScreen (yang memang sudah mengecek emailVerified).
         final isVerified = user?.emailVerified ?? false;
 
-        // Sudah pernah login sebelumnya (sesi tersimpan otomatis oleh
-        // Firebase) -> langsung ke Beranda, tidak perlu login ulang.
-        //
-        // StreamBuilder (bukan FutureBuilder) SENGAJA dipakai di sini supaya
-        // begitu roles user berubah sambil app masih kebuka (mis. baru saja
-        // accept undangan jadi Driver di InboxScreen), routing ikut
-        // ter-update live tanpa perlu logout-login ulang.
-        //
-        // Urutan prioritas: Driver > Penjual > Pembeli (default). Driver
-        // dicek PALING DULUAN karena satu akun kadang masih kebawa
-        // roles.buyer / roles.seller lama sebelum sempat "dimatikan" --
-        // begitu roles.driver true, akun itu harus selalu masuk ke
-        // dashboard Driver, apa pun status role lainnya.
         if (user != null && isVerified) {
           return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
@@ -123,10 +103,10 @@ class AuthGate extends StatelessWidget {
                 return const _SplashScreen();
               }
 
-              final roles =
-                  roleSnap.data?.data()?['roles'] as Map<String, dynamic>?;
-              final isDriver = (roles?['driver'] as bool?) ?? false;
-              final isSeller = (roles?['seller'] as bool?) ?? false;
+              final data = roleSnap.data?.data();
+              final roles = data?['roles'] as Map<String, dynamic>?;
+              final isDriver = (data?['is_driver'] as bool?) ?? (roles?['driver'] as bool?) ?? false;
+              final isSeller = (data?['is_seller'] as bool?) ?? (roles?['seller'] as bool?) ?? false;
 
               if (isDriver) return const HomeScreen3();
               if (isSeller) return const HomeScreen2();

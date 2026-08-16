@@ -8,20 +8,67 @@ import 'package:frontend/models/cart_model.dart';
 //  sisi pembeli (orders_screen.dart) dan
 //  sisi penjual (seller_home_screen.dart).
 // ─────────────────────────────────────────────
+const String kStatusMenunggu = 'menunggu';
+const String kStatusPending = 'pending';
 const String kStatusMenungguKonfirmasi = 'menunggu_konfirmasi';
+
+const String kStatusDiproses = 'diproses';
+const String kStatusAccepted = 'accepted';
+const String kStatusProcessing = 'processing';
 const String kStatusDikemas = 'dikemas';
+
+const String kStatusMenungguDriver = 'menunggu_driver';
+const String kStatusMenujuPenjual = 'menuju_penjual';
 const String kStatusDalamPengantaran = 'dalam_pengantaran';
+const String kStatusDiantar = 'diantar';
 const String kStatusSelesai = 'selesai';
+
+const String kStatusDitolak = 'ditolak';
+const String kStatusRejected = 'rejected';
 const String kStatusDibatalkan = 'dibatalkan';
 
-const List<String> kActiveStatuses = [
+const List<String> kPendingStatuses = [
+  kStatusMenunggu,
+  kStatusPending,
   kStatusMenungguKonfirmasi,
+];
+
+const List<String> kProcessingStatuses = [
+  kStatusDiproses,
+  kStatusAccepted,
+  kStatusProcessing,
   kStatusDikemas,
+  // FIX: sebelumnya cuma sampai "dikemas" -- begitu penjual pencet
+  // "Serahkan Kurir" dan status pindah ke salah satu status di bawah ini,
+  // order langsung HILANG dari query "Sedang Diproses" (seller_home_screen.dart),
+  // padahal ada UI-nya buat nampilin "Menunggu driver..." dan info driver
+  // yang jadi kode mati karena datanya keburu nggak ke-query lagi.
+  // Sekarang dilebarkan supaya seller tetap bisa mantau order-nya sampai
+  // benar-benar sampai ke pembeli (status jadi kStatusSelesai baru hilang).
+  kStatusMenungguDriver,
+  kStatusMenujuPenjual,
   kStatusDalamPengantaran,
+  kStatusDiantar,
+];
+
+const List<String> kActiveStatuses = [
+  kStatusMenunggu,
+  kStatusPending,
+  kStatusMenungguKonfirmasi,
+  kStatusDiproses,
+  kStatusAccepted,
+  kStatusProcessing,
+  kStatusDikemas,
+  kStatusMenungguDriver,
+  kStatusMenujuPenjual,
+  kStatusDalamPengantaran,
+  kStatusDiantar,
 ];
 
 const List<String> kHistoryStatuses = [
   kStatusSelesai,
+  kStatusDitolak,
+  kStatusRejected,
   kStatusDibatalkan,
 ];
 
@@ -29,14 +76,10 @@ const List<String> kHistoryStatuses = [
 //  OrdersManager — Singleton
 //  Bertugas MENULIS pesanan asli ke Firestore
 //  saat checkout, dan menyediakan stream untuk
-//  ditampilkan di orders_screen.dart (sisi pembeli).
+//  ditampilkan di orders_screen.dart (sisi pembeli)
+//  dan seller_home_screen.dart (sisi penjual).
 //
 //  Skema Firestore: collection('orders')
-//  Satu dokumen = satu pesanan ke SATU gerai/seller.
-//  Kalau keranjang berisi produk dari beberapa gerai,
-//  checkout akan memecahnya jadi beberapa dokumen
-//  order sekaligus (dikelompokkan per sellerId),
-//  supaya tiap seller cuma melihat order miliknya.
 // ─────────────────────────────────────────────
 class OrdersManager {
   OrdersManager._();
@@ -53,16 +96,13 @@ class OrdersManager {
   }
 
   /// Membuat pesanan dari isi keranjang saat ini.
-  /// Mengelompokkan item per gerai (sellerId) supaya tiap
+  /// Mengelompokkan item per gerai (store_id / sellerId) supaya tiap
   /// seller hanya menerima order untuk produknya sendiri.
-  ///
-  /// [ongkirPerGerai] adalah ongkos kirim flat per gerai (default Rp2.000
-  /// sesuai info di home_screen.dart).
-  ///
-  /// Return: list orderCode yang berhasil dibuat.
   Future<List<String>> placeOrder({
     required List<CartItem> items,
     String? catatan,
+    String? alamatPengiriman,
+    String? paymentMethod,
     int ongkirPerGerai = 2000,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -78,16 +118,13 @@ class OrdersManager {
         ? user.displayName!
         : (user.email ?? 'Pembeli');
 
-    // Kelompokkan item berdasarkan gerai (sellerId + namaGerai)
+    // Kelompokkan item berdasarkan gerai (store_id / sellerId / namaGerai)
     final Map<String, List<CartItem>> grouped = {};
     for (final item in items) {
-      final key = item.sellerId ?? item.geraiId ?? item.namaGerai;
+      final key = item.geraiId ?? item.sellerId ?? item.namaGerai;
       grouped.putIfAbsent(key, () => []).add(item);
     }
 
-    // groupOrderId menandai bahwa beberapa dokumen order ini
-    // berasal dari satu checkout yang sama (berguna kalau nanti
-    // ingin menampilkan "1 checkout, 3 gerai" di riwayat pembeli).
     final groupOrderId = _db.collection('orders').doc().id;
     final batch = _db.batch();
     final List<String> orderCodes = [];
@@ -96,23 +133,32 @@ class OrdersManager {
       final groupItems = entry.value;
       final first = groupItems.first;
 
+      final storeId = first.geraiId ?? first.sellerId ?? '';
+      final sellerId = first.sellerId ?? first.geraiId ?? '';
+      final marketType = first.namaMarket;
+      final storeName = first.namaGerai;
+
       final itemsSummary = groupItems
           .map((c) => '${c.produk.nama} ${c.qty}${c.produk.satuan}')
           .join(', ');
 
       final itemsDetail = groupItems
           .map((c) => {
+                'product_id': c.produk.id,
                 'produkId': c.produk.id,
+                'product_name': c.produk.nama,
                 'nama': c.produk.nama,
                 'satuan': c.produk.satuan,
+                'quantity': c.qty,
                 'qty': c.qty,
+                'price': c.produk.hargaSekarang,
                 'hargaSatuan': c.produk.hargaSekarang,
                 'subtotal': c.subtotal,
               })
           .toList();
 
       final subtotalProduk =
-          groupItems.fold<int>(0, (sum, c) => sum + c.subtotal);
+          groupItems.fold<int>(0, (acc, c) => acc + c.subtotal);
       final totalPrice = subtotalProduk + ongkirPerGerai;
 
       final orderCode = _generateOrderCode();
@@ -120,21 +166,41 @@ class OrdersManager {
 
       final docRef = _ordersRef.doc();
       batch.set(docRef, {
+        'orderId': docRef.id,
+        'order_id': docRef.id,
         'orderCode': orderCode,
         'groupOrderId': groupOrderId,
-        'sellerId': first.sellerId,
-        'namaGerai': first.namaGerai,
-        'namaMarket': first.namaMarket,
         'buyerId': buyerId,
+        'buyer_id': buyerId,
         'buyerName': buyerName,
+        'buyer_name': buyerName,
+        'storeId': storeId,
+        'store_id': storeId,
+        'sellerId': sellerId,
+        'seller_id': sellerId,
+        'owner_id': sellerId,
+        'namaGerai': storeName,
+        'store_name': storeName,
+        'namaMarket': marketType,
+        'market_type': marketType,
         'itemsSummary': itemsSummary,
         'items': itemsDetail,
+        'subtotal': subtotalProduk,
         'subtotalProduk': subtotalProduk,
         'ongkir': ongkirPerGerai,
+        'totalHarga': totalPrice,
         'totalPrice': totalPrice,
+        'total_price': totalPrice,
+        'alamatPengiriman': alamatPengiriman ?? '',
+        'address': alamatPengiriman ?? '',
+        'paymentMethod': paymentMethod ?? 'Bayar di Tempat (COD)',
         'catatan': catatan ?? '',
-        'status': kStatusMenungguKonfirmasi,
+        'status': kStatusMenunggu, // Status awal: menunggu (menunggu konfirmasi)
+        'statusLabel': 'Menunggu Konfirmasi',
+        'timestamp': FieldValue.serverTimestamp(),
+        'created_at': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
     }
@@ -144,39 +210,158 @@ class OrdersManager {
   }
 
   /// Stream pesanan aktif milik pembeli yang sedang login
-  /// (menunggu_konfirmasi / dikemas / dalam_pengantaran).
-  /// Dipakai di home_screen.dart & orders_screen.dart untuk
-  /// menampilkan status pengantaran real-time.
   Stream<QuerySnapshot<Map<String, dynamic>>> activeOrdersStream() {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       return const Stream.empty();
     }
-    return _ordersRef
-        .where('buyerId', isEqualTo: uid)
-        .where('status', whereIn: kActiveStatuses)
-        .orderBy('createdAt', descending: true)
-        .snapshots();
+    return _ordersRef.where('buyer_id', isEqualTo: uid).snapshots();
   }
 
-  /// Stream riwayat pesanan milik pembeli (selesai / dibatalkan).
+  /// Stream riwayat pesanan milik pembeli (selesai / rejected / dibatalkan)
   Stream<QuerySnapshot<Map<String, dynamic>>> orderHistoryStream({int limit = 30}) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) {
       return const Stream.empty();
     }
-    return _ordersRef
-        .where('buyerId', isEqualTo: uid)
-        .where('status', whereIn: kHistoryStatuses)
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
-        .snapshots();
+    return _ordersRef.where('buyer_id', isEqualTo: uid).snapshots();
   }
 
-  /// Batalkan pesanan (dipakai pembeli jika masih menunggu konfirmasi).
+  /// Stream pesanan pending untuk toko seller
+  Stream<QuerySnapshot<Map<String, dynamic>>> pendingOrdersForStoreStream(
+    String storeId, {
+    String? sellerUid,
+  }) {
+    return _ordersRef.snapshots();
+  }
+
+  /// Stream pesanan yang sedang diproses untuk toko seller
+  Stream<QuerySnapshot<Map<String, dynamic>>> processingOrdersForStoreStream(
+    String storeId, {
+    String? sellerUid,
+  }) {
+    return _ordersRef.snapshots();
+  }
+
+  /// Penjual Menerima Pesanan: update status ke 'diproses' & kirim notifikasi ke buyer inbox
+  Future<void> acceptOrder(
+    String orderDocId, {
+    String? buyerId,
+    String? storeName,
+    String? orderCode,
+  }) async {
+    String? targetBuyerId = buyerId;
+    String targetStoreName = storeName ?? 'Toko';
+    String targetOrderCode = orderCode ?? '';
+
+    if (targetBuyerId == null || targetBuyerId.isEmpty) {
+      final docSnap = await _ordersRef.doc(orderDocId).get();
+      if (docSnap.exists) {
+        final data = docSnap.data();
+        targetBuyerId = (data?['buyerId'] as String?) ??
+            (data?['buyer_id'] as String?);
+        targetStoreName = (data?['store_name'] as String?) ??
+            (data?['namaGerai'] as String?) ??
+            targetStoreName;
+        targetOrderCode = (data?['orderCode'] as String?) ?? targetOrderCode;
+      }
+    }
+
+    await _ordersRef.doc(orderDocId).update({
+      'status': kStatusDiproses,
+      'statusLabel': 'Diproses',
+      'updated_at': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    // Kirim notifikasi ke inbox pembeli
+    if (targetBuyerId != null && targetBuyerId.isNotEmpty) {
+      try {
+        await _db
+            .collection('users')
+            .doc(targetBuyerId)
+            .collection('inbox')
+            .add({
+          'type': 'order_accepted',
+          'title': 'Pesanan Diproses',
+          'message':
+              'Pesanan Anda ${targetOrderCode.isNotEmpty ? '($targetOrderCode) ' : ''}di $targetStoreName telah diterima dan sedang diproses!',
+          'orderDocId': orderDocId,
+          'orderId': orderDocId,
+          'status': kStatusDiproses,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        // Jangan gagalkan update pesanan jika inbox gagal
+      }
+    }
+  }
+
+  /// Penjual Menolak Pesanan: update status ke 'ditolak' & kirim notifikasi ke buyer inbox
+  Future<void> rejectOrder(
+    String orderDocId, {
+    String? buyerId,
+    String? storeName,
+    String? orderCode,
+    String? reason,
+  }) async {
+    String? targetBuyerId = buyerId;
+    String targetStoreName = storeName ?? 'Toko';
+    String targetOrderCode = orderCode ?? '';
+
+    if (targetBuyerId == null || targetBuyerId.isEmpty) {
+      final docSnap = await _ordersRef.doc(orderDocId).get();
+      if (docSnap.exists) {
+        final data = docSnap.data();
+        targetBuyerId = (data?['buyerId'] as String?) ??
+            (data?['buyer_id'] as String?);
+        targetStoreName = (data?['store_name'] as String?) ??
+            (data?['namaGerai'] as String?) ??
+            targetStoreName;
+        targetOrderCode = (data?['orderCode'] as String?) ?? targetOrderCode;
+      }
+    }
+
+    await _ordersRef.doc(orderDocId).update({
+      'status': kStatusDitolak,
+      'statusLabel': 'Ditolak Penjual',
+      'rejectReason': reason ?? 'Pesanan tidak dapat diproses',
+      'updated_at': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    // Kirim notifikasi ke inbox pembeli
+    if (targetBuyerId != null && targetBuyerId.isNotEmpty) {
+      try {
+        await _db
+            .collection('users')
+            .doc(targetBuyerId)
+            .collection('inbox')
+            .add({
+          'type': 'order_rejected',
+          'title': 'Pesanan Ditolak',
+          'message': reason != null && reason.isNotEmpty
+              ? 'Pesanan Anda ${targetOrderCode.isNotEmpty ? '($targetOrderCode) ' : ''}di $targetStoreName ditolak: $reason'
+              : 'Mohon maaf, pesanan Anda ${targetOrderCode.isNotEmpty ? '($targetOrderCode) ' : ''}di $targetStoreName tidak dapat diproses saat ini.',
+          'orderDocId': orderDocId,
+          'orderId': orderDocId,
+          'status': kStatusDitolak,
+          'read': false,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        // Jangan gagalkan update pesanan jika inbox gagal
+      }
+    }
+  }
+
+  /// Batalkan pesanan dari sisi pembeli
   Future<void> cancelOrder(String orderDocId) async {
     await _ordersRef.doc(orderDocId).update({
       'status': kStatusDibatalkan,
+      'statusLabel': 'Dibatalkan',
+      'updated_at': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
