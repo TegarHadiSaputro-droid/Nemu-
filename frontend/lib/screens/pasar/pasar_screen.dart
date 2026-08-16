@@ -55,7 +55,7 @@ class _PasarScreenState extends State<PasarScreen> {
 
   // ── Taruh link URL gambar pasar di sini (menggantikan emoji jika diisi) ──
   static const Map<String, String> _marketImageUrls = {
-    'p1': 'https://nomorsatukaltim.disway.id/uploads/pasar-sepinggan.jpg', // Pasar Sepinggan
+    'p1': 'https://nomorsatukaltim.disway.id/upload/d846bda0b0f7c5923d7c39e70bccc419.jpg', // Pasar Sepinggan
     'p2': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRWL__NIHl6U-AMt-_sC9dDY3sgDuKx-SFKm7NnwkbsQtPiwNeHo4SwRl8&s=10', // Pasar Klandasan
     'p3': 'https://www.niaga.asia/wp-content/uploads/2024/02/pandansari.jpg', // Pasar Pandansari
     'p4': 'https://airial.travel/_next/image?url=https%3A%2F%2Fcoinventmediastorage.blob.core.windows.net%2Fmedia-storage-container%2Fgphoto_ChIJnabs3NxH8S0R525KRyz9WtM_0.jpg&w=2048&q=70', // Pasar Baru
