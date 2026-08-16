@@ -503,14 +503,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           const SizedBox(height: 10),
                           _buildAddressCard(),
 
-                          const SizedBox(height: 18),
-                          _buildSectionTitle('Pilih Driver Pengantar'),
-                          Text(
-                            'Tiap gerai diantar oleh drivernya masing-masing',
-                            style: _cs(size: 11.5, color: Colors.black45),
-                          ),
-                          const SizedBox(height: 10),
-                          ..._geraiGroups.map(_buildDriverSelectionForGerai),
+                          // DIMATIKAN SEMENTARA: "Pilih Driver Pengantar" tadinya
+                          // nampilin daftar driver dari collection 'store_drivers'
+                          // (diisi lewat alur undangan penjual->driver yang belum
+                          // ada implementasinya di kode ini -- DriverService.
+                          // acceptDriverInvite belum ditemukan). Karena
+                          // collection itu praktis selalu kosong, seksi ini cuma
+                          // nampilin UI kosong ke buyer.
+                          //
+                          // Penugasan driver yang BENAR-BENAR jalan sekarang
+                          // otomatis lewat marketplace terbuka: begitu penjual
+                          // pencet "Serahkan Kurir" (seller_home_screen.dart),
+                          // OrderTrackingService.markReadyForDriver() bikin order
+                          // masuk antrian (status 'menunggu_driver') yang bisa
+                          // di-terima driver mana pun yang online (home_screen3.dart)
+                          // -- bahkan kalau ada driverUid yang kepilih di sini,
+                          // markReadyForDriver() bakal NULL-in lagi field itu.
+                          // Jadi seksi ini nggak berpengaruh & cuma bikin bingung.
+                          //
+                          // Kalau nanti alur undangan driver-per-toko itu jadi
+                          // dibangun beneran, aktifkan lagi baris di bawah ini:
+                          //
+                          // const SizedBox(height: 18),
+                          // _buildSectionTitle('Pilih Driver Pengantar'),
+                          // Text(
+                          //   'Tiap gerai diantar oleh drivernya masing-masing',
+                          //   style: _cs(size: 11.5, color: Colors.black45),
+                          // ),
+                          // const SizedBox(height: 10),
+                          // ..._geraiGroups.map(_buildDriverSelectionForGerai),
 
                           const SizedBox(height: 18),
                           _buildSectionTitle('Metode Pembayaran'),

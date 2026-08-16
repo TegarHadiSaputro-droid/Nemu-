@@ -28,11 +28,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:latlong2/latlong.dart' as ll;
 import '../../Theme/app_theme.dart';
 import '../../Theme/decor_background.dart';
 import '../../main.dart'; // untuk AuthGate — sesuaikan path kalau struktur foldermu beda
 import '../../services/gerai_service.dart'; // sesuaikan path kalau struktur foldermu beda
 import '../../services/auth_service.dart'; // untuk AuthService.registerAsSeller
+import '../../services/store_service.dart'; // untuk StoreService.createStore -- ini yang dibaca GeraiScreen (sisi Pembeli)
+import '../../screens/location_picker_screen.dart'; // lib/screens/location_picker_screen.dart -- widget peta yang sama dipakai di alamat pengiriman Pembeli
 
 // Daftar pasar yang bisa dipilih user sebagai lokasi gerai (kategori Pasar).
 // NOTE: kalau daftar pasar ini nanti sering berubah/ditambah, sebaiknya
@@ -63,16 +66,27 @@ class DaftarUsahaFormPage extends StatefulWidget {
 }
 
 class _DaftarUsahaFormPageState extends State<DaftarUsahaFormPage> {
-  final _namaController = TextEditingController();
+  // Nama KTP (identitas pribadi) dipisah dari Nama Gerai (nama usaha yang
+  // tampil ke pembeli) -- sebelumnya cuma ada 1 field yang labelnya "Nama
+  // lengkap (Sesuai KTP)" tapi isinya dipakai juga sebagai storeName di
+  // StoreService.createStore(), jadi nama yang muncul ke pembeli malah
+  // ketuker jadi nama KTP pemilik, bukan nama usahanya.
+  final _namaKtpController = TextEditingController();
+  final _namaController = TextEditingController(); // = Nama Gerai/Usaha
   final _rekeningController = TextEditingController();
 
   // Field khusus kategori Pasar.
   final _alamatGeraiController = TextEditingController();
   String? _selectedPasar;
+  // Titik peta gerai -- sistemnya sama kayak alamat pengiriman Pembeli di
+  // home_screen.dart: teks alamat diisi manual, titik koordinatnya ditandai
+  // lewat LocationPickerScreen (peta full-screen, pin di tengah).
+  ll.LatLng? _geraiLatLng;
 
   // Field khusus kategori Jasa.
   final _jenisJasaController = TextEditingController();
   final _alamatRumahController = TextEditingController();
+  ll.LatLng? _rumahLatLng;
 
   // Kategori usaha yang dipilih user: Pasar atau Jasa.
   KategoriUsaha? _selectedKategori;
@@ -81,6 +95,7 @@ class _DaftarUsahaFormPageState extends State<DaftarUsahaFormPage> {
 
   @override
   void dispose() {
+    _namaKtpController.dispose();
     _namaController.dispose();
     _rekeningController.dispose();
     _alamatGeraiController.dispose();
@@ -89,16 +104,49 @@ class _DaftarUsahaFormPageState extends State<DaftarUsahaFormPage> {
     super.dispose();
   }
 
+  // Buka LocationPickerScreen (peta full-screen, pin di tengah, sama
+  // persis kayak yang dipakai buat alamat pengiriman Pembeli) lalu simpan
+  // titik yang dipilih ke state lokal (isGerai menentukan field mana yang
+  // di-update: gerai di pasar, atau rumah/tempat usaha jasa).
+  Future<void> _pickLocationDiPeta({required bool isGerai}) async {
+    final current = isGerai ? _geraiLatLng : _rumahLatLng;
+    final result = await Navigator.push<ll.LatLng>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(
+          initialLat: current?.latitude,
+          initialLng: current?.longitude,
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      if (isGerai) {
+        _geraiLatLng = result;
+      } else {
+        _rumahLatLng = result;
+      }
+    });
+  }
+
   String? _validateBeforeSubmit() {
     if (_selectedKategori == null) {
       return 'Pilih kategori usaha: Pasar atau Jasa.';
     }
-    if (_namaController.text.trim().isEmpty) return 'Nama lengkap wajib diisi.';
+    if (_namaKtpController.text.trim().isEmpty) {
+      return 'Nama lengkap sesuai KTP wajib diisi.';
+    }
+    if (_namaController.text.trim().isEmpty) {
+      return 'Nama gerai/usaha wajib diisi.';
+    }
 
     if (_selectedKategori == KategoriUsaha.pasar) {
       if (_selectedPasar == null) return 'Pilih pasar tempat kios kamu berada.';
       if (_alamatGeraiController.text.trim().isEmpty) {
         return 'Alamat gerai wajib diisi.';
+      }
+      if (_geraiLatLng == null) {
+        return 'Tandai titik lokasi gerai kamu di peta.';
       }
     } else {
       if (_jenisJasaController.text.trim().isEmpty) {
@@ -106,6 +154,9 @@ class _DaftarUsahaFormPageState extends State<DaftarUsahaFormPage> {
       }
       if (_alamatRumahController.text.trim().isEmpty) {
         return 'Alamat rumah/tempat usaha wajib diisi.';
+      }
+      if (_rumahLatLng == null) {
+        return 'Tandai titik lokasi rumah/tempat usaha kamu di peta.';
       }
     }
 
@@ -148,7 +199,8 @@ class _DaftarUsahaFormPageState extends State<DaftarUsahaFormPage> {
       final trialEndsAt = DateTime.now().add(const Duration(days: 30));
 
       final usahaData = <String, dynamic>{
-        'nama': _namaController.text.trim(),
+        'namaKtp': _namaKtpController.text.trim(),
+        'namaGerai': _namaController.text.trim(),
         'kategori': kategoriValue,
         'nomorRekening': _rekeningController.text.trim(),
         'status': 'menunggu_verifikasi', // lihat alur di nemu_plus_page.dart
@@ -156,9 +208,39 @@ class _DaftarUsahaFormPageState extends State<DaftarUsahaFormPage> {
         if (_selectedKategori == KategoriUsaha.pasar) ...{
           'namaPasar': _selectedPasar,
           'alamatGerai': _alamatGeraiController.text.trim(),
+          // Format sama kayak DeliveryAddress.toMap() di address_manager.dart
+          // supaya konsisten kalau nanti mau ditampilkan di peta juga.
+          'lokasiGerai': {
+            'text': _alamatGeraiController.text.trim(),
+            'lat': _geraiLatLng?.latitude,
+            'lng': _geraiLatLng?.longitude,
+          },
+          // TITIK LOKASI UNTUK DRIVER: field flat {lat, lng} ini sengaja
+          // dibuat kompatibel sama LiveLatLng.fromMap() di
+          // order_tracking_service.dart (yang juga dipakai buat
+          // 'sellerLocation'/'driverLocation'/'buyerLiveLocation') --
+          // supaya kode sisi driver (home_screen3.dart / live_tracking_map.dart)
+          // bisa langsung baca titik gerai ini dari collection 'gerai'
+          // tanpa nunggu penjual online & GPS-nya aktif dulu (markReadyForDriver()
+          // baru nulis 'sellerLocation' ke order secara real-time, dan itu
+          // bisa gagal/null kalau GPS penjual lagi mati -- 'storeLocation' di
+          // sini jadi fallback yang lebih pasti ada).
+          'storeLocation': {
+            'lat': _geraiLatLng?.latitude,
+            'lng': _geraiLatLng?.longitude,
+          },
         } else ...{
           'jenisJasa': _jenisJasaController.text.trim(),
           'alamatRumah': _alamatRumahController.text.trim(),
+          'lokasiRumah': {
+            'text': _alamatRumahController.text.trim(),
+            'lat': _rumahLatLng?.latitude,
+            'lng': _rumahLatLng?.longitude,
+          },
+          'storeLocation': {
+            'lat': _rumahLatLng?.latitude,
+            'lng': _rumahLatLng?.longitude,
+          },
         },
       };
 
@@ -183,6 +265,30 @@ class _DaftarUsahaFormPageState extends State<DaftarUsahaFormPage> {
       // routing beranda itu ada di luar file ini (main.dart / AuthGate),
       // jadi perlu disesuaikan juga di sana.
       await AuthService.registerAsSeller(geraiData: usahaData);
+
+      // PENTING: langkah di atas (collection 'gerai' + 'seller/{uid}') TIDAK
+      // membuat entry di collection 'stores' -- padahal 'stores' itu yang
+      // dibaca GeraiScreen (sisi Pembeli, lihat gerai_screen.dart) lewat
+      // StoreService.allActiveStoresStream(). Tanpa baris ini, gerai yang
+      // baru daftar tidak akan pernah muncul di halaman manapun yang
+      // dilihat pembeli, walau datanya sebenarnya sudah masuk Firestore.
+      //
+      // Cuma dibuat untuk kategori Pasar -- GeraiScreen memang khusus
+      // menampilkan gerai di dalam pasar fisik. Kategori Jasa belum ada
+      // halaman listing sisi-pembeli yang setara di kode yang saya lihat;
+      // kalau nanti ada, bikin store serupa di sana juga.
+      if (_selectedKategori == KategoriUsaha.pasar) {
+        // TODO: kalau StoreService.createStore sudah/nanti punya parameter
+        // lat/lng, teruskan _geraiLatLng!.latitude / .longitude ke sana juga
+        // supaya titik gerai ini ikut muncul di peta sisi Pembeli, bukan
+        // cuma tersimpan di collection 'gerai' lewat 'lokasiGerai' di atas.
+        await StoreService.createStore(
+          ownerUid: uid,
+          storeName: _namaController.text.trim(),
+          marketType: _selectedPasar!,
+          description: _alamatGeraiController.text.trim(),
+        );
+      }
 
       if (!mounted) return;
 
@@ -471,8 +577,14 @@ class _DaftarUsahaFormPageState extends State<DaftarUsahaFormPage> {
                   _FormCard(
                     fields: [
                       _TextFieldData(
-                        label: 'Nama lengkap',
+                        label: 'Nama Lengkap (KTP)',
                         hint: 'Sesuai KTP',
+                        controller: _namaKtpController,
+                        keyboardType: TextInputType.name,
+                      ),
+                      _TextFieldData(
+                        label: isJasa ? 'Nama Usaha/Jasa' : 'Nama Gerai',
+                        hint: 'Nama yang akan tampil ke pembeli di aplikasi',
                         controller: _namaController,
                         keyboardType: TextInputType.name,
                       ),
@@ -491,16 +603,14 @@ class _DaftarUsahaFormPageState extends State<DaftarUsahaFormPage> {
                     // gerai di dalam pasar tersebut (bukan alamat pasarnya).
                     if (_selectedPasar != null) ...[
                       const SizedBox(height: 10),
-                      _FormCard(
-                        fields: [
-                          _TextFieldData(
-                            label: 'Alamat gerai',
-                            hint:
-                                'Contoh: Blok A, Los 5, dekat pintu masuk utama',
-                            controller: _alamatGeraiController,
-                            maxLines: 2,
-                          ),
-                        ],
+                      _AddressMapField(
+                        label: 'Alamat gerai',
+                        hint:
+                            'Contoh: Blok A, Los 5, dekat pintu masuk utama',
+                        controller: _alamatGeraiController,
+                        latLng: _geraiLatLng,
+                        onPickLocation: () =>
+                            _pickLocationDiPeta(isGerai: true),
                       ),
                     ],
                   ],
@@ -518,15 +628,13 @@ class _DaftarUsahaFormPageState extends State<DaftarUsahaFormPage> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    _FormCard(
-                      fields: [
-                        _TextFieldData(
-                          label: 'Alamat rumah/tempat usaha',
-                          hint: 'Alamat lengkap tempat kamu menjalankan jasa',
-                          controller: _alamatRumahController,
-                          maxLines: 2,
-                        ),
-                      ],
+                    _AddressMapField(
+                      label: 'Alamat rumah/tempat usaha',
+                      hint: 'Alamat lengkap tempat kamu menjalankan jasa',
+                      controller: _alamatRumahController,
+                      latLng: _rumahLatLng,
+                      onPickLocation: () =>
+                          _pickLocationDiPeta(isGerai: false),
                     ),
                   ],
 
@@ -810,6 +918,100 @@ class _PlainTextField extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide.none,
         ),
+      ),
+    );
+  }
+}
+
+// Field alamat + titik peta -- pola sama kayak "Ganti Alamat" di
+// home_screen.dart/checkout_screen.dart (AddressManager + LocationPickerScreen):
+// teks alamat tetap diisi manual (detail blok/patokan yang susah dibaca dari
+// peta), tapi titik koordinatnya WAJIB ditandai lewat peta biar akurat --
+// dipakai belakangan buat radius pencarian pembeli / estimasi ongkir.
+class _AddressMapField extends StatelessWidget {
+  final String label;
+  final String hint;
+  final TextEditingController controller;
+  final ll.LatLng? latLng;
+  final VoidCallback onPickLocation;
+
+  const _AddressMapField({
+    required this.label,
+    required this.hint,
+    required this.controller,
+    required this.latLng,
+    required this.onPickLocation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPin = latLng != null;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kCream,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.manrope(
+              color: kInk.withOpacity(0.7),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          _PlainTextField(hint: hint, controller: controller, maxLines: 2),
+          const SizedBox(height: 8),
+          InkWell(
+            onTap: onPickLocation,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 11,
+              ),
+              decoration: BoxDecoration(
+                color: hasPin ? kGradientBottom.withOpacity(0.12) : Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: hasPin ? kGradientBottom : kInk.withOpacity(0.15),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.location_on_rounded,
+                    size: 18,
+                    color: hasPin ? kGradientBottom : kInk.withOpacity(0.5),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      hasPin
+                          ? 'Titik lokasi tersimpan • Tap untuk ubah'
+                          : 'Tandai titik lokasi di peta',
+                      style: GoogleFonts.manrope(
+                        color: hasPin ? kInk : kInk.withOpacity(0.5),
+                        fontSize: 12.5,
+                        fontWeight: hasPin ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: kInk.withOpacity(0.4),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

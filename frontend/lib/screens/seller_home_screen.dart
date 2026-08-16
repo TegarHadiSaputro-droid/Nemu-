@@ -732,19 +732,25 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                   child: Text(
                     orderId,
                     style: _ms(size: 12, weight: FontWeight.bold, color: _selAmber),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: _selAmber.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _selAmber.withValues(alpha: 0.4)),
-                  ),
-                  child: Text(
-                    '⏳ Menunggu Konfirmasi',
-                    style: _ms(size: 9, weight: FontWeight.bold, color: _selAmber),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _selAmber.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: _selAmber.withValues(alpha: 0.4)),
+                    ),
+                    child: Text(
+                      '⏳ Menunggu Konfirmasi',
+                      style: _ms(size: 9, weight: FontWeight.bold, color: _selAmber),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ],
@@ -805,7 +811,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                             ),
                           ),
                           Text(
-                            'Rp${StoreService.formatRupiah(harga * qty)}',
+                            StoreService.formatRupiahFull(harga * qty),
                             style: _ms(size: 11, weight: FontWeight.w600, color: _selDark),
                           ),
                         ],
@@ -877,7 +883,7 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                     Text('Total Pembayaran', style: _ms(size: 12, color: Colors.black54)),
                     const Spacer(),
                     Text(
-                      'Rp${StoreService.formatRupiah(totalPrice)}',
+                      StoreService.formatRupiahFull(totalPrice),
                       style: _ms(size: 15, weight: FontWeight.bold, color: _selGreen),
                     ),
                   ],
@@ -948,9 +954,40 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
         (data['totalPrice'] as num?)?.toInt() ?? 0;
     final status = data['status'] as String? ?? kStatusAccepted;
 
+    // Info driver yang sudah ditugaskan ke pesanan ini (kalau ada). Nama
+    // field 'driverName'/'driverLocation'/'sellerLocation' ngikutin pola
+    // yang dipakai home_screen3.dart (sisi Driver) buat baca dokumen order
+    // yang sama -- lihat data['sellerLocation']/data['buyerLiveLocation']
+    // di sana.
+    final driverName = data['driverName'] as String?;
+    final driverLoc = LiveLatLng.fromMap(data['driverLocation'] as Map<String, dynamic>?);
+    final sellerLoc = LiveLatLng.fromMap(data['sellerLocation'] as Map<String, dynamic>?);
+
+    // FIX: sebelumnya "isPackaging" (yang nge-gate tombol "Serahkan Kurir")
+    // dicek lewat `status == kStatusDikemas` -- konstanta itu didefinisikan
+    // di orders_manager.dart dan kalau string yang ditulis
+    // OrdersManager.acceptOrder() ternyata beda dari kStatusDikemas (atau
+    // acceptOrder() nulis status lain dulu sebelum "dikemas"), tombolnya
+    // nggak akan pernah muncul -- order nyangkut selamanya di sini dan
+    // TIDAK PERNAH nyampe status 'menunggu_driver', jadi driver
+    // (home_screen3.dart) nggak pernah lihat apa-apa.
+    //
+    // Diganti jadi dicek dari KONDISI, bukan dari string status yang persis:
+    // order ini butuh tombol "Serahkan Kurir" kalau dia BELUM ada driver
+    // yang ditugaskan DAN belum masuk antrian pencarian driver
+    // (OrderStatus.menungguDriver, dari order_tracking_service.dart --
+    // satu sumber kebenaran status order lintas role). Ini tetap benar
+    // apa pun nilai persis kStatusAccepted/kStatusDikemas di orders_manager.dart.
+    final belumAdaDriver = driverName == null &&
+        status != OrderStatus.menungguDriver &&
+        status != OrderStatus.menujuPenjual &&
+        status != OrderStatus.diantar &&
+        status != OrderStatus.selesai;
+    final isPackaging = belumAdaDriver;
+
     Color badgeColor;
     String badgeLabel;
-    if (status == kStatusDikemas) {
+    if (isPackaging) {
       badgeColor = _selAmber;
       badgeLabel = '📦 Dikemas';
     } else {
@@ -973,45 +1010,138 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: badgeColor)),
-                const SizedBox(height: 2),
-                Text(buyerName, style: _ms(size: 11, color: Colors.black54)),
-                if (itemsSummary.isNotEmpty) ...[
-                  const SizedBox(height: 2),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(orderId, style: _ms(size: 12, weight: FontWeight.bold, color: badgeColor)),
+                    const SizedBox(height: 2),
+                    Text(buyerName, style: _ms(size: 11, color: Colors.black54)),
+                    if (itemsSummary.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        itemsSummary,
+                        style: _ms(size: 10.5, color: Colors.black38),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: badgeColor.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(badgeLabel, style: _ms(size: 9, weight: FontWeight.bold, color: badgeColor)),
+                  ),
+                  const SizedBox(height: 4),
                   Text(
-                    itemsSummary,
-                    style: _ms(size: 10.5, color: Colors.black38),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    StoreService.formatRupiahFull(totalPrice),
+                    style: _ms(size: 13, weight: FontWeight.bold, color: _selGreen),
                   ),
                 ],
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(badgeLabel, style: _ms(size: 9, weight: FontWeight.bold, color: badgeColor)),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Rp${StoreService.formatRupiah(totalPrice)}',
-                style: _ms(size: 13, weight: FontWeight.bold, color: _selGreen),
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          if (isPackaging)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () async {
+                  HapticFeedback.mediumImpact();
+                  await OrderTrackingService.markReadyForDriver(
+                    orderDocId: doc.id,
+                    storeName: _storeName,
+                    marketName: _marketType,
+                  );
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Pesanan $orderId diserahkan ke driver...', style: _ms(size: 12, color: Colors.white)),
+                      backgroundColor: _selGreen,
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _selAmber,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  'Selesai Mengemas / Serahkan Kurir',
+                  textAlign: TextAlign.center,
+                  style: _ms(size: 11, weight: FontWeight.bold, color: Colors.white),
+                ),
+              ),
+            )
+          else if (status == OrderStatus.menungguDriver)
+            Row(
+              children: [
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: _selOrange),
+                ),
+                const SizedBox(width: 8),
+                Text('Menunggu driver...', style: _ms(size: 11, weight: FontWeight.w600, color: _selOrange)),
+              ],
+            )
+          else
+            // CATATAN: baris nama driver di bawah ini direkonstruksi ulang --
+            // versi aslinya sempat ketiban konten lain pas proses merge
+            // (git salah nyocokin dua baris beda yang formatnya mirip),
+            // jadi teks/style persisnya mungkin beda dari desain awal.
+            // Fungsinya tetap sama: nunjukin driver yang ditugaskan +
+            // tombol buat lacak posisinya.
+            Row(
+              children: [
+                const Icon(Icons.two_wheeler_rounded, size: 15, color: _selGreen),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    driverName != null ? 'Driver: $driverName' : 'Menunggu info driver...',
+                    style: _ms(size: 11, weight: FontWeight.w600, color: Colors.black54),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (driverName != null && driverLoc != null) const SizedBox(width: 8),
+                if (driverLoc != null)
+                  OutlinedButton.icon(
+                    onPressed: () => _showTrackDriverSheet(
+                      driverLoc: driverLoc,
+                      destination: sellerLoc,
+                      destinationLabel: 'Toko Kamu',
+                    ),
+                    icon: const Icon(Icons.map_rounded, size: 15),
+                    label: Text('Lacak Driver', style: _ms(size: 11, weight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _selGreen,
+                      side: BorderSide(color: _selGreen.withValues(alpha: 0.4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+              ],
+            ),
         ],
       ),
     );

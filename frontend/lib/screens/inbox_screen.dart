@@ -17,6 +17,13 @@ TextStyle _ib({
 
 // ─────────────────────────────────────────────
 //  Notifikasi sistem (statis)
+//  Dulu tinggal di home_screen.dart sebagai _NotificationSheet (bottom
+//  sheet terpisah dari InboxScreen). Sekarang digabung ke sini supaya
+//  cuma ada SATU pintu masuk "Pesan & Notifikasi" -- lebih gampang
+//  ditemukan user, nggak bikin bingung ada 2 kotak pesan beda tempat.
+//  Masih statis/mock (belum dari backend) -- kalau nanti notifikasi
+//  sistem sudah beneran datang dari Firestore/backend, tinggal ganti
+//  list ini jadi hasil query, struktur tile-nya nggak perlu berubah.
 // ─────────────────────────────────────────────
 class _SystemNotifItem {
   final IconData icon;
@@ -34,10 +41,24 @@ class _SystemNotifItem {
 
 const List<_SystemNotifItem> _systemNotifs = [
   _SystemNotifItem(
+    icon: Icons.local_shipping_rounded,
+    iconColor: Color(0xFFFF7B00),
+    title: 'Pesanan dikirim!',
+    sub: 'Pak Budi sedang mengantar pesananmu • 2 mnt lalu',
+    isUnread: true,
+  ),
+  _SystemNotifItem(
+    icon: Icons.check_circle_rounded,
+    iconColor: Color(0xFF007C3F),
+    title: 'Pesanan dikonfirmasi',
+    sub: 'Lapak Sari menerima pesananmu • 15 mnt lalu',
+    isUnread: true,
+  ),
+  _SystemNotifItem(
     icon: Icons.campaign_rounded,
     iconColor: Color(0xFF0071FF),
     title: 'Promo hari ini!',
-    sub: 'Ongkir hemat dan produk segar dari pasar terdekat • 1 jam lalu',
+    sub: 'Ongkir flat Rp2.000 untuk semua pesanan • 1 jam lalu',
     isUnread: false,
   ),
   _SystemNotifItem(
@@ -383,7 +404,9 @@ class _InboxTileState extends State<_InboxTile> {
 }
 
 // ─────────────────────────────────────────────
-//  _SystemNotifTile
+//  _SystemNotifTile — tile notifikasi sistem (statis, bukan dari inbox
+//  Firestore). Sengaja dibuat mirip _InboxTile di atas biar visualnya
+//  konsisten walau sumber datanya beda.
 // ─────────────────────────────────────────────
 class _SystemNotifTile extends StatelessWidget {
   final _SystemNotifItem item;

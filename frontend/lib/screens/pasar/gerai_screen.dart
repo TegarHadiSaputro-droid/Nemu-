@@ -157,6 +157,20 @@ class _GeraiScreenState extends State<GeraiScreen> {
 
         final filteredFirestore = firestoreDocs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
+
+          // Cocokkan dulu dengan pasar yang sedang dibuka -- tanpa ini,
+          // SEMUA gerai dari SEMUA pasar bakal numpuk muncul di halaman
+          // pasar manapun, karena allActiveStoresStream() sengaja tidak
+          // memfilter market di sisi server (lihat catatan di
+          // StoreService.allActiveStoresStream).
+          if (!StoreService.matchesMarket(
+            data,
+            marketId: widget.market.id,
+            marketNama: widget.market.nama,
+          )) {
+            return false;
+          }
+
           final name = (data['store_name'] as String? ?? '').toLowerCase();
           final desc = (data['description'] as String? ?? '').toLowerCase();
           final q = _query.toLowerCase();

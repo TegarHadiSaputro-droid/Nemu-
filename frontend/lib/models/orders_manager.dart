@@ -38,6 +38,17 @@ const List<String> kProcessingStatuses = [
   kStatusAccepted,
   kStatusProcessing,
   kStatusDikemas,
+  // FIX: sebelumnya cuma sampai "dikemas" -- begitu penjual pencet
+  // "Serahkan Kurir" dan status pindah ke salah satu status di bawah ini,
+  // order langsung HILANG dari query "Sedang Diproses" (seller_home_screen.dart),
+  // padahal ada UI-nya buat nampilin "Menunggu driver..." dan info driver
+  // yang jadi kode mati karena datanya keburu nggak ke-query lagi.
+  // Sekarang dilebarkan supaya seller tetap bisa mantau order-nya sampai
+  // benar-benar sampai ke pembeli (status jadi kStatusSelesai baru hilang).
+  kStatusMenungguDriver,
+  kStatusMenujuPenjual,
+  kStatusDalamPengantaran,
+  kStatusDiantar,
 ];
 
 const List<String> kActiveStatuses = [
