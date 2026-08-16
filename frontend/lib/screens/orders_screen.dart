@@ -66,27 +66,23 @@ class OrderHistoryItem {
 
   factory OrderHistoryItem.fromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
-    final status = (data['status'] as String?) ?? kStatusPending;
+    final status = (data['status'] as String?) ?? kStatusMenunggu;
 
     String label;
     Color color;
     switch (status) {
+      case kStatusMenunggu:
       case kStatusPending:
+      case kStatusMenungguKonfirmasi:
         label = 'Menunggu Konfirmasi';
         color = Colors.orange;
         break;
+      case kStatusDiproses:
       case kStatusAccepted:
-        label = 'Diterima Penjual';
-        color = Colors.blue;
-        break;
       case kStatusProcessing:
       case kStatusDikemas:
         label = 'Diproses';
         color = Colors.blue;
-        break;
-      case kStatusMenungguKonfirmasi:
-        label = 'Menunggu Konfirmasi';
-        color = Colors.orange;
         break;
       case kStatusMenungguDriver:
         label = 'Mencari Driver';
@@ -102,6 +98,7 @@ class OrderHistoryItem {
         label = 'Selesai';
         color = _green;
         break;
+      case kStatusDitolak:
       case kStatusRejected:
         label = 'Ditolak Penjual';
         color = Colors.red;
@@ -115,7 +112,7 @@ class OrderHistoryItem {
         color = Colors.grey;
     }
 
-    final createdAt = data['created_at'] ?? data['createdAt'];
+    final createdAt = data['created_at'] ?? data['createdAt'] ?? data['timestamp'];
     String dateLabel = 'Hari ini';
     if (createdAt is Timestamp) {
       final dt = createdAt.toDate();
@@ -133,7 +130,10 @@ class OrderHistoryItem {
       marketName: (data['market_type'] as String?) ?? (data['namaMarket'] as String?) ?? '',
       date: dateLabel,
       items: (data['itemsSummary'] as String?) ?? '',
-      totalPrice: (data['total_price'] as num?)?.toInt() ?? (data['totalPrice'] as num?)?.toInt() ?? 0,
+      totalPrice: (data['total_price'] as num?)?.toInt() ??
+          (data['totalPrice'] as num?)?.toInt() ??
+          (data['totalHarga'] as num?)?.toInt() ??
+          0,
       statusLabel: label,
       statusColor: color,
       rawStatus: status,
@@ -141,8 +141,10 @@ class OrderHistoryItem {
   }
 
   bool get isActive => [
+    kStatusMenunggu,
     kStatusPending,
     kStatusAccepted,
+    kStatusDiproses,
     kStatusProcessing,
     kStatusMenungguKonfirmasi,
     kStatusDikemas,
@@ -154,6 +156,7 @@ class OrderHistoryItem {
 
   bool get isHistory => [
     kStatusSelesai,
+    kStatusDitolak,
     kStatusRejected,
     kStatusDibatalkan,
   ].contains(rawStatus);
@@ -320,7 +323,12 @@ class _OrdersScreenState extends State<OrdersScreen>
           ? const Stream.empty()
           : FirebaseFirestore.instance
               .collection('orders')
-              .where('buyer_id', isEqualTo: uid)
+              .where(
+                Filter.or(
+                  Filter('buyer_id', isEqualTo: uid),
+                  Filter('buyerId', isEqualTo: uid),
+                ),
+              )
               .snapshots(),
       builder: (context, snapshot) {
         final docs = snapshot.data?.docs ?? [];
@@ -345,10 +353,15 @@ class _OrdersScreenState extends State<OrdersScreen>
         // Tentukan currentStep berdasarkan status
         final status = activeOrder?.rawStatus;
         int currentStep = 0;
-        if (status == kStatusAccepted || status == kStatusProcessing || status == kStatusDikemas) {
+        if (status == kStatusDiproses ||
+            status == kStatusAccepted ||
+            status == kStatusProcessing ||
+            status == kStatusDikemas) {
           currentStep = 1;
-        } else if (status == kStatusMenungguDriver || status == kStatusMenujuPenjual ||
-            status == kStatusDalamPengantaran || status == kStatusDiantar) {
+        } else if (status == kStatusMenungguDriver ||
+            status == kStatusMenujuPenjual ||
+            status == kStatusDalamPengantaran ||
+            status == kStatusDiantar) {
           currentStep = 2;
         } else if (status == kStatusSelesai) {
           currentStep = 3;
@@ -820,6 +833,21 @@ class _OrdersScreenState extends State<OrdersScreen>
               final infoColor = currentStep == 1 ? Colors.blue : _green;
 
               switch (status) {
+                case kStatusMenunggu:
+                case kStatusPending:
+                case kStatusMenungguKonfirmasi:
+                  icon = Icons.hourglass_top_rounded;
+                  title = 'Menunggu Konfirmasi Penjual';
+                  subtitle = 'Penjual sedang meninjau pesananmu';
+                  break;
+                case kStatusDiproses:
+                case kStatusAccepted:
+                case kStatusProcessing:
+                case kStatusDikemas:
+                  icon = Icons.inventory_2_rounded;
+                  title = 'Pesanan Anda sedang dikemas oleh pedagang';
+                  subtitle = 'Estimasi siap: 5–10 menit lagi';
+                  break;
                 case OrderStatus.menungguDriver:
                   icon = Icons.search_rounded;
                   title = 'Menunggu Driver...';
@@ -838,7 +866,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                   break;
                 default:
                   icon = Icons.inventory_2_rounded;
-                  title = 'Pesanan Anda sedang dikemas oleh pedagang';
+                  title = 'Pesanan Anda sedang diproses';
                   subtitle = 'Estimasi siap: 5–10 menit lagi';
               }
 

@@ -9,6 +9,7 @@ import 'package:frontend/services/order_tracking_service.dart';
 import 'package:frontend/services/store_service.dart';
 import 'package:frontend/widgets/live_tracking_map.dart';
 import 'package:frontend/models/orders_manager.dart';
+import 'package:frontend/screens/inbox_screen.dart';
 
 // ─────────────────────────────────────────────
 //  Warna Palette (konsisten dengan home_screen.dart)
@@ -586,39 +587,11 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   }
 
   Widget _buildAcceptedOrdersStream(String storeId, String? uid) {
-    final validIds = <String>{
-      if (storeId.isNotEmpty) storeId,
-      if (uid != null && uid.isNotEmpty) uid,
-    }.toList();
-
-    if (validIds.isEmpty) return const SizedBox.shrink();
-
-    final statuses = [kStatusAccepted, kStatusProcessing, kStatusDikemas];
-
-    final filters = <Filter>[];
-    for (final id in validIds) {
-      filters.add(Filter('store_id', isEqualTo: id));
-      filters.add(Filter('seller_id', isEqualTo: id));
-      filters.add(Filter('owner_id', isEqualTo: id));
-      filters.add(Filter('storeId', isEqualTo: id));
-      filters.add(Filter('sellerId', isEqualTo: id));
-    }
-
-    Filter orGroup = filters.first;
-    for (int i = 1; i < filters.length; i++) {
-      orGroup = Filter.or(orGroup, filters[i]);
-    }
-
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('orders')
-          .where(
-            Filter.and(
-              orGroup,
-              Filter('status', whereIn: statuses),
-            ),
-          )
-          .snapshots(),
+      stream: OrdersManager.instance.processingOrdersForStoreStream(
+        storeId,
+        sellerUid: uid,
+      ),
       builder: (context, snapshot) {
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) return const SizedBox.shrink();
@@ -695,8 +668,10 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
   Widget _buildPendingOrderCard(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data();
     final orderId = (data['orderCode'] as String?) ?? doc.id;
+    final buyerId = (data['buyerId'] as String?) ?? (data['buyer_id'] as String?) ?? '';
     final buyerName = (data['buyer_name'] as String?) ??
         (data['buyerName'] as String?) ?? 'Pembeli';
+    final alamatPengiriman = (data['alamatPengiriman'] as String?) ?? (data['address'] as String?) ?? '';
     final itemsSummary = (data['itemsSummary'] as String?) ?? '';
     final totalPrice = (data['total_price'] as num?)?.toInt() ??
         (data['totalPrice'] as num?)?.toInt() ?? 0;
@@ -850,7 +825,24 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                     overflow: TextOverflow.ellipsis,
                   ),
 
-                // Catatan pembeli
+                // Catatan & Alamat pembeli
+                if (alamatPengiriman.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_rounded, size: 13, color: Colors.black45),
+                      const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          alamatPengiriman,
+                          style: _ms(size: 11, color: Colors.black54),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 if (catatan.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Container(
@@ -899,7 +891,12 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                     // Tombol Tolak (Decline)
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () => _confirmDeclineOrder(doc.id, orderId),
+                        onPressed: () => _confirmDeclineOrder(
+                          doc.id,
+                          orderId,
+                          buyerId: buyerId,
+                          storeName: _storeName,
+                        ),
                         icon: const Icon(Icons.close_rounded, size: 16),
                         label: Text('Tolak', style: _ms(size: 12, weight: FontWeight.bold)),
                         style: OutlinedButton.styleFrom(
@@ -915,7 +912,12 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
                     Expanded(
                       flex: 2,
                       child: ElevatedButton.icon(
-                        onPressed: () => _acceptOrder(doc.id, orderId),
+                        onPressed: () => _acceptOrder(
+                          doc.id,
+                          orderId,
+                          buyerId: buyerId,
+                          storeName: _storeName,
+                        ),
                         icon: const Icon(Icons.check_rounded, size: 16),
                         label: Text('Terima Pesanan', style: _ms(size: 12, weight: FontWeight.bold, color: Colors.white)),
                         style: ElevatedButton.styleFrom(
@@ -1015,14 +1017,24 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     );
   }
 
-  Future<void> _acceptOrder(String docId, String orderId) async {
+  Future<void> _acceptOrder(
+    String docId,
+    String orderId, {
+    String? buyerId,
+    String? storeName,
+  }) async {
     HapticFeedback.mediumImpact();
     try {
-      await OrdersManager.instance.acceptOrder(docId);
+      await OrdersManager.instance.acceptOrder(
+        docId,
+        buyerId: buyerId,
+        storeName: storeName ?? _storeName,
+        orderCode: orderId,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Pesanan $orderId berhasil diterima ✓', style: _ms(size: 12, color: Colors.white)),
+          content: Text('Pesanan $orderId berhasil diterima & diproses ✓', style: _ms(size: 12, color: Colors.white)),
           backgroundColor: _selGreen,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1039,15 +1051,38 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     }
   }
 
-  Future<void> _confirmDeclineOrder(String docId, String orderId) async {
+  Future<void> _confirmDeclineOrder(
+    String docId,
+    String orderId, {
+    String? buyerId,
+    String? storeName,
+  }) async {
+    final reasonCtrl = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Tolak Pesanan?', style: _ms(size: 16, weight: FontWeight.bold)),
-        content: Text(
-          'Apakah kamu yakin ingin menolak pesanan $orderId? Pembeli akan mendapat notifikasi bahwa pesanannya ditolak.',
-          style: _ms(size: 13, color: Colors.black54),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Apakah kamu yakin ingin menolak pesanan $orderId? Pembeli akan mendapat notifikasi bahwa pesanannya ditolak.',
+              style: _ms(size: 13, color: Colors.black54),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              decoration: InputDecoration(
+                hintText: 'Alasan penolakan (opsional)',
+                hintStyle: _ms(size: 12, color: Colors.black38),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              style: _ms(size: 13),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -1069,15 +1104,25 @@ class _SellerDashboardBodyState extends State<SellerDashboardBody>
     if (confirmed != true) return;
     HapticFeedback.mediumImpact();
     try {
-      await OrdersManager.instance.rejectOrder(docId);
+      await OrdersManager.instance.rejectOrder(
+        docId,
+        buyerId: buyerId,
+        storeName: storeName ?? _storeName,
+        orderCode: orderId,
+        reason: reasonCtrl.text.trim().isNotEmpty ? reasonCtrl.text.trim() : null,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Pesanan $orderId ditolak', style: _ms(size: 12, color: Colors.white)),
+          content: Text('Pesanan $orderId ditolak.', style: _ms(size: 12, color: Colors.white)),
           backgroundColor: Colors.red.shade600,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
+      );
+      // Navigasi ke inbox_screen.dart dengan notifikasi penolakan
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const InboxScreen()),
       );
     } catch (e) {
       if (!mounted) return;

@@ -243,16 +243,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   void _pesan() async {
     final groups = _geraiGroups;
-    if (groups.isEmpty) return;
-
-    final missingDriverFor = groups
-        .where((g) => _selectedDriverByGerai[g.key] == null)
-        .toList();
-    if (missingDriverFor.isNotEmpty) {
+    if (groups.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Pilih driver pengantar untuk ${missingDriverFor.map((g) => g.namaGerai).join(', ')} dulu ya',
+            'Keranjang belanja kamu masih kosong.',
             style: _cs(size: 13, color: Colors.white),
           ),
           backgroundColor: Colors.redAccent,
@@ -263,15 +258,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     final address = AddressManager.instance.address.value;
-    if (address == null) {
+    if (address == null || address.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Isi alamat pengiriman dulu ya',
+            'Silakan isi alamat pengiriman terlebih dahulu ya.',
             style: _cs(size: 13, color: Colors.white),
           ),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Isi Alamat',
+            textColor: _cYellow,
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => const AddressEditorSheet(),
+              );
+            },
+          ),
         ),
       );
       return;
@@ -282,7 +289,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Kamu harus login dulu untuk memesan',
+            'Kamu harus login dulu untuk memesan.',
+            style: _cs(size: 13, color: Colors.white),
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Driver hanya divalidasi jika gerai memiliki driver terdaftar
+    final missingDriverFor = groups.where((g) {
+      final hasDrivers = (_driversByGerai[g.key] ?? []).isNotEmpty;
+      return hasDrivers && _selectedDriverByGerai[g.key] == null;
+    }).toList();
+
+    if (missingDriverFor.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Pilih driver pengantar untuk ${missingDriverFor.map((g) => g.namaGerai).join(', ')} dulu ya',
             style: _cs(size: 13, color: Colors.white),
           ),
           backgroundColor: Colors.redAccent,
@@ -298,6 +325,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final catatan = _catatanCtrl.text.trim();
     final ongkirShare = _ongkirShareByGeraiKey(groups);
     final orderTimestamp = DateTime.now().millisecondsSinceEpoch;
+    final groupOrderId = FirebaseFirestore.instance.collection('orders').doc().id;
 
     String buyerName = 'Sobat Nemu';
     try {
@@ -310,10 +338,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     } catch (_) {}
 
-    // Tulis SATU dokumen order per gerai ke Firestore, supaya tiap
-    // pemilik pasar/seller (owner_id) cuma nerima & lihat pesanan
-    // miliknya sendiri, dan tiap gerai punya driver pengantarnya
-    // masing-masing (driverUid).
+    // Tulis SATU dokumen order per gerai ke Firestore collection 'orders'
     try {
       final batch = FirebaseFirestore.instance.batch();
       final ordersRef = FirebaseFirestore.instance.collection('orders');
@@ -325,31 +350,67 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         final itemsSummary =
             group.items.map((it) => '${it.produk.nama} x${it.qty}').join(', ');
         final driverId = _selectedDriverByGerai[group.key];
+        final orderCode = 'ORD$orderTimestamp${i.toString().padLeft(2, '0')}';
+
+        final itemsDetail = group.items
+            .map((c) => {
+                  'product_id': c.produk.id,
+                  'produkId': c.produk.id,
+                  'product_name': c.produk.nama,
+                  'nama': c.produk.nama,
+                  'satuan': c.produk.satuan,
+                  'quantity': c.qty,
+                  'qty': c.qty,
+                  'price': c.produk.hargaSekarang,
+                  'hargaSatuan': c.produk.hargaSekarang,
+                  'subtotal': c.subtotal,
+                })
+            .toList();
+
+        final sellerId = group.sellerId ?? group.geraiId ?? '';
+        final storeId = group.geraiId ?? group.sellerId ?? '';
 
         final docRef = ordersRef.doc();
         final data = <String, dynamic>{
-          'orderCode': 'ORD$orderTimestamp${i.toString().padLeft(2, '0')}',
+          'orderId': docRef.id,
+          'order_id': docRef.id,
+          'orderCode': orderCode,
+          'groupOrderId': groupOrderId,
+          'buyerId': uid,
           'buyer_id': uid,
           'buyerName': buyerName,
+          'buyer_name': buyerName,
+          'sellerId': sellerId,
+          'seller_id': sellerId,
+          'owner_id': sellerId,
+          'storeId': storeId,
+          'store_id': storeId,
+          'namaGerai': group.namaGerai,
           'store_name': group.namaGerai,
+          'namaMarket': group.namaMarket,
           'market_type': group.namaMarket,
+          'items': itemsDetail,
           'itemsSummary': itemsSummary.isNotEmpty ? itemsSummary : '-',
           'subtotal': subtotal,
+          'subtotalProduk': subtotal,
           'ongkir': ongkir,
+          'totalHarga': subtotal + ongkir,
+          'totalPrice': subtotal + ongkir,
           'total_price': subtotal + ongkir,
+          'alamatPengiriman': address.text,
+          'address': address.text,
           'driverUid': driverId,
           'paymentMethod': _paymentMethods[_selectedPayment].label,
           'catatan': catatan.isEmpty ? null : catatan,
+          'status': 'menunggu',
+          'statusLabel': 'Menunggu Konfirmasi',
+          'timestamp': FieldValue.serverTimestamp(),
           'created_at': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+          'updated_at': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
         };
-        // owner_id -- dipakai dashboard seller buat nyaring pesanan
-        // miliknya sendiri. Gerai mock/statis (belum daftar lewat
-        // seller onboarding) nggak punya sellerId, jadi field ini
-        // sengaja nggak ditulis dan pesanannya tidak akan muncul di
-        // dashboard seller mana pun.
-        if (group.sellerId != null) {
-          data['owner_id'] = group.sellerId;
-        }
+
         if (group.geraiId != null) {
           data['gerai_id'] = group.geraiId;
         }
@@ -364,7 +425,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Gagal membuat pesanan, coba lagi ya',
+              'Gagal membuat pesanan: $e',
               style: _cs(size: 13, color: Colors.white),
             ),
             backgroundColor: Colors.redAccent,
@@ -375,7 +436,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 1));
     if (mounted) {
       _cart.kosongkan();
       _showSuccessDialog();
