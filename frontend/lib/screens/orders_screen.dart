@@ -350,28 +350,48 @@ class _OrdersScreenState extends State<OrdersScreen>
         final OrderHistoryItem? activeOrder =
             activeOrders.isNotEmpty ? activeOrders.first : null;
 
-        // Tentukan currentStep berdasarkan status
-        final status = activeOrder?.rawStatus;
+        // Tentukan currentStep berdasarkan status:
+        // Step 0: Diterima (menunggu konfirmasi)
+        // Step 1: Diproses (sedang dikemas toko / mencari driver)
+        // Step 2: Diantar (driver menuju toko / otw antar ke pembeli)
+        // Step 3: Selesai (sudah selesai diantar)
+        final status = activeOrder?.rawStatus?.trim();
         int currentStep = 0;
-        if (status == kStatusDiproses ||
+        if (status == kStatusMenunggu ||
+            status == kStatusPending ||
+            status == kStatusMenungguKonfirmasi ||
+            status == 'menunggu') {
+          currentStep = 0;
+        } else if (status == kStatusDiproses ||
             status == kStatusAccepted ||
             status == kStatusProcessing ||
-            status == kStatusDikemas) {
+            status == kStatusDikemas ||
+            status == 'diproses' ||
+            status == 'dikemas' ||
+            status == OrderStatus.menungguDriver ||
+            status == 'menunggu_driver' ||
+            status == kStatusMenungguDriver) {
           currentStep = 1;
-        } else if (status == kStatusMenungguDriver ||
+        } else if (status == OrderStatus.menujuPenjual ||
+            status == 'menuju_penjual' ||
             status == kStatusMenujuPenjual ||
-            status == kStatusDalamPengantaran ||
-            status == kStatusDiantar) {
+            status == OrderStatus.diantar ||
+            status == 'diantar' ||
+            status == kStatusDiantar ||
+            status == kStatusDalamPengantaran) {
           currentStep = 2;
-        } else if (status == kStatusSelesai) {
+        } else if (status == kStatusSelesai ||
+            status == OrderStatus.selesai ||
+            status == 'selesai') {
           currentStep = 3;
         }
 
         // GPS sharing — trigger saat status diantar
-        if (status == kStatusDiantar && _lastKnownStatus != kStatusDiantar) {
+        final isOtw = (status == OrderStatus.diantar || status == 'diantar' || status == kStatusDiantar);
+        if (isOtw && _lastKnownStatus != kStatusDiantar) {
           _lastKnownStatus = kStatusDiantar;
-          if (uid != null) _startSharingMyLocation(activeOrder!.docId);
-        } else if (status != kStatusDiantar && _lastKnownStatus == kStatusDiantar) {
+          if (uid != null && activeOrder != null) _startSharingMyLocation(activeOrder.docId);
+        } else if (!isOtw && _lastKnownStatus == kStatusDiantar) {
           _lastKnownStatus = status;
           _stopSharingMyLocation();
         }
@@ -848,21 +868,27 @@ class _OrdersScreenState extends State<OrdersScreen>
                   title = 'Pesanan Anda sedang dikemas oleh pedagang';
                   subtitle = 'Estimasi siap: 5–10 menit lagi';
                   break;
-                case OrderStatus.menungguDriver:
+                case kStatusMenungguDriver:
                   icon = Icons.search_rounded;
                   title = 'Menunggu Driver...';
                   subtitle =
-                      'Sistem sedang mencarikan driver terdekat untuk pesananmu';
+                      'Sistem sedang mencarikan driver untuk pesananmu';
                   break;
-                case OrderStatus.menujuPenjual:
+                case kStatusMenujuPenjual:
                   icon = Icons.storefront_rounded;
-                  title = 'Driver menuju lokasi penjual';
+                  title = 'Driver Menuju Lokasi Penjual 🛵';
                   subtitle = 'Driver sedang menjemput pesananmu di toko';
                   break;
-                case OrderStatus.diantar:
+                case kStatusDiantar:
+                case kStatusDalamPengantaran:
                   icon = Icons.two_wheeler_rounded;
-                  title = 'Barang segera diantarkan!';
-                  subtitle = 'Driver sudah bawa pesananmu, otw ke alamatmu';
+                  title = 'Pesanan Sedang Diantar ke Alamatmu 🛵';
+                  subtitle = 'Driver sedang dalam perjalanan membawa pesananmu';
+                  break;
+                case kStatusSelesai:
+                  icon = Icons.check_circle_rounded;
+                  title = 'Pesanan Telah Selesai 🎉';
+                  subtitle = 'Terima kasih sudah berbelanja di Nemu!';
                   break;
                 default:
                   icon = Icons.inventory_2_rounded;

@@ -830,11 +830,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
 
-          // Tombol Pesan & Notifikasi (undangan driver + notifikasi sistem,
-          // sekarang digabung jadi satu pintu masuk lewat InboxScreen --
-          // dulu ada 2 tombol terpisah (amplop -> InboxScreen, lonceng ->
-          // _NotificationSheet bottom sheet berisi notif statis), sekarang
-          // cuma 1 supaya user nggak bingung ada 2 "kotak pesan" beda.
+          // Tombol Notifikasi & Inbox Terpadu (Undangan Driver, Update Order, dsb)
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: FirebaseAuth.instance.currentUser == null
                 ? null
@@ -862,7 +858,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     clipBehavior: Clip.none,
                     children: [
                       const Icon(
-                        Icons.mail_outline_rounded,
+                        Icons.notifications_outlined,
                         color: _textDark,
                         size: 22,
                       ),
@@ -896,24 +892,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
               );
             },
-          ),
-          const SizedBox(width: 10),
-
-          // Tombol Notifikasi
-          GestureDetector(
-            onTap: _showNotificationPanel,
-            child: Container(
-              padding: const EdgeInsets.all(9),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.35),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.notifications_outlined,
-                color: _textDark,
-                size: 22,
-              ),
-            ),
           ),
           const SizedBox(width: 10),
 

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -55,19 +54,18 @@ class _PasarScreenState extends State<PasarScreen> {
 
   // ── Taruh link URL gambar pasar di sini (menggantikan emoji jika diisi) ──
   static const Map<String, String> _marketImageUrls = {
-    'p1': 'https://nomorsatukaltim.disway.id/upload/d846bda0b0f7c5923d7c39e70bccc419.jpg', // Pasar Sepinggan
-    'p2': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRWL__NIHl6U-AMt-_sC9dDY3sgDuKx-SFKm7NnwkbsQtPiwNeHo4SwRl8&s=10', // Pasar Klandasan
-    'p3': 'https://www.niaga.asia/wp-content/uploads/2024/02/pandansari.jpg', // Pasar Pandansari
-    'p4': 'https://airial.travel/_next/image?url=https%3A%2F%2Fcoinventmediastorage.blob.core.windows.net%2Fmedia-storage-container%2Fgphoto_ChIJnabs3NxH8S0R525KRyz9WtM_0.jpg&w=2048&q=70', // Pasar Baru
-    'p5': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSyuR0bnZIYOHVlqcNHcoXc9HFmwIjMqtbxsfXVFQw7EWukDiG5Ark-Atg&s=10', // Pasar Segar
-    'p6': 'https://witness.tempo.co/source/index.php?image=/9/1/7/1/9171.jpg&size=1000&dimension=width&quality=100', // Pasar Balikpapan Permai
-    'p7': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_PIXPBXZbvfrDTwtxLkKnoo3nS9UbGtCYHS3o2A46XQ&s=10', // Pasar Manggar
-    'p8': 'https://lh3.googleusercontent.com/gps-cs-s/AHRPTWn-HQMSzmVMZv6U8iKMpx1UBVj6RS2c3AvCQ1WtL6BNCPWiVDpVf-Z6wIjRatlJN2yV1cFKWqz6yilIt4WTxN6sO-tAmcji7VVgyU-5S3EF6opu6-AWhF_gzLThFrkowZgZvTvM=w243-h174-n-k-no-nu', // Pasar Butun
     'p9': 'https://images.bisnis.com/posts/2025/01/20/1833269/pasar-0_1737376804.jpg', // Pasar Kebun Sayur
   };
 
   static const Map<String, String> _marketImages = {
     'p1': 'assets/products/pasar_sepinggan.jpg',
+    'p2': 'assets/products/pasar_klandasan.jpg',
+    'p3': 'assets/products/pasar_pandansari.jpg',
+    'p4': 'assets/products/pasar_baru.jpg',
+    'p5': 'assets/products/pasar_segar.jpg',
+    'p6': 'assets/products/pasar_balikpapan_permai.jpg',
+    'p7': 'assets/products/pasar_manggar.jpg',
+    'p8': 'assets/products/pasar_buton.jpg',
   };
 
   static const Map<String, Color> _accentColors = {
@@ -100,15 +98,7 @@ class _PasarScreenState extends State<PasarScreen> {
             _buildHeader(),
             _buildSearchBar(),
             const SizedBox(height: 12),
-            Expanded(
-              child: _filtered.isEmpty
-                  ? _buildEmpty()
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                      itemCount: _filtered.length,
-                      itemBuilder: (_, i) => _buildPasarCard(_filtered[i]),
-                    ),
-            ),
+            Expanded(child: _buildList()),
           ],
         ),
       ),
@@ -117,18 +107,34 @@ class _PasarScreenState extends State<PasarScreen> {
 
   Widget _buildHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Pilih Pasar',
-            style: _ms(size: 24, weight: FontWeight.bold, color: _dark),
+          Row(
+            children: [
+              Text(
+                'Pasar Tradisional',
+                style: _ms(size: 20, weight: FontWeight.w800, color: _dark),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _dark.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Balikpapan',
+                  style: _ms(size: 11, weight: FontWeight.w700, color: _dark),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Text(
-            '${mockDaftarPasar.length} pasar tradisional tersedia',
-            style: _ms(size: 13, color: _dark.withOpacity(0.65)),
+            'Pilih pasar tujuan untuk melihat gerai & produk segar',
+            style: _ms(size: 12, color: _dark.withValues(alpha: 0.75)),
           ),
         ],
       ),
@@ -137,73 +143,54 @@ class _PasarScreenState extends State<PasarScreen> {
 
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Container(
+        height: 44,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _cream,
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+              color: Colors.black.withValues(alpha: 0.07),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
         child: TextField(
           onChanged: (v) => setState(() => _query = v),
-          style: _ms(size: 14),
+          style: _ms(size: 13),
           decoration: InputDecoration(
             hintText: 'Cari pasar...',
             hintStyle: _ms(size: 13, color: Colors.black38),
-            prefixIcon: const Icon(
-              Icons.search_rounded,
-              color: _green,
-              size: 20,
-            ),
+            prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Colors.black45),
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
           ),
         ),
       ),
     );
   }
 
-  // ── Helper: render gambar dari URL biasa ATAU data:base64 URI ──
-  Widget _resolveImage(String imageUrl, Color accent, String emoji) {
-    if (imageUrl.startsWith('data:image')) {
-      try {
-        final base64Str = imageUrl.substring(imageUrl.indexOf(',') + 1);
-        final bytes = base64Decode(base64Str);
-        return Image.memory(
-          bytes,
-          fit: BoxFit.cover,
-          alignment: Alignment.center,
-          errorBuilder: (_, __, ___) => _visualFallback(accent, emoji),
-        );
-      } catch (_) {
-        return _visualFallback(accent, emoji);
-      }
-    }
-    return Image.network(
-      imageUrl,
-      fit: BoxFit.cover,
-      alignment: Alignment.center,
-      errorBuilder: (_, __, ___) => _visualFallback(accent, emoji),
-      loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
-        return _visualLoading(accent);
-      },
+  Widget _buildList() {
+    final list = _filtered;
+    if (list.isEmpty) return _buildEmpty();
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+      itemCount: list.length,
+      itemBuilder: (_, i) => _buildPasarCard(list[i]),
     );
   }
 
   Widget _buildPasarCard(PasarMarket market) {
     final accent = _accentColors[market.id] ?? _green;
     final emoji = _emojis[market.id] ?? '🏪';
+    final imagePath = _marketImages[market.id];
     final imageUrl = _marketImageUrls[market.id];
+    final hasImagePath = imagePath != null && imagePath.isNotEmpty;
     final hasImageUrl = imageUrl != null && imageUrl.isNotEmpty;
-    final imagePath = hasImageUrl ? null : _marketImages[market.id];
-    final hasVisual = hasImageUrl || imagePath != null;
+    final hasVisual = hasImagePath || hasImageUrl;
 
     return GestureDetector(
       onTap: () {
@@ -219,7 +206,7 @@ class _PasarScreenState extends State<PasarScreen> {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: _dark.withOpacity(0.18),
+              color: _dark.withValues(alpha: 0.18),
               blurRadius: 14,
               offset: const Offset(0, 5),
             ),
@@ -232,12 +219,18 @@ class _PasarScreenState extends State<PasarScreen> {
             children: [
               // ── Foto full-bleed jadi background seluruh card ──
               hasVisual
-                  ? (hasImageUrl
-                      ? _resolveImage(imageUrl, accent, emoji)
-                      : Image.asset(
-                          imagePath!,
+                  ? (hasImagePath
+                      ? Image.asset(
+                          imagePath,
                           fit: BoxFit.cover,
-                          alignment: Alignment.center,
+                          errorBuilder: (_, __, ___) =>
+                              _visualFallback(accent, emoji),
+                        )
+                      : Image.network(
+                          imageUrl!,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (_, child, progress) =>
+                              progress == null ? child : _visualLoading(accent),
                           errorBuilder: (_, __, ___) =>
                               _visualFallback(accent, emoji),
                         ))
@@ -251,9 +244,9 @@ class _PasarScreenState extends State<PasarScreen> {
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
-                        Colors.black.withOpacity(0.0),
-                        Colors.black.withOpacity(0.15),
-                        Colors.black.withOpacity(0.78),
+                        Colors.black.withValues(alpha: 0.0),
+                        Colors.black.withValues(alpha: 0.15),
+                        Colors.black.withValues(alpha: 0.78),
                       ],
                       stops: const [0.0, 0.45, 1.0],
                     ),
@@ -268,11 +261,11 @@ class _PasarScreenState extends State<PasarScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _cream.withOpacity(0.94),
+                    color: _cream.withValues(alpha: 0.94),
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
+                        color: Colors.black.withValues(alpha: 0.15),
                         blurRadius: 6,
                         offset: const Offset(0, 2),
                       ),
@@ -293,13 +286,6 @@ class _PasarScreenState extends State<PasarScreen> {
               ),
 
               // ── Badge jumlah gerai di pojok kiri atas ──
-              // Dulu cuma ngitung market.gerai.length (data statis) --
-              // gerai yang didaftarkan lewat Nemu+ (collection 'stores' di
-              // Firestore) nggak pernah ikut kehitung, walau sudah muncul
-              // beneran di GeraiScreen. Sekarang digabung: statis +
-              // Firestore, pakai StoreService.matchesMarket yang sama
-              // persis dipakai gerai_screen.dart, biar angkanya konsisten
-              // dengan yang beneran ditampilkan begitu pasar ini dibuka.
               Positioned(
                 top: 12,
                 left: 12,
@@ -317,7 +303,7 @@ class _PasarScreenState extends State<PasarScreen> {
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                       decoration: BoxDecoration(
-                        color: accent.withOpacity(0.92),
+                        color: accent.withValues(alpha: 0.92),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -358,27 +344,23 @@ class _PasarScreenState extends State<PasarScreen> {
     );
   }
 
-  // ── Helper: fallback saat tidak ada foto ──
   Widget _visualFallback(Color accent, String emoji) {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [accent.withOpacity(0.55), accent.withOpacity(0.85)],
+          colors: [accent.withValues(alpha: 0.5), accent.withValues(alpha: 0.8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
-      child: Center(
-        child: Text(emoji, style: const TextStyle(fontSize: 48)),
-      ),
+      child: Center(child: Text(emoji, style: const TextStyle(fontSize: 48))),
     );
   }
 
-  // ── Helper: loading state saat foto dari network belum siap ──
   Widget _visualLoading(Color accent) {
     return Container(
-      color: accent.withOpacity(0.25),
-      child: Center(
+      color: accent.withValues(alpha: 0.25),
+      child: const Center(
         child: SizedBox(
           width: 22,
           height: 22,
@@ -388,21 +370,24 @@ class _PasarScreenState extends State<PasarScreen> {
     );
   }
 
-  // ── Info row dengan teks putih + shadow, biar kebaca di atas foto apa pun ──
+  // ── Info row dengan teks putih + shadow ──
   Widget _infoRow(IconData icon, String label, Color iconColor) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(icon, size: 13, color: iconColor, shadows: [
-          Shadow(color: Colors.black.withOpacity(0.4), blurRadius: 4),
+          Shadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 4),
         ]),
         const SizedBox(width: 4),
         Expanded(
           child: Text(
             label,
-            style: _ms(size: 11.5, color: Colors.white).copyWith(
+            style: _ms(size: 11, color: Colors.white).copyWith(
               shadows: [
-                Shadow(color: Colors.black.withOpacity(0.5), blurRadius: 4),
+                Shadow(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  blurRadius: 4,
+                ),
               ],
             ),
             maxLines: 1,
@@ -414,22 +399,26 @@ class _PasarScreenState extends State<PasarScreen> {
   }
 
   Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('🔍', style: TextStyle(fontSize: 48)),
-          const SizedBox(height: 12),
-          Text(
-            'Pasar tidak ditemukan',
-            style: _ms(size: 16, weight: FontWeight.bold),
-          ),
-          Text(
-            'Coba kata kunci lain',
-            style: _ms(size: 13, color: Colors.black45),
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('🔍', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 12),
+            Text(
+              'Pasar tidak ditemukan',
+              style: _ms(size: 16, weight: FontWeight.bold, color: Colors.white),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Coba kata kunci atau filter kategori lain',
+              style: _ms(size: 12, color: Colors.white70),
+            ),
+          ],
+        ),
       ),
     );
   }
-}
+}

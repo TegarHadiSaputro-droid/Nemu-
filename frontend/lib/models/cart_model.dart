@@ -444,7 +444,7 @@ final List<PasarMarket> mockDaftarPasar = [
   ),
   PasarMarket(
     id: 'p8',
-    nama: 'Pasar Butun',
+    nama: 'Pasar Buton',
     kategori: 'Kebutuhan Harian',
     rating: 4.2,
     jarak: '8.0 km',

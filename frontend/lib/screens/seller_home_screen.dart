@@ -41,7 +41,7 @@ const List<String> _pasarOptions = [
   'Pasar Segar',
   'Pasar Balikpapan Permai',
   'Pasar Manggar',
-  'Pasar Butun',
+  'Pasar Buton',
   'Pasar Kebun Sayur',
 ];
 
