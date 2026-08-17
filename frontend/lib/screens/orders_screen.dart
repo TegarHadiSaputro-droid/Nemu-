@@ -39,6 +39,7 @@ class OrderHistoryItem {
   final String docId;
   final String id; // orderCode
   final String storeName;
+  final String? storeId;
   final String marketName;
   final String date;
   final String items;
@@ -46,13 +47,14 @@ class OrderHistoryItem {
   final String statusLabel;
   final Color statusColor;
   final String rawStatus;
-  double? ratingStore;
-  double? ratingMarket;
+  int? ratingStore;
+  String? commentStore;
 
   OrderHistoryItem({
     required this.docId,
     required this.id,
     required this.storeName,
+    this.storeId,
     required this.marketName,
     required this.date,
     required this.items,
@@ -61,7 +63,7 @@ class OrderHistoryItem {
     required this.statusColor,
     required this.rawStatus,
     this.ratingStore,
-    this.ratingMarket,
+    this.commentStore,
   });
 
   factory OrderHistoryItem.fromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
@@ -127,6 +129,7 @@ class OrderHistoryItem {
       docId: doc.id,
       id: (data['orderCode'] as String?) ?? doc.id,
       storeName: (data['store_name'] as String?) ?? (data['namaGerai'] as String?) ?? 'Gerai',
+      storeId: (data['store_id'] as String?) ?? (data['storeId'] as String?),
       marketName: (data['market_type'] as String?) ?? (data['namaMarket'] as String?) ?? '',
       date: dateLabel,
       items: (data['itemsSummary'] as String?) ?? '',
@@ -137,6 +140,8 @@ class OrderHistoryItem {
       statusLabel: label,
       statusColor: color,
       rawStatus: status,
+      ratingStore: (data['ratingStore'] as num?)?.toInt(),
+      commentStore: data['commentStore'] as String?,
     );
   }
 
@@ -509,10 +514,21 @@ class _OrdersScreenState extends State<OrdersScreen>
                       ),
                     ),
 
-                    SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, i) => _buildHistoryCard(historyOrders[i]),
-                        childCount: historyOrders.length,
+                    // Dibungkus SliverPadding + padding bawah per-item supaya
+                    // card riwayat punya margin horizontal 16px yang sama
+                    // persis dengan card "Status Pengiriman" di atasnya --
+                    // sebelumnya SliverList ini nggak dikasih padding sama
+                    // sekali jadi card-nya nempel/melebar sampai tepi layar.
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, i) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _buildHistoryCard(historyOrders[i]),
+                          ),
+                          childCount: historyOrders.length,
+                        ),
                       ),
                     ),
                     if (historyOrders.isEmpty)
@@ -1277,13 +1293,14 @@ class _OrdersScreenState extends State<OrdersScreen>
   //  HISTORY CARD: Riwayat Pesanan
   // ──────────────────────────────────────────
   Widget _buildHistoryCard(OrderHistoryItem order) {
-    final hasRated = order.ratingStore != null && order.ratingMarket != null;
+    final hasCommented = order.ratingStore != null && order.ratingStore! > 0;
     final isCancelled = order.statusLabel == 'Dibatalkan';
 
     return GestureDetector(
       onTap: isCancelled ? null : () => _showOrderDetailSheet(order),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
+        width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -1394,7 +1411,7 @@ class _OrdersScreenState extends State<OrdersScreen>
             ),
             const SizedBox(height: 8),
 
-            // Bottom Row: Harga + Rating/Action
+            // Bottom Row: Harga + Komentar/Action
             Row(
               children: [
                 Text(
@@ -1407,17 +1424,17 @@ class _OrdersScreenState extends State<OrdersScreen>
                 ),
                 const Spacer(),
                 if (!isCancelled)
-                  hasRated
+                  hasCommented
                       ? Row(
                           children: [
                             const Icon(
                               Icons.star_rounded,
-                              color: Colors.amber,
+                              color: Color(0xFFF59E0B),
                               size: 14,
                             ),
                             const SizedBox(width: 3),
                             Text(
-                              'Sudah dinilai',
+                              '${order.ratingStore}/5 · Sudah dinilai',
                               style: _manrope(size: 10, color: Colors.black45),
                             ),
                           ],
@@ -1438,7 +1455,7 @@ class _OrdersScreenState extends State<OrdersScreen>
                             child: Row(
                               children: [
                                 const Icon(
-                                  Icons.star_outline_rounded,
+                                  Icons.star_border_rounded,
                                   color: Colors.white,
                                   size: 13,
                                 ),
@@ -1644,58 +1661,91 @@ class _OrdersScreenState extends State<OrdersScreen>
             const SizedBox(height: 8),
             const Divider(),
             const SizedBox(height: 8),
-            if (order.ratingStore == null)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.star_rounded, size: 16),
-                  label: Text(
-                    'Beri Penilaian',
-                    style: _manrope(
-                      size: 13,
-                      weight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _green,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    elevation: 0,
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _showRatingModal(order);
-                  },
-                ),
-              )
-            else
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.star_rounded,
-                      color: Colors.amber,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Gerai: ${order.ratingStore!.toStringAsFixed(1)}★  |  '
-                      'Pasar: ${order.ratingMarket!.toStringAsFixed(1)}★',
-                      style: _manrope(size: 12, weight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
+            _buildRatingSummaryBlock(order),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Blok ringkasan rating gerai di dalam Detail Pesanan.
+  /// CATATAN: rating bersifat SEKALI KIRIM (write-once) -- begitu
+  /// pembeli sudah kasih rating, tidak ada lagi tombol untuk mengubahnya.
+  /// Ini sengaja dihilangkan supaya nggak ada lagi celah salah hitung
+  /// akumulasi ratingSum/ratingCount di dokumen toko akibat alur edit.
+  Widget _buildRatingSummaryBlock(OrderHistoryItem order) {
+    final hasRated = order.ratingStore != null && order.ratingStore! > 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _green.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.storefront_rounded, size: 15, color: _green),
+              const SizedBox(width: 6),
+              Text('Rating untuk Gerai',
+                  style: _manrope(size: 11, weight: FontWeight.bold, color: _green)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: List.generate(5, (i) => Icon(
+              i < (order.ratingStore ?? 0) ? Icons.star_rounded : Icons.star_border_rounded,
+              color: const Color(0xFFF59E0B),
+              size: 18,
+            )),
+          ),
+          if (order.commentStore?.trim().isNotEmpty ?? false) ...[
+            const SizedBox(height: 8),
+            Text(
+              order.commentStore!,
+              style: _manrope(size: 12, color: Colors.black87),
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (!hasRated)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.star_border_rounded, size: 14, color: _green),
+                label: Text(
+                  'Beri Penilaian',
+                  style: _manrope(size: 12, weight: FontWeight.bold, color: _green),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: _green.withOpacity(0.4)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showRatingModal(order);
+                },
+              ),
+            )
+          else
+            Row(
+              children: [
+                const Icon(Icons.lock_outline_rounded, size: 13, color: Colors.black38),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Penilaian sudah dikirim dan tidak bisa diubah.',
+                    style: _manrope(size: 10.5, color: Colors.black45),
+                  ),
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }
@@ -1728,13 +1778,21 @@ class _OrdersScreenState extends State<OrdersScreen>
     );
   }
 
-  /// Modal: Rating Gerai & Pasar
-  /// CATATAN: rating masih disimpan lokal di objek (tidak dipersist ke
-  /// Firestore). Kalau mau permanen, tambahkan write ke field
-  /// 'ratingStore' / 'ratingMarket' pada dokumen order terkait di sini.
+  /// Modal: Rating bintang + Komentar untuk Gerai.
+  /// Hanya bisa dipanggil untuk order yang BELUM pernah dirating
+  /// (lihat guard di _buildHistoryCard & _buildRatingSummaryBlock --
+  /// keduanya cuma nampilin tombol "Beri Nilai" kalau order.ratingStore
+  /// masih null/0). Ditulis permanen ke field 'ratingStore' /
+  /// 'commentStore' pada dokumen order terkait di Firestore, dan
+  /// sekaligus nambah agregat rating gerai di collection('stores').
   void _showRatingModal(OrderHistoryItem order) {
-    double ratingStore = 0;
-    double ratingMarket = 0;
+    // Guard tambahan: kalau entah bagaimana order ini sudah pernah
+    // dirating, jangan buka modal sama sekali -- rating bersifat
+    // sekali kirim dan tidak bisa diubah.
+    if (order.ratingStore != null && order.ratingStore! > 0) return;
+
+    int selectedRating = 0;
+    final commentCtrl = TextEditingController();
 
     showDialog(
       context: context,
@@ -1755,24 +1813,86 @@ class _OrdersScreenState extends State<OrdersScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Bagaimana pengalamanmu?',
+                  'Bagaimana pengalamanmu di gerai ini?',
                   style: _manrope(size: 12, color: Colors.black45),
                 ),
                 const SizedBox(height: 20),
 
-                _ratingSection(
-                  icon: Icons.storefront_rounded,
-                  title: 'Gerai: ${order.storeName}',
-                  rating: ratingStore,
-                  onChanged: (v) => setDialogState(() => ratingStore = v),
-                ),
-                const SizedBox(height: 16),
-
-                _ratingSection(
-                  icon: Icons.store_mall_directory_rounded,
-                  title: 'Pasar: ${order.marketName}',
-                  rating: ratingMarket,
-                  onChanged: (v) => setDialogState(() => ratingMarket = v),
+                // ── Rating bintang + Komentar untuk Gerai ──
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: _surface,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.storefront_rounded, size: 18, color: _green),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Gerai: ${order.storeName}',
+                              style: _manrope(size: 12, weight: FontWeight.w600),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(5, (i) {
+                          final starIndex = i + 1;
+                          return GestureDetector(
+                            onTap: () {
+                              setDialogState(() => selectedRating = starIndex);
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 2),
+                              child: Icon(
+                                starIndex <= selectedRating
+                                    ? Icons.star_rounded
+                                    : Icons.star_border_rounded,
+                                color: const Color(0xFFF59E0B),
+                                size: 32,
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: commentCtrl,
+                        maxLines: 3,
+                        maxLength: 300,
+                        style: _manrope(size: 12.5),
+                        decoration: InputDecoration(
+                          hintText: 'Tulis komentarmu di sini... (wajib diisi)',
+                          hintStyle: _manrope(size: 12, color: Colors.black38),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.all(12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade200),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.grey.shade200),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: _green, width: 1.5),
+                          ),
+                          counterStyle: _manrope(size: 10, color: Colors.black38),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 24),
 
@@ -1790,61 +1910,69 @@ class _OrdersScreenState extends State<OrdersScreen>
                     const SizedBox(width: 8),
                     Expanded(
                       flex: 2,
-                      child: ElevatedButton(
-                        onPressed: ratingStore > 0 && ratingMarket > 0
-                            ? () async {
-                                order.ratingStore = ratingStore;
-                                order.ratingMarket = ratingMarket;
-                                try {
-                                  await FirebaseFirestore.instance
-                                      .collection('orders')
-                                      .doc(order.docId)
-                                      .update({
-                                    'ratingStore': ratingStore,
-                                    'ratingMarket': ratingMarket,
-                                  });
-                                } catch (_) {
-                                  // Abaikan jika gagal, UI lokal tetap terupdate
-                                }
-                                if (!mounted) return;
-                                Navigator.pop(ctx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Terima kasih atas penilaianmu!',
-                                      style: _manrope(
-                                        size: 12,
-                                        color: Colors.white,
+                      child: ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: commentCtrl,
+                        builder: (context, commentVal, _) {
+                          final canSubmit = selectedRating > 0 &&
+                              commentVal.text.trim().isNotEmpty;
+                          return ElevatedButton(
+                            onPressed: canSubmit
+                                ? () async {
+                                    final commentStore = commentCtrl.text.trim();
+                                    order.ratingStore = selectedRating;
+                                    order.commentStore = commentStore;
+                                    try {
+                                      await _submitStoreRating(
+                                        order: order,
+                                        newRating: selectedRating,
+                                        commentStore: commentStore,
+                                      );
+                                    } catch (e) {
+                                      // Debug: cetak errornya biar ketahuan
+                                      // kenapa rating gagal disimpan
+                                      // (contoh: permission-denied dari
+                                      // Firestore Security Rules).
+                                      debugPrint('Gagal update rating gerai: $e');
+                                    }
+                                    if (!mounted) return;
+                                    Navigator.pop(ctx);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Terima kasih atas penilaianmu!',
+                                          style: _manrope(
+                                            size: 12,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        backgroundColor: _green,
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
                                       ),
-                                    ),
-                                    backgroundColor: _green,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                );
-                              }
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _green,
-                          disabledBackgroundColor: Colors.grey.shade300,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          elevation: 0,
-                        ),
-                        child: Text(
-                          'Kirim Penilaian',
-                          style: _manrope(
-                            size: 13,
-                            weight: FontWeight.bold,
-                            color: ratingStore > 0 && ratingMarket > 0
-                                ? Colors.white
-                                : Colors.black38,
-                          ),
-                        ),
+                                    );
+                                  }
+                                : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _green,
+                              disabledBackgroundColor: Colors.grey.shade300,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              'Kirim Penilaian',
+                              style: _manrope(
+                                size: 13,
+                                weight: FontWeight.bold,
+                                color: canSubmit ? Colors.white : Colors.black38,
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -1857,93 +1985,88 @@ class _OrdersScreenState extends State<OrdersScreen>
     );
   }
 
-  Widget _ratingSection({
-    required IconData icon,
-    required String title,
-    required double rating,
-    required ValueChanged<double> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 18, color: _green),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: _manrope(size: 12, weight: FontWeight.w600),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(5, (i) {
-              return GestureDetector(
-                onTap: () => onChanged(i + 1.0),
-                child: AnimatedScale(
-                  scale: rating > i ? 1.25 : 1.0,
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.elasticOut,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Icon(
-                      rating > i
-                          ? Icons.star_rounded
-                          : Icons.star_outline_rounded,
-                      color: rating > i ? Colors.amber : Colors.grey.shade300,
-                      size: 32,
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-          if (rating > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Center(
-                child: Text(
-                  _ratingLabel(rating.toInt()),
-                  style: _manrope(
-                    size: 11,
-                    weight: FontWeight.w600,
-                    color: Colors.amber.shade800,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  /// Menulis rating ke dokumen order (SEKALI KIRIM, tidak ada alur edit),
+  /// sekaligus menambah agregat rating gerai (`ratingSum` / `ratingCount`)
+  /// di collection('stores') pakai transaction, supaya rata-rata rating
+  /// selalu akurat walau banyak pembeli kasih rating bersamaan.
+  ///
+  /// Karena rating sudah bersifat write-once (lihat guard di
+  /// _showRatingModal), method ini SELALU memperlakukan setiap
+  /// pemanggilan sebagai kontribusi BARU -- tidak ada lagi cabang
+  /// "kurangi rating lama, tambah rating baru" yang dulu jadi sumber
+  /// bug ratingSum bisa minus.
+  Future<void> _submitStoreRating({
+    required OrderHistoryItem order,
+    required int newRating,
+    required String commentStore,
+  }) async {
+    final orderRef =
+        FirebaseFirestore.instance.collection('orders').doc(order.docId);
 
-  String _ratingLabel(int r) {
-    switch (r) {
-      case 1:
-        return 'Sangat Buruk';
-      case 2:
-        return 'Buruk';
-      case 3:
-        return 'Cukup';
-      case 4:
-        return 'Bagus';
-      case 5:
-        return 'Sangat Memuaskan';
-      default:
-        return '';
+    final storeId = order.storeId;
+
+    if (storeId == null || storeId.isEmpty) {
+      // Tidak ada referensi dokumen toko -- tetap simpan rating di order
+      // saja supaya tidak hilang, tanpa update agregat.
+      debugPrint(
+          'Rating gerai TIDAK di-agregasi: order.docId=${order.docId} '
+          'tidak punya store_id / storeId yang valid.');
+      await orderRef.update({
+        'ratingStore': newRating,
+        'commentStore': commentStore,
+      });
+      return;
     }
+
+    debugPrint('Tambah rating baru untuk store_id=$storeId '
+        '(newRating=$newRating)');
+
+    final storeRef =
+        FirebaseFirestore.instance.collection('stores').doc(storeId);
+
+    await FirebaseFirestore.instance.runTransaction((tx) async {
+      // Guard tambahan di level transaction: kalau order ini TERNYATA
+      // sudah pernah sukses tercatat sebelumnya (misal race condition
+      // dua tap cepat), jangan tambahkan lagi -- supaya count tidak
+      // dobel-hitung untuk order yang sama.
+      final orderSnap = await tx.get(orderRef);
+      final orderData = orderSnap.data() ?? {};
+      final alreadyCounted = orderData['ratingCountedStoreId'] != null;
+      if (alreadyCounted) {
+        debugPrint('Order ${order.docId} sudah pernah ter-agregasi, '
+            'dilewati supaya tidak dobel-hitung.');
+        return;
+      }
+
+      final storeSnap = await tx.get(storeRef);
+      final storeData = storeSnap.data() ?? {};
+
+      final currentSum = (storeData['ratingSum'] as num?)?.toDouble() ?? 0.0;
+      final currentCount = (storeData['ratingCount'] as num?)?.toInt() ?? 0;
+
+      final newSum = currentSum + newRating;
+      final newCount = currentCount + 1;
+      final newAvg = newCount > 0 ? newSum / newCount : 0.0;
+
+      tx.set(
+        storeRef,
+        {
+          'ratingSum': newSum,
+          'ratingCount': newCount,
+          'ratingAvg': double.parse(newAvg.toStringAsFixed(1)),
+        },
+        SetOptions(merge: true),
+      );
+
+      tx.update(orderRef, {
+        'ratingStore': newRating,
+        'commentStore': commentStore,
+        // Penanda: order ini sudah sukses ter-agregasi ke toko ini,
+        // supaya tidak bisa lagi ditambahkan kedua kalinya.
+        'ratingCountedStoreId': storeId,
+        'ratingCountedValue': newRating,
+      });
+    });
   }
 
   // ──────────────────────────────────────────

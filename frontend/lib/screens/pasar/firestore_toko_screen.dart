@@ -20,6 +20,28 @@ TextStyle _fts({
 }) => GoogleFonts.manrope(fontSize: size, fontWeight: weight, color: color);
 
 // ─────────────────────────────────────────────
+//  Model kecil untuk satu ulasan (dipetakan dari
+//  dokumen collection('orders') yang sudah dirating)
+// ─────────────────────────────────────────────
+class _ReviewItem {
+  final int rating;
+  final String comment;
+  final DateTime? date;
+
+  _ReviewItem({required this.rating, required this.comment, this.date});
+
+  factory _ReviewItem.fromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
+    final createdAt = data['created_at'] ?? data['createdAt'] ?? data['timestamp'];
+    return _ReviewItem(
+      rating: (data['ratingStore'] as num?)?.toInt() ?? 0,
+      comment: (data['commentStore'] as String?)?.trim() ?? '',
+      date: createdAt is Timestamp ? createdAt.toDate() : null,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
 //  FirestoreTokoScreen
 //  Menampilkan detail toko + produk yang terdaftar di Firestore
 //  untuk sisi Pembeli secara real-time.
@@ -151,8 +173,16 @@ class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
 
                   // Daftar produk (real-time)
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     sliver: _buildProductSliver(storeName, marketSection, isOpen),
+                  ),
+
+                  // ── Ulasan Pembeli (rating & komentar gerai, real-time) ──
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                      child: _buildReviewsSection(),
+                    ),
                   ),
                 ],
               ),
@@ -462,6 +492,179 @@ class _FirestoreTokoScreenState extends State<FirestoreTokoScreen> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ──────────────────────────────────────────
+  //  ULASAN PEMBELI
+  //  Ambil dari collection('orders') milik toko ini yang sudah
+  //  dirating (ratingStore > 0). Query pakai widget.storeId LANGSUNG
+  //  -- ini persis sama dengan field store_id yang ditulis ke dokumen
+  //  order dari OrdersScreen._submitStoreRating(), jadi begitu pembeli
+  //  kasih rating di sana, otomatis muncul di sini juga (real-time).
+  // ──────────────────────────────────────────
+  Widget _buildReviewsSection() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('orders')
+          .where('store_id', isEqualTo: widget.storeId)
+          .where('ratingStore', isGreaterThan: 0)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          // Kasus paling umum: query butuh composite index (store_id +
+          // ratingStore) yang belum dibuat di Firestore. Errornya berisi
+          // link langsung untuk generate index tsb -- cek di console/log.
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.red.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, size: 18, color: Colors.red),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Gagal memuat ulasan: ${snapshot.error}',
+                    style: _fts(size: 11.5, color: Colors.red.shade700),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: _ftGreen),
+              ),
+            ),
+          );
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+        final reviews = docs
+            .map((d) => _ReviewItem.fromDoc(d))
+            .where((r) => r.comment.isNotEmpty) // cuma yang ada komentarnya
+            .toList()
+          ..sort((a, b) {
+            if (a.date == null || b.date == null) return 0;
+            return b.date!.compareTo(a.date!); // terbaru dulu
+          });
+
+        final ratingCount = docs.length;
+        final avgRating = ratingCount > 0
+            ? docs.fold<int>(
+                    0, (sum, d) => sum + ((d.data()['ratingStore'] as num?)?.toInt() ?? 0)) /
+                ratingCount
+            : 0.0;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: _ftGreen,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('Ulasan Pembeli', style: _fts(size: 15, weight: FontWeight.bold)),
+                const Spacer(),
+                if (ratingCount > 0) ...[
+                  const Icon(Icons.star_rounded, color: Color(0xFFF59E0B), size: 16),
+                  const SizedBox(width: 3),
+                  Text(avgRating.toStringAsFixed(1),
+                      style: _fts(size: 13, weight: FontWeight.bold)),
+                  const SizedBox(width: 4),
+                  Text('($ratingCount)', style: _fts(size: 12, color: Colors.black45)),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (reviews.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.rate_review_outlined, size: 18, color: Colors.black38),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Belum ada ulasan untuk toko ini.',
+                        style: _fts(size: 12.5, color: Colors.black45),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Column(
+                children: reviews.map((r) => _buildReviewCard(r)).toList(),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildReviewCard(_ReviewItem review) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Row(
+                children: List.generate(5, (i) => Icon(
+                  i < review.rating ? Icons.star_rounded : Icons.star_border_rounded,
+                  color: const Color(0xFFF59E0B),
+                  size: 15,
+                )),
+              ),
+              const Spacer(),
+              if (review.date != null)
+                Text(
+                  '${review.date!.day}/${review.date!.month}/${review.date!.year}',
+                  style: _fts(size: 10.5, color: Colors.black38),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            review.comment,
+            style: _fts(size: 12.5, color: Colors.black87),
+          ),
+        ],
       ),
     );
   }
