@@ -283,25 +283,22 @@ class StoreService {
     return uid;
   }
 
-  /// Format angka ke Rupiah singkat (misal 12000 → "12rb" atau "Rp 12.000").
-  static String formatRupiah(int value) {
-    if (value >= 1000000) {
-      final juta = value / 1000000;
-      return 'Rp${juta == juta.truncateToDouble() ? '${juta.toInt()}jt' : '${juta.toStringAsFixed(1)}jt'}';
-    } else if (value >= 1000) {
-      final ribu = value / 1000;
-      return 'Rp${ribu == ribu.truncateToDouble() ? '${ribu.toInt()}rb' : '${ribu.toStringAsFixed(0)}rb'}';
-    }
-    return 'Rp$value';
-  }
+  /// Format angka Rupiah. SENGAJA didelegasikan ke formatRupiahFull --
+  /// dulu method ini nyingkat ("12rb", "1.5jt"), tapi itu bikin tiap file
+  /// yang manggil harus diburu satu-satu buat diseragamkan. Sekarang cukup
+  /// diubah SEKALI di sini, otomatis konsisten di semua tempat yang manggil
+  /// formatRupiah() -- nama method dipertahankan (bukan dihapus) supaya
+  /// file lain yang masih manggil formatRupiah() nggak perlu diubah satu-satu.
+  static String formatRupiah(int value) => formatRupiahFull(value);
 
-  /// Format angka Rupiah lengkap (contoh: Rp 15.000)
+  /// Format angka Rupiah: "Rp. " + angka dengan titik ribuan.
+  /// Contoh: 15000 -> "Rp. 15.000"
   static String formatRupiahFull(int value) {
     final s = value.toString().split('').reversed.join();
     final groups = <String>[];
     for (var i = 0; i < s.length; i += 3) {
       groups.add(s.substring(i, i + 3 > s.length ? s.length : i + 3));
     }
-    return 'Rp ${groups.join('.').split('').reversed.join()}';
+    return 'Rp. ${groups.join('.').split('').reversed.join()}';
   }
 }
