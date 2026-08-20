@@ -76,15 +76,36 @@ class MyApp extends StatelessWidget {
 /// Begitu user menerima undangan driver di InboxScreen, dokumen Firestore
 /// terupdate (is_driver = true) dan AuthGate seketika merender ulang ke HomeScreen3
 /// secara real-time tanpa perlu restart app atau login ulang!
+///
+/// CATATAN: Menggunakan StatefulWidget + cache data role (_cachedData) supaya
+/// _SplashScreen hanya muncul SEKALI saat pertama kali load. Tanpa cache,
+/// setiap kali Firestore stream re-emit (reconnect / update dokumen) akan
+/// kembali ke connectionState == waiting dan memunculkan splash lagi
+/// -> efek "loading tersentak-sentak".
 /// ============================================================
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  // Cache data role terakhir agar tidak kembali ke splash
+  // saat Firestore stream re-emit.
+  Map<String, dynamic>? _cachedRoleData;
+
+  // Timeout flag: jika Firestore tidak bisa connect dalam 6 detik,
+  // fallback ke HomeScreen (pembeli) daripada stuck di splash.
+  bool _firestoreTimedOut = false;
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
+        // Hanya tampilkan splash jika belum ada data sama sekali
+        // (pertama kali buka app).
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const _SplashScreen();
         }
@@ -93,20 +114,69 @@ class AuthGate extends StatelessWidget {
         final isVerified = user?.emailVerified ?? false;
 
         if (user != null && isVerified) {
+          // Reset timeout flag saat user berubah.
+          _firestoreTimedOut = false;
+
           return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
                 .collection('users')
                 .doc(user.uid)
-                .snapshots(),
+                .snapshots()
+                // Timeout 6 detik: jika Firestore tidak respond
+                // (misal: no internet / DNS fail), emit error
+                // supaya tidak stuck di splash selamanya.
+                .timeout(
+                  const Duration(seconds: 6),
+                  onTimeout: (sink) {
+                    if (mounted) setState(() => _firestoreTimedOut = true);
+                  },
+                ),
             builder: (context, roleSnap) {
-              if (roleSnap.connectionState == ConnectionState.waiting) {
+              // Jika ada data baru, perbarui cache & reset timeout flag.
+              if (roleSnap.hasData && roleSnap.data?.data() != null) {
+                _cachedRoleData = roleSnap.data!.data();
+                _firestoreTimedOut = false;
+              }
+
+              // Error Firestore (misal: no internet) atau timeout ->
+              // pakai cache kalau ada, atau fallback ke HomeScreen.
+              if (roleSnap.hasError || _firestoreTimedOut) {
+                final data = _cachedRoleData;
+                if (data != null) {
+                  final roles = data['roles'] as Map<String, dynamic>?;
+                  final isDriver =
+                      (data['is_driver'] as bool?) ??
+                      (roles?['driver'] as bool?) ??
+                      false;
+                  final isSeller =
+                      (data['is_seller'] as bool?) ??
+                      (roles?['seller'] as bool?) ??
+                      false;
+                  if (isDriver) return const HomeScreen3();
+                  if (isSeller) return const HomeScreen2();
+                }
+                // Tidak ada cache -> fallback ke HomeScreen pembeli.
+                return const HomeScreen();
+              }
+
+              // Tampilkan splash HANYA jika cache juga kosong
+              // (benar-benar pertama kali load, belum ada data apapun).
+              if (roleSnap.connectionState == ConnectionState.waiting &&
+                  _cachedRoleData == null) {
                 return const _SplashScreen();
               }
 
-              final data = roleSnap.data?.data();
+              // Gunakan cached data jika data baru belum tersedia.
+              final data = _cachedRoleData ?? roleSnap.data?.data();
               final roles = data?['roles'] as Map<String, dynamic>?;
-              final isDriver = (data?['is_driver'] as bool?) ?? (roles?['driver'] as bool?) ?? false;
-              final isSeller = (data?['is_seller'] as bool?) ?? (roles?['seller'] as bool?) ?? false;
+              final isDriver =
+                  (data?['is_driver'] as bool?) ??
+                  (roles?['driver'] as bool?) ??
+                  false;
+              final isSeller =
+                  (data?['is_seller'] as bool?) ??
+                  (roles?['seller'] as bool?) ??
+                  false;
 
               if (isDriver) return const HomeScreen3();
               if (isSeller) return const HomeScreen2();
@@ -114,6 +184,10 @@ class AuthGate extends StatelessWidget {
             },
           );
         }
+
+        // User logout -> reset semua state.
+        _cachedRoleData = null;
+        _firestoreTimedOut = false;
 
         // Belum login -> tampilkan halaman awal seperti biasa.
         return const LandingPage();

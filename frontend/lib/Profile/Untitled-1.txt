@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en" data-critters-container>
+  <head>
+    <meta charset="utf-8" />
+    <title>Panel Harga Pangan</title>
+
+    <base href="/" />
+
+    <meta name="color-scheme" content="light" />
+    <meta
+      name="viewport"
+      content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-tap-highlight" content="no" />
+
+    <link rel="icon" type="image/png" href="assets/icon/android-icon.png" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/intro.js/4.0.0/introjs.min.css"
+    />
+
+    <!-- add to homescreen for ios -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta itemprop="name" content="Badanpangan Nasional" />
+    <meta
+      property="title"
+      content="Informasi Hargapangan Pokok &amp; Strategis"
+    />
+
+    <meta property="og:site_name" content="Badanpangan Nasional" />
+    <meta
+      property="og:title"
+      content="Informasi Hargapangan Pokok &amp; Strategis"
+    />
+
+    <meta
+      name="description"
+      content="Informasi Hargapangan Pokok &amp; Strategis."
+    />
+    <meta name="author" content="https://indonesiacore.com" />
+
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDxzdHkAJ8SQ_ItFzVVIQd6isvP4_rcceE&amp;libraries=places"></script>
+    <script src="https://unpkg.com/supercluster@8.0.0/dist/supercluster.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.3.5/jspdf.min.js"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/masonry-layout@4.2.2/dist/masonry.pkgd.min.js"
+      integrity="sha384-GNFwBvfVxBkLMJpYMOABq3c+d3KnQxudP/mGPkzpZSTYykLBNsZEnG2D9G/X/+7D"
+      crossorigin="anonymous"
+      async
+    ></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/intro.js/4.0.0/intro.min.js"></script>
+
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <!-- <link href="assets/css/fonts.css" rel="stylesheet" /> -->
+    <link
+      href="assets/css/historic.css"
+      rel="stylesheet"
+      media="print"
+      onload="this.media = 'all'"
+    />
+    <noscript
+      ><link rel="stylesheet" href="assets/css/historic.css"
+    /></noscript>
+    <!-- <link href="assets/css/main.css" rel="stylesheet" /> -->
+    <link
+      href="assets/css/tabs.css"
+      rel="stylesheet"
+      media="print"
+      onload="this.media = 'all'"
+    />
+    <noscript><link rel="stylesheet" href="assets/css/tabs.css" /></noscript>
+    <script>
+      function startTour() {
+        introJs().start();
+      }
+    </script>
+    <script>
+      function startTourGrafik() {
+        introJs().start();
+      }
+    </script>
+    <script>
+      function startTableDinamis() {
+        introJs().start();
+      }
+    </script>
+    <script>
+      function startTableRerata() {
+        introJs().start();
+      }
+    </script>
+    <script>
+      function startTableRekap() {
+        introJs().start();
+      }
+    </script>
+    <script>
+      function startTableRekapKomoditas() {
+        introJs().start();
+      }
+    </script>
+    <script>
+      function startRingkasanHarian() {
+        introJs().start();
+      }
+    </script>
+    <script>
+      function startRingkasanWeek() {
+        introJs().start();
+      }
+    </script>
+    <script>
+      function startRingkasanWeekAll() {
+        introJs().start();
+      }
+    </script>
+    <style>
+      :root {
+        --ion-color-primary: #0a5d22;
+        --ion-color-primary-rgb: 0, 121, 101;
+        --ion-color-primary-contrast: #ffffff;
+        --ion-color-primary-contrast-rgb: 255, 255, 255;
+        --ion-color-primary-shade: #018330;
+        --ion-color-primary-tint: #1a8674;
+        --ion-color-secondary: #f4f5f8;
+        --ion-color-secondary-rgb: 61, 194, 255;
+        --ion-color-secondary-contrast: #ffffff;
+        --ion-color-secondary-contrast-rgb: 255, 255, 255;
+        --ion-color-secondary-shade: #36abe0;
+        --ion-color-secondary-tint: #50c8ff;
+        --ion-color-tertiary: #018330;
+        --ion-color-tertiary-rgb: 82, 96, 255;
+        --ion-color-tertiary-contrast: #ffffff;
+        --ion-color-tertiary-contrast-rgb: 255, 255, 255;
+        --ion-color-tertiary-shade: #4854e0;
+        --ion-color-tertiary-tint: #6370ff;
+        --ion-color-success: #2dd36f;
+        --ion-color-success-rgb: 45, 211, 111;
+        --ion-color-success-contrast: #ffffff;
+        --ion-color-success-contrast-rgb: 255, 255, 255;
+        --ion-color-success-shade: #28ba62;
+        --ion-color-success-tint: #42d77d;
+        --ion-color-warning: #ffc409;
+        --ion-color-warning-rgb: 255, 196, 9;
+        --ion-color-warning-contrast: #000000;
+        --ion-color-warning-contrast-rgb: 0, 0, 0;
+        --ion-color-warning-shade: #e0ac08;
+        --ion-color-warning-tint: #ffca22;
+        --ion-color-danger: #eb445a;
+        --ion-color-danger-rgb: 235, 68, 90;
+        --ion-color-danger-contrast: #ffffff;
+        --ion-color-danger-contrast-rgb: 255, 255, 255;
+        --ion-color-danger-shade: #cf3c4f;
+        --ion-color-danger-tint: #ed576b;
+        --ion-color-medium: #92949c;
+        --ion-color-medium-rgb: 146, 148, 156;
+        --ion-color-medium-contrast: #ffffff;
+        --ion-color-medium-contrast-rgb: 255, 255, 255;
+        --ion-color-medium-shade: #808289;
+        --ion-color-medium-tint: #9d9fa6;
+        --ion-color-light: #f4f5f8;
+        --ion-color-light-rgb: 244, 245, 248;
+        --ion-color-light-contrast: #000000;
+        --ion-color-light-contrast-rgb: 0, 0, 0;
+        --ion-color-light-shade: #d7d8da;
+        --ion-color-light-tint: #f5f6f9;
+      }
+      html {
+        --ion-dynamic-font: var(--ion-default-dynamic-font);
+      }
+      html {
+        --ion-default-dynamic-font: -apple-system-body;
+        --ion-font-family: var(--ion-default-font);
+      }
+      body {
+        background: var(--ion-background-color);
+      }
+      @supports (padding-top: 20px) {
+        html {
+          --ion-safe-area-top: var(--ion-statusbar-padding);
+        }
+      }
+      @supports (padding-top: env(safe-area-inset-top)) {
+        html {
+          --ion-safe-area-top: env(safe-area-inset-top);
+          --ion-safe-area-bottom: env(safe-area-inset-bottom);
+          --ion-safe-area-left: env(safe-area-inset-left);
+          --ion-safe-area-right: env(safe-area-inset-right);
+        }
+      }
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+      }
+      html {
+        width: 100%;
+        height: 100%;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+      html:not(.hydrated) body {
+        display: none;
+      }
+      body {
+        -moz-osx-font-smoothing: grayscale;
+        -webkit-font-smoothing: antialiased;
+        margin: 0;
+        padding: 0;
+        position: fixed;
+        width: 100%;
+        max-width: 100%;
+        height: 100%;
+        max-height: 100%;
+        transform: translateZ(0);
+        text-rendering: optimizeLegibility;
+        overflow: hidden;
+        touch-action: manipulation;
+        -webkit-user-drag: none;
+        -ms-content-zooming: none;
+        word-wrap: break-word;
+        overscroll-behavior-y: none;
+        -webkit-text-size-adjust: none;
+        text-size-adjust: none;
+      }
+      html {
+        font-family: var(--ion-font-family);
+      }
+      @supports (-webkit-touch-callout: none) {
+        html {
+          font: var(--ion-dynamic-font, 16px var(--ion-font-family));
+        }
+      }
+      @charset "UTF-8";
+    </style>
+    <link
+      rel="stylesheet"
+      href="styles.f2565a73322f9df7.css"
+      media="print"
+      onload="this.media = 'all'"
+    />
+    <noscript
+      ><link rel="stylesheet" href="styles.f2565a73322f9df7.css"
+    /></noscript>
+  </head>
+
+  <body>
+    <!-- Maintenance Modal -->
+    <div
+      id="maintenanceModal"
+      style="
+        display: none;
+        position: fixed;
+        z-index: 9999;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(8px);
+      "
+    >
+      <div
+        style="
+          position: relative;
+          background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+          margin: 5% auto;
+          padding: 0;
+          border-radius: 16px;
+          width: 90%;
+          max-width: 600px;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+          overflow: hidden;
+        "
+      >
+        <!-- Logo Section -->
+        <div
+          style="
+            background: linear-gradient(135deg, #0a5d22 0%, #018330 100%);
+            padding: 40px 30px;
+            text-align: center;
+          "
+        >
+          <img
+            src="assets/icon/android-icon.png"
+            alt="Logo"
+            style="
+              width: 100px;
+              height: 100px;
+              margin-bottom: 15px;
+              filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+            "
+          />
+          <h1
+            style="
+              color: #ffffff;
+              margin: 0;
+              font-size: 28px;
+              font-weight: 700;
+              text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            "
+          >
+            Panel Harga Pangan
+          </h1>
+          <p
+            style="
+              color: rgba(255, 255, 255, 0.9);
+              margin: 8px 0 0 0;
+              font-size: 14px;
+            "
+          >
+            Badan Pangan Nasional
+          </p>
+        </div>
+
+        <!-- Content Section -->
+        <div style="padding: 40px 35px">
+          <div style="text-align: center; margin-bottom: 25px">
+            <!-- <svg
+              width="90"
+              height="90"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              style="margin: 0 auto"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="10"
+                fill="#fff3cd"
+                stroke="#ffc409"
+                stroke-width="2"
+              />
+              <path
+                d="M12 8v4m0 4h.01"
+                stroke="#ffc409"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              />
+            </svg> -->
+          </div>
+
+          <h2
+            style="
+              color: #0a5d22;
+              margin: 0 0 20px 0;
+              font-size: 26px;
+              font-weight: 700;
+              text-align: center;
+            "
+          >
+            Website Sedang Dalam Pemeliharaan
+          </h2>
+
+          <div
+            style="
+              background-color: #f8f9fa;
+              border-left: 4px solid #0a5d22;
+              padding: 20px;
+              border-radius: 8px;
+              margin-bottom: 25px;
+            "
+          >
+            <p
+              style="
+                color: #333;
+                font-size: 16px;
+                line-height: 1.8;
+                margin: 0 0 15px 0;
+                text-align: justify;
+              "
+            >
+              Mohon maaf atas ketidaknyamanannya. Saat ini kami sedang melakukan
+              pemeliharaan dan peningkatan sistem untuk memberikan layanan yang
+              lebih baik kepada Anda.
+            </p>
+            <!-- <p
+              style="
+                color: #333;
+                font-size: 16px;
+                line-height: 1.8;
+                margin: 0;
+                text-align: justify;
+              "
+            >
+              Tim teknis kami sedang bekerja untuk memastikan semua fitur
+              berjalan dengan optimal dan aman.
+            </p> -->
+          </div>
+
+          <!-- <div
+            style="
+              background-color: #e8f5e9;
+              padding: 20px;
+              border-radius: 8px;
+              margin-bottom: 20px;
+            "
+          >
+            <h3
+              style="
+                color: #0a5d22;
+                margin: 0 0 12px 0;
+                font-size: 18px;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+              "
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                style="margin-right: 8px"
+              >
+                <path
+                  d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+                  stroke="#0a5d22"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              Yang Kami Lakukan:
+            </h3>
+            <ul
+              style="
+                color: #333;
+                font-size: 15px;
+                line-height: 1.8;
+                margin: 0;
+                padding-left: 20px;
+              "
+            >
+              <li>Pembaruan sistem keamanan</li>
+              <li>Optimalisasi performa aplikasi</li>
+              <li>Penambahan fitur baru</li>
+              <li>Perbaikan bug dan peningkatan stabilitas</li>
+            </ul>
+          </div> -->
+
+          <!-- <div
+            style="
+              text-align: center;
+              padding: 20px;
+              background-color: #fff8e1;
+              border-radius: 8px;
+            "
+          >
+            <p
+              style="
+                color: #666;
+                font-size: 15px;
+                margin: 0 0 8px 0;
+                font-weight: 500;
+              "
+            >
+              Perkiraan Waktu Selesai:
+            </p>
+            <p
+              style="
+                color: #0a5d22;
+                font-size: 20px;
+                font-weight: 700;
+                margin: 0;
+              "
+            >
+              Segera
+            </p>
+          </div> -->
+
+          <div
+            style="
+              margin-top: 25px;
+              padding-top: 20px;
+              border-top: 1px solid #e0e0e0;
+              text-align: center;
+            "
+          >
+            <p
+              style="color: #888; font-size: 14px; margin: 0; line-height: 1.6"
+            >
+              Untuk informasi lebih lanjut, silakan hubungi:<br />
+              <strong style="color: #0a5d22">support@badanpangan.go.id</strong>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <app-root></app-root>
+    <script src="runtime.4bb9e68c38febeea.js" type="module"></script>
+    <script src="polyfills.37139ed011cdcbed.js" type="module"></script>
+    <script src="scripts.59b677dfe8464c21.js" defer></script>
+    <script src="main.69d329b558fe5803.js" type="module"></script>
+
+    <script>
+      // Show maintenance modal on page load - cannot be closed
+      window.addEventListener("DOMContentLoaded", function () {
+        var modal = document.getElementById("maintenanceModal");
+        modal.style.display = "block";
+
+        // Prevent closing modal by any means
+        document.body.style.overflow = "hidden";
+
+        // Prevent ESC key from closing
+        document.addEventListener("keydown", function (event) {
+          event.preventDefault();
+          return false;
+        });
+
+        // Prevent right click
+        document.addEventListener("contextmenu", function (event) {
+          event.preventDefault();
+          return false;
+        });
+      });
+    </script>
+  </body>
+</html>
