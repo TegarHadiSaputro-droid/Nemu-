@@ -13,6 +13,14 @@ class AuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  static bool hasRole(Map<String, dynamic>? data, String role) {
+    if (data == null) return false;
+    final roles = data['roles'] as Map<String, dynamic>?;
+    final nestedRole = roles?[role];
+    if (nestedRole is bool) return nestedRole;
+    return data['is_$role'] == true;
+  }
+
   /// Registrasi akun baru + simpan profil ke Firestore + kirim email verifikasi.
   static Future<User> register({
     required String name,
@@ -217,8 +225,7 @@ class AuthService {
     final data = snapshot.data();
     if (data == null) return false;
  
-    final roles = data['roles'] as Map<String, dynamic>?;
-    return (data['is_seller'] as bool?) ?? (roles?['seller'] == true);
+    return hasRole(data, 'seller');
   }
 
   /// Sama seperti isSeller(), tapi cek roles.driver / is_driver. Dipakai login_screen.dart
@@ -231,8 +238,7 @@ class AuthService {
     final data = snapshot.data();
     if (data == null) return false;
 
-    final roles = data['roles'] as Map<String, dynamic>?;
-    return (data['is_driver'] as bool?) ?? (roles?['driver'] == true);
+    return hasRole(data, 'driver');
   }
  
   /// Versi stream dari isSeller(), untuk halaman yang perlu langsung
@@ -249,8 +255,7 @@ class AuthService {
         .map((snapshot) {
       final data = snapshot.data();
       if (data == null) return false;
-      final roles = data['roles'] as Map<String, dynamic>?;
-      return (data['is_seller'] as bool?) ?? (roles?['seller'] == true);
+      return hasRole(data, 'seller');
     });
   }
  

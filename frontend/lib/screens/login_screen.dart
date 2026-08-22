@@ -52,9 +52,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       TextInput.finishAutofillContext(shouldSave: true);
 
-      final isDriver = await AuthService.isDriver();
-      final isSeller = isDriver ? false : await AuthService.isSeller();
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -66,10 +63,10 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
 
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const AuthGate()),
-          (route) => false,
-        );
+        // AuthGate di root sudah menerima perubahan authStateChanges().
+        // Tutup halaman login agar halaman yang sudah dipilih AuthGate terlihat.
+        Navigator.of(context).popUntil((route) => route.isFirst);
+
       }
     } on FirebaseAuthException catch (e) {
       if (mounted) {
@@ -102,6 +99,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           backgroundColor: AppColors.gradientBottom,
                         ),
                       );
+
+                      Navigator.of(context).popUntil((route) => route.isFirst);
                     }
                   } on FirebaseAuthException catch (err) {
                     if (mounted) {

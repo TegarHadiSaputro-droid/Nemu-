@@ -21,6 +21,7 @@ import 'widgets/background_decoration.dart';
 import 'utils/page_transitions.dart';
 import 'Theme/app_theme.dart'; // berisi kInk, kCream, kGradientTop, kGradientBottom
 import 'Profile/account.dart'; // berisi AccountPage
+import 'services/auth_service.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 void main() async {
@@ -98,6 +99,25 @@ class _AuthGateState extends State<AuthGate> {
   // Timeout flag: jika Firestore tidak bisa connect dalam 6 detik,
   // fallback ke HomeScreen (pembeli) daripada stuck di splash.
   bool _firestoreTimedOut = false;
+  String? _roleUid;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _roleStream;
+
+  Stream<DocumentSnapshot<Map<String, dynamic>>> _getRoleStream(String uid) {
+    if (_roleUid != uid || _roleStream == null) {
+      _roleUid = uid;
+      _roleStream = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots()
+          .timeout(
+            const Duration(seconds: 6),
+            onTimeout: (sink) {
+              if (mounted) setState(() => _firestoreTimedOut = true);
+            },
+          );
+    }
+    return _roleStream!;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -118,19 +138,7 @@ class _AuthGateState extends State<AuthGate> {
           _firestoreTimedOut = false;
 
           return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(user.uid)
-                .snapshots()
-                // Timeout 6 detik: jika Firestore tidak respond
-                // (misal: no internet / DNS fail), emit error
-                // supaya tidak stuck di splash selamanya.
-                .timeout(
-                  const Duration(seconds: 6),
-                  onTimeout: (sink) {
-                    if (mounted) setState(() => _firestoreTimedOut = true);
-                  },
-                ),
+            stream: _getRoleStream(user.uid),
             builder: (context, roleSnap) {
               // Jika ada data baru, perbarui cache & reset timeout flag.
               if (roleSnap.hasData && roleSnap.data?.data() != null) {
@@ -143,15 +151,8 @@ class _AuthGateState extends State<AuthGate> {
               if (roleSnap.hasError || _firestoreTimedOut) {
                 final data = _cachedRoleData;
                 if (data != null) {
-                  final roles = data['roles'] as Map<String, dynamic>?;
-                  final isDriver =
-                      (data['is_driver'] as bool?) ??
-                      (roles?['driver'] as bool?) ??
-                      false;
-                  final isSeller =
-                      (data['is_seller'] as bool?) ??
-                      (roles?['seller'] as bool?) ??
-                      false;
+                    final isDriver = AuthService.hasRole(data, 'driver');
+                    final isSeller = AuthService.hasRole(data, 'seller');
                   if (isDriver) return const HomeScreen3();
                   if (isSeller) return const HomeScreen2();
                 }
@@ -168,15 +169,8 @@ class _AuthGateState extends State<AuthGate> {
 
               // Gunakan cached data jika data baru belum tersedia.
               final data = _cachedRoleData ?? roleSnap.data?.data();
-              final roles = data?['roles'] as Map<String, dynamic>?;
-              final isDriver =
-                  (data?['is_driver'] as bool?) ??
-                  (roles?['driver'] as bool?) ??
-                  false;
-              final isSeller =
-                  (data?['is_seller'] as bool?) ??
-                  (roles?['seller'] as bool?) ??
-                  false;
+                final isDriver = AuthService.hasRole(data, 'driver');
+                final isSeller = AuthService.hasRole(data, 'seller');
 
               if (isDriver) return const HomeScreen3();
               if (isSeller) return const HomeScreen2();
@@ -188,6 +182,8 @@ class _AuthGateState extends State<AuthGate> {
         // User logout -> reset semua state.
         _cachedRoleData = null;
         _firestoreTimedOut = false;
+        _roleUid = null;
+        _roleStream = null;
 
         // Belum login -> tampilkan halaman awal seperti biasa.
         return const LandingPage();

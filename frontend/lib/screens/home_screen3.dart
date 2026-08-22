@@ -37,6 +37,7 @@ import 'package:frontend/widgets/live_tracking_map.dart';
 import 'package:frontend/Profile/account.dart';
 import 'package:frontend/widgets/bottom_navbar.dart';
 import '/main.dart'; // untuk AuthGate — sesuaikan path kalau struktur foldermu beda
+import '../services/auth_service.dart';
 
 // ─────────────────────────────────────────────
 //  Warna Palette (konsisten dengan seller_home_screen.dart / home_screen.dart)
@@ -98,21 +99,18 @@ class _HomeScreen3State extends State<HomeScreen3> with TickerProviderStateMixin
         }
 
         final data = snapshot.data?.data();
-        final roles = data?['roles'] as Map<String, dynamic>?;
-        final isDriver = (roles?['driver'] as bool?) ?? false;
+        if (snapshot.hasError) {
+          return const _DriverAccessDenied(
+            message: 'Data driver belum dapat dimuat. Periksa koneksi lalu coba lagi.',
+          );
+        }
+
+        final isDriver = AuthService.hasRole(data, 'driver');
 
         if (!isDriver) {
-          // TIDAK menampilkan layar statis "Akses Ditolak" lagi -- itu
-          // penyebab bug stuck permanen. Begitu Firestore ditulis (mis.
-          // dari tombol debug di account.dart), cache lokal Firestore
-          // ke-update duluan sebelum network round-trip selesai, sehingga
-          // StreamBuilder ini bisa langsung rebuild dan MEMBONGKAR context
-          // AccountPage SEBELUM baris Navigator.pushAndRemoveUntil() manual
-          // di account.dart sempat dieksekusi (context.mounted jadi false,
-          // navigasi dibatalkan begitu saja, user nyangkut di sini selamanya).
-          // Sekarang HALAMAN INI sendiri yang tanggung jawab pindah ke
-          // AuthGate begitu isDriver == false, apa pun penyebabnya.
-          return const _AutoRedirectAway();
+          return const _DriverAccessDenied(
+            message: 'Akun ini tidak memiliki akses driver.',
+          );
         }
 
         final userName = (data?['name'] as String?) ?? 'Driver';
