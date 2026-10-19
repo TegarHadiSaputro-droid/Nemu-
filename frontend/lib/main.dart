@@ -102,15 +102,19 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+      stream: FirebaseAuth.instance.authStateChanges().timeout(
+        const Duration(seconds: 8),
+      ),
       builder: (context, snapshot) {
+        final user = snapshot.data ?? FirebaseAuth.instance.currentUser;
+
         // Hanya tampilkan splash jika belum ada data sama sekali
         // (pertama kali buka app).
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            user == null) {
           return const _SplashScreen();
         }
 
-        final user = snapshot.data;
         final isVerified = user?.emailVerified ?? false;
 
         if (user != null && isVerified) {
@@ -152,7 +156,7 @@ class _AuthGateState extends State<AuthGate> {
                       (data['is_seller'] as bool?) ??
                       (roles?['seller'] as bool?) ??
                       false;
-                  if (isDriver) return const HomeScreen3();
+                  if (isDriver) return HomeScreen3(initialData: data);
                   if (isSeller) return const HomeScreen2();
                 }
                 // Tidak ada cache -> fallback ke HomeScreen pembeli.
@@ -178,7 +182,7 @@ class _AuthGateState extends State<AuthGate> {
                   (roles?['seller'] as bool?) ??
                   false;
 
-              if (isDriver) return const HomeScreen3();
+              if (isDriver) return HomeScreen3(initialData: data);
               if (isSeller) return const HomeScreen2();
               return const HomeScreen();
             },

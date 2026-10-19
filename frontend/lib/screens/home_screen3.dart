@@ -52,13 +52,12 @@ TextStyle _md({
   FontWeight weight = FontWeight.normal,
   Color color = _drDark,
   double? height,
-}) =>
-    GoogleFonts.manrope(
-      fontSize: size,
-      fontWeight: weight,
-      color: color,
-      height: height,
-    );
+}) => GoogleFonts.manrope(
+  fontSize: size,
+  fontWeight: weight,
+  color: color,
+  height: height,
+);
 
 // ─────────────────────────────────────────────
 //  HomeScreen3
@@ -67,13 +66,16 @@ TextStyle _md({
 //  gradient + dekorasi blob/dot + NemuBottomNavbar di bawah.
 // ─────────────────────────────────────────────
 class HomeScreen3 extends StatefulWidget {
-  const HomeScreen3({super.key});
+  final Map<String, dynamic>? initialData;
+
+  const HomeScreen3({super.key, this.initialData});
 
   @override
   State<HomeScreen3> createState() => _HomeScreen3State();
 }
 
-class _HomeScreen3State extends State<HomeScreen3> with TickerProviderStateMixin {
+class _HomeScreen3State extends State<HomeScreen3>
+    with TickerProviderStateMixin {
   int _navIndex = 0;
 
   @override
@@ -89,15 +91,20 @@ class _HomeScreen3State extends State<HomeScreen3> with TickerProviderStateMixin
     // StreamBuilder supaya kalau roles.driver berubah (mis. dicabut admin),
     // halaman ini otomatis nolak akses tanpa perlu keluar-masuk manual.
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        final data = snapshot.data?.data() ?? widget.initialData;
+
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            data == null) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator(color: _drGreen)),
           );
         }
 
-        final data = snapshot.data?.data();
         final roles = data?['roles'] as Map<String, dynamic>?;
         final isDriver = (roles?['driver'] as bool?) ?? false;
 
@@ -133,13 +140,41 @@ class _HomeScreen3State extends State<HomeScreen3> with TickerProviderStateMixin
               ),
 
               // ── Dekorasi Playful Background (copy persis dari home_screen2.dart) ──
-              Positioned(top: -40, right: -50, child: _blob(200, Colors.white.withValues(alpha: 0.12))),
-              Positioned(top: 80, left: -60, child: _blob(160, Colors.white.withValues(alpha: 0.10))),
-              Positioned(top: 220, right: 20, child: _blob(80, Colors.white.withValues(alpha: 0.08))),
-              Positioned(top: 300, left: 30, child: _dot(18, Colors.white.withValues(alpha: 0.20))),
-              Positioned(top: 340, right: 60, child: _dot(10, Colors.white.withValues(alpha: 0.18))),
-              Positioned(bottom: 200, right: -40, child: _blob(150, _drYellow.withValues(alpha: 0.18))),
-              Positioned(bottom: 350, left: 10, child: _dot(14, Colors.white.withValues(alpha: 0.15))),
+              Positioned(
+                top: -40,
+                right: -50,
+                child: _blob(200, Colors.white.withValues(alpha: 0.12)),
+              ),
+              Positioned(
+                top: 80,
+                left: -60,
+                child: _blob(160, Colors.white.withValues(alpha: 0.10)),
+              ),
+              Positioned(
+                top: 220,
+                right: 20,
+                child: _blob(80, Colors.white.withValues(alpha: 0.08)),
+              ),
+              Positioned(
+                top: 300,
+                left: 30,
+                child: _dot(18, Colors.white.withValues(alpha: 0.20)),
+              ),
+              Positioned(
+                top: 340,
+                right: 60,
+                child: _dot(10, Colors.white.withValues(alpha: 0.18)),
+              ),
+              Positioned(
+                bottom: 200,
+                right: -40,
+                child: _blob(150, _drYellow.withValues(alpha: 0.18)),
+              ),
+              Positioned(
+                bottom: 350,
+                left: 10,
+                child: _dot(14, Colors.white.withValues(alpha: 0.15)),
+              ),
 
               // ── Konten Utama ──
               Positioned.fill(
@@ -158,7 +193,10 @@ class _HomeScreen3State extends State<HomeScreen3> with TickerProviderStateMixin
                             ).animate(animation);
                             return FadeTransition(
                               opacity: animation,
-                              child: SlideTransition(position: slide, child: child),
+                              child: SlideTransition(
+                                position: slide,
+                                child: child,
+                              ),
                             );
                           },
                           child: _navIndex == 0
@@ -208,10 +246,7 @@ class _HomeScreen3State extends State<HomeScreen3> with TickerProviderStateMixin
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }
@@ -223,11 +258,7 @@ class DriverDashboardBody extends StatefulWidget {
   final String userName;
   final String? photoUrl;
 
-  const DriverDashboardBody({
-    super.key,
-    required this.userName,
-    this.photoUrl,
-  });
+  const DriverDashboardBody({super.key, required this.userName, this.photoUrl});
 
   @override
   State<DriverDashboardBody> createState() => _DriverDashboardBodyState();
@@ -269,8 +300,14 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
   void initState() {
     super.initState();
 
-    _entranceCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
-    _entranceAnim = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic);
+    _entranceCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _entranceAnim = CurvedAnimation(
+      parent: _entranceCtrl,
+      curve: Curves.easeOutCubic,
+    );
     _entranceCtrl.forward();
 
     _listenDriverData();
@@ -282,27 +319,33 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
-    _driverSub = FirebaseFirestore.instance.collection('users').doc(uid).snapshots().listen((snap) {
-      if (!mounted) return;
-      final data = snap.data();
-      final onlineNow = (data?['driverStatus'] as String?) == 'online';
-      setState(() {
-        _driverData = data;
-        _isOnline = onlineNow;
-      });
-      if (onlineNow) {
-        _startGpsStream();
-      } else {
-        _stopGpsStream();
-      }
-      if (_activeOrderDoc == null && _openRequestsSub == null) {
-        _listenOpenRequests();
-      }
-    });
+    _driverSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .listen((snap) {
+          if (!mounted) return;
+          final data = snap.data();
+          final onlineNow = (data?['driverStatus'] as String?) == 'online';
+          setState(() {
+            _driverData = data;
+            _isOnline = onlineNow;
+          });
+          if (onlineNow) {
+            _startGpsStream();
+          } else {
+            _stopGpsStream();
+          }
+          if (_activeOrderDoc == null && _openRequestsSub == null) {
+            _listenOpenRequests();
+          }
+        });
   }
 
   void _listenActiveOrder() {
-    _activeOrderSub = OrderTrackingService.watchMyActiveDelivery().listen((snap) {
+    _activeOrderSub = OrderTrackingService.watchMyActiveDelivery().listen((
+      snap,
+    ) {
       if (!mounted) return;
       final active = snap.docs.where((doc) {
         final st = (doc.data()['status'] as String?)?.trim();
@@ -348,11 +391,12 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
     });
   }
 
-
   void _maybeShowRequestPopup() {
     if (!mounted) return;
     if (_requestDialogOpen || _activeOrderDoc != null) return;
-    final pending = _openRequests.where((d) => !_dismissedRequestIds.contains(d.id));
+    final pending = _openRequests.where(
+      (d) => !_dismissedRequestIds.contains(d.id),
+    );
     if (pending.isEmpty) return;
     final next = pending.first;
 
@@ -378,32 +422,40 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
     });
   }
 
-  Future<void> _acceptOrder(QueryDocumentSnapshot<Map<String, dynamic>> doc) async {
+  Future<void> _acceptOrder(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) async {
     if (_submittingAccept) return;
     setState(() => _submittingAccept = true);
 
     // Otomatis pastikan status driver online saat menerima order
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null && !_isOnline) {
-      await FirebaseFirestore.instance.collection('users').doc(uid).set(
-        {'driverStatus': 'online'},
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'driverStatus': 'online',
+      }, SetOptions(merge: true));
       _startGpsStream();
     }
 
-    final ok = await OrderTrackingService.acceptOrder(doc.id, driverName: widget.userName);
+    final ok = await OrderTrackingService.acceptOrder(
+      doc.id,
+      driverName: widget.userName,
+    );
     if (mounted) {
       setState(() => _submittingAccept = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            ok ? 'Pesanan diterima! Yuk jemput ke toko.' : 'Yah, pesanan ini sudah diambil driver lain.',
+            ok
+                ? 'Pesanan diterima! Yuk jemput ke toko.'
+                : 'Yah, pesanan ini sudah diambil driver lain.',
             style: _md(size: 12, color: Colors.white, weight: FontWeight.bold),
           ),
           backgroundColor: ok ? _drGreen : Colors.red.shade400,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
     }
@@ -412,47 +464,49 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
   // ── GPS 24/7 SELAMA ONLINE ──
   void _startGpsStream() {
     if (_gpsSub != null) return;
-    _gpsSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
-      ),
-    ).listen((pos) async {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
+    _gpsSub =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 10,
+          ),
+        ).listen((pos) async {
+          final uid = FirebaseAuth.instance.currentUser?.uid;
+          if (uid == null) return;
 
-      // pos.speed dari Geolocator dalam meter/detik -> konversi ke km/jam.
-      // Kadang GPS ngasih noise/negatif pas device diam, jadi di-clamp ke 0.
-      if (mounted) {
-        setState(() => _currentSpeedKmh = (pos.speed * 3.6).clamp(0, 200).toDouble());
-      }
+          // pos.speed dari Geolocator dalam meter/detik -> konversi ke km/jam.
+          // Kadang GPS ngasih noise/negatif pas device diam, jadi di-clamp ke 0.
+          if (mounted) {
+            setState(
+              () =>
+                  _currentSpeedKmh = (pos.speed * 3.6).clamp(0, 200).toDouble(),
+            );
+          }
 
-      // 1) Selalu update posisi umum si driver (dipakai buat matching driver
-      // terdekat di fase berikutnya / status "aktif").
-      FirebaseFirestore.instance.collection('users').doc(uid).set(
-        {
-          'currentLocation': {
-            'lat': pos.latitude,
-            'lng': pos.longitude,
-            'updatedAt': DateTime.now().millisecondsSinceEpoch,
-          },
-        },
-        SetOptions(merge: true),
-      );
+          // 1) Selalu update posisi umum si driver (dipakai buat matching driver
+          // terdekat di fase berikutnya / status "aktif").
+          FirebaseFirestore.instance.collection('users').doc(uid).set({
+            'currentLocation': {
+              'lat': pos.latitude,
+              'lng': pos.longitude,
+              'updatedAt': DateTime.now().millisecondsSinceEpoch,
+            },
+          }, SetOptions(merge: true));
 
-      // 2) Kalau lagi pegang order aktif, mirror ke dokumen order-nya juga
-      // (di-throttle ~5 detik biar nggak spam write) supaya Penjual &
-      // Pembeli bisa lacak real-time.
-      final order = _activeOrderDoc;
-      if (order != null) {
-        final now = DateTime.now();
-        if (_lastOrderLocationWrite == null ||
-            now.difference(_lastOrderLocationWrite!) > const Duration(seconds: 5)) {
-          _lastOrderLocationWrite = now;
-          OrderTrackingService.updateDriverLocation(order.id, pos);
-        }
-      }
-    });
+          // 2) Kalau lagi pegang order aktif, mirror ke dokumen order-nya juga
+          // (di-throttle ~5 detik biar nggak spam write) supaya Penjual &
+          // Pembeli bisa lacak real-time.
+          final order = _activeOrderDoc;
+          if (order != null) {
+            final now = DateTime.now();
+            if (_lastOrderLocationWrite == null ||
+                now.difference(_lastOrderLocationWrite!) >
+                    const Duration(seconds: 5)) {
+              _lastOrderLocationWrite = now;
+              OrderTrackingService.updateDriverLocation(order.id, pos);
+            }
+          }
+        });
   }
 
   void _stopGpsStream() {
@@ -471,11 +525,15 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Izin lokasi dibutuhkan supaya bisa online sebagai Driver.', style: _md(size: 12, color: Colors.white)),
+              content: Text(
+                'Izin lokasi dibutuhkan supaya bisa online sebagai Driver.',
+                style: _md(size: 12, color: Colors.white),
+              ),
               backgroundColor: Colors.red.shade400,
             ),
           );
@@ -487,7 +545,10 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Nyalakan GPS di HP kamu dulu ya.', style: _md(size: 12, color: Colors.white)),
+              content: Text(
+                'Nyalakan GPS di HP kamu dulu ya.',
+                style: _md(size: 12, color: Colors.white),
+              ),
               backgroundColor: Colors.red.shade400,
             ),
           );
@@ -498,10 +559,9 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
 
     setState(() => _togglingOnline = true);
     try {
-      await FirebaseFirestore.instance.collection('users').doc(uid).set(
-        {'driverStatus': value ? 'online' : 'offline'},
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'driverStatus': value ? 'online' : 'offline',
+      }, SetOptions(merge: true));
       if (value) {
         _startGpsStream();
         if (_openRequestsSub == null) _listenOpenRequests();
@@ -513,9 +573,9 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengubah status: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal mengubah status: $e')));
       }
     } finally {
       if (mounted) setState(() => _togglingOnline = false);
@@ -531,7 +591,10 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
       setState(() => _submittingPickup = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Barang diambil! Yuk antar ke pembeli.', style: _md(size: 12, color: Colors.white)),
+          content: Text(
+            'Barang diambil! Yuk antar ke pembeli.',
+            style: _md(size: 12, color: Colors.white),
+          ),
           backgroundColor: _drGreen,
         ),
       );
@@ -543,8 +606,16 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
   // jarak jalan asli, tapi cukup buat estimasi kasar tanpa perlu API
   // routing berbayar. Rute tercepat yang sebenarnya (ngikutin jalan)
   // ditangani lewat tombol "Petunjuk Arah" yang buka Google Maps eksternal.
-  ({double distanceKm, int etaMinutes})? _estimateTrip(LiveLatLng from, LiveLatLng to) {
-    final meters = Geolocator.distanceBetween(from.lat, from.lng, to.lat, to.lng);
+  ({double distanceKm, int etaMinutes})? _estimateTrip(
+    LiveLatLng from,
+    LiveLatLng to,
+  ) {
+    final meters = Geolocator.distanceBetween(
+      from.lat,
+      from.lng,
+      to.lat,
+      to.lng,
+    );
     final km = meters / 1000;
     // Pakai kecepatan live kalau driver emang lagi jalan (>5 km/h), kalau
     // diam/baru mulai pakai asumsi rata-rata motor di kota (25 km/h) biar
@@ -562,7 +633,12 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Nggak bisa buka aplikasi peta.', style: _md(size: 12, color: Colors.white))),
+        SnackBar(
+          content: Text(
+            'Nggak bisa buka aplikasi peta.',
+            style: _md(size: 12, color: Colors.white),
+          ),
+        ),
       );
     }
   }
@@ -576,7 +652,10 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Selesaikan Pesanan?', style: _md(size: 15, weight: FontWeight.bold)),
+        title: Text(
+          'Selesaikan Pesanan?',
+          style: _md(size: 15, weight: FontWeight.bold),
+        ),
         content: Text(
           'Pastikan pesanan sudah diterima pembeli sebelum menyelesaikan.',
           style: _md(size: 13, color: Colors.black54),
@@ -590,10 +669,19 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: _drGreen,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               elevation: 0,
             ),
-            child: Text('Ya, Selesai', style: _md(size: 13, weight: FontWeight.bold, color: Colors.white)),
+            child: Text(
+              'Ya, Selesai',
+              style: _md(
+                size: 13,
+                weight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
           ),
         ],
       ),
@@ -608,10 +696,19 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Pesanan selesai! Terima kasih sudah mengantar. 🎉', style: _md(size: 12, color: Colors.white, weight: FontWeight.bold)),
+            content: Text(
+              'Pesanan selesai! Terima kasih sudah mengantar. 🎉',
+              style: _md(
+                size: 12,
+                color: Colors.white,
+                weight: FontWeight.bold,
+              ),
+            ),
             backgroundColor: _drGreen,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -619,10 +716,15 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal menyelesaikan pesanan: $e', style: _md(size: 12, color: Colors.white)),
+            content: Text(
+              'Gagal menyelesaikan pesanan: $e',
+              style: _md(size: 12, color: Colors.white),
+            ),
             backgroundColor: Colors.red.shade400,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
       }
@@ -651,30 +753,32 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
           end: Offset.zero,
         ).animate(_entranceAnim),
         child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 16),
-            _buildOnlineToggleCard(),
-            const SizedBox(height: 16),
-            if (_activeOrderDoc != null) ...[
-              _buildActiveDeliveryCard(_activeOrderDoc!),
-              const SizedBox(height: 20),
-            ] else ...[
-              _buildIncomingRequestsSection(),
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(),
               const SizedBox(height: 16),
-              if (_openRequests.isEmpty) ...[
-                _buildNoActiveDeliveryCard(),
+              _buildOnlineToggleCard(),
+              const SizedBox(height: 16),
+              if (_activeOrderDoc != null) ...[
+                _buildActiveDeliveryCard(_activeOrderDoc!),
                 const SizedBox(height: 20),
+              ] else ...[
+                _buildIncomingRequestsSection(),
+                const SizedBox(height: 16),
+                if (_openRequests.isEmpty) ...[
+                  _buildNoActiveDeliveryCard(),
+                  const SizedBox(height: 20),
+                ],
               ],
+              _buildStatsRow(),
             ],
-            _buildStatsRow(),
-          ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -685,11 +789,19 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
         CircleAvatar(
           radius: 24,
           backgroundColor: Colors.white,
-          backgroundImage: widget.photoUrl != null ? NetworkImage(widget.photoUrl!) : null,
+          backgroundImage: widget.photoUrl != null
+              ? NetworkImage(widget.photoUrl!)
+              : null,
           child: widget.photoUrl == null
               ? Text(
-                  widget.userName.isNotEmpty ? widget.userName[0].toUpperCase() : '?',
-                  style: _md(size: 18, weight: FontWeight.bold, color: _drGreen),
+                  widget.userName.isNotEmpty
+                      ? widget.userName[0].toUpperCase()
+                      : '?',
+                  style: _md(
+                    size: 18,
+                    weight: FontWeight.bold,
+                    color: _drGreen,
+                  ),
                 )
               : null,
         ),
@@ -700,12 +812,19 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
             children: [
               Text(
                 widget.userName,
-                style: _md(size: 16, weight: FontWeight.bold, color: Colors.white),
+                style: _md(
+                  size: 16,
+                  weight: FontWeight.bold,
+                  color: Colors.white,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
-              Text('Driver Nemu', style: _md(size: 12, color: Colors.white.withOpacity(0.85))),
+              Text(
+                'Driver Nemu',
+                style: _md(size: 12, color: Colors.white.withOpacity(0.85)),
+              ),
             ],
           ),
         ),
@@ -719,7 +838,13 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 6))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -760,12 +885,17 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: _drGreen),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _drGreen,
+                      ),
                     )
                   : Switch(
                       value: _isOnline,
                       activeColor: _drGreen,
-                      onChanged: (_activeOrderDoc != null) ? null : _toggleOnline,
+                      onChanged: (_activeOrderDoc != null)
+                          ? null
+                          : _toggleOnline,
                     ),
             ],
           ),
@@ -807,15 +937,26 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
       child: Column(
         children: [
-          Icon(Icons.local_shipping_outlined, size: 40, color: Colors.grey.shade300),
+          Icon(
+            Icons.local_shipping_outlined,
+            size: 40,
+            color: Colors.grey.shade300,
+          ),
           const SizedBox(height: 10),
           Text(
             'Belum ada pesanan yang sedang kamu antar',
             textAlign: TextAlign.center,
-            style: _md(size: 13, weight: FontWeight.w600, color: Colors.black54),
+            style: _md(
+              size: 13,
+              weight: FontWeight.w600,
+              color: Colors.black54,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -830,21 +971,32 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
     );
   }
 
-  Widget _buildActiveDeliveryCard(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+  Widget _buildActiveDeliveryCard(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
     final data = doc.data();
     final status = data['status'] as String? ?? OrderStatus.menujuPenjual;
     final storeName = data['storeName'] as String? ?? 'Toko';
     final marketName = data['marketName'] as String? ?? '';
-    final buyerName = (data['buyerName'] as String?) ?? (data['buyer_name'] as String?) ?? 'Pembeli';
-    final items = (data['items'] as String?) ?? (data['itemsSummary'] as String?) ?? '';
+    final buyerName =
+        (data['buyerName'] as String?) ??
+        (data['buyer_name'] as String?) ??
+        'Pembeli';
+    final items =
+        (data['items'] as String?) ?? (data['itemsSummary'] as String?) ?? '';
     // Baca deliveryAddress dengan fallback ke alamatPengiriman / address
-    final deliveryAddress = (data['deliveryAddress'] as String?) ??
+    final deliveryAddress =
+        (data['deliveryAddress'] as String?) ??
         (data['alamatPengiriman'] as String?) ??
         (data['address'] as String?) ??
         '';
 
-    final sellerLoc = LiveLatLng.fromMap(data['sellerLocation'] as Map<String, dynamic>?);
-    final buyerLiveLoc = LiveLatLng.fromMap(data['buyerLiveLocation'] as Map<String, dynamic>?);
+    final sellerLoc = LiveLatLng.fromMap(
+      data['sellerLocation'] as Map<String, dynamic>?,
+    );
+    final buyerLiveLoc = LiveLatLng.fromMap(
+      data['buyerLiveLocation'] as Map<String, dynamic>?,
+    );
     final myLoc = LiveLatLng.fromMap(
       (_driverData?['currentLocation'] as Map<String, dynamic>?),
     );
@@ -858,7 +1010,13 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 16, offset: const Offset(0, 6))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -866,28 +1024,46 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: (headingToStore ? _drBlue : _drGreen).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   headingToStore ? 'Menuju Toko' : 'Menuju Pembeli',
-                  style: _md(size: 10, weight: FontWeight.bold, color: headingToStore ? _drBlue : _drGreen),
+                  style: _md(
+                    size: 10,
+                    weight: FontWeight.bold,
+                    color: headingToStore ? _drBlue : _drGreen,
+                  ),
                 ),
               ),
               const Spacer(),
-              Text(doc.id.substring(0, doc.id.length > 6 ? 6 : doc.id.length), style: _md(size: 10, color: Colors.black38)),
+              Text(
+                doc.id.substring(0, doc.id.length > 6 ? 6 : doc.id.length),
+                style: _md(size: 10, color: Colors.black38),
+              ),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              Icon(headingToStore ? Icons.storefront_rounded : Icons.person_rounded, size: 16, color: _drDark),
+              Icon(
+                headingToStore
+                    ? Icons.storefront_rounded
+                    : Icons.person_rounded,
+                size: 16,
+                color: _drDark,
+              ),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  headingToStore ? '$storeName${marketName.isNotEmpty ? ' • $marketName' : ''}' : buyerName,
+                  headingToStore
+                      ? '$storeName${marketName.isNotEmpty ? ' • $marketName' : ''}'
+                      : buyerName,
                   style: _md(size: 13, weight: FontWeight.bold),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -897,7 +1073,12 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
           ),
           if (items.isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text(items, style: _md(size: 11, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
+            Text(
+              items,
+              style: _md(size: 11, color: Colors.black54),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
           if (deliveryAddress.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -911,7 +1092,11 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.location_on_rounded, size: 16, color: Colors.redAccent),
+                  const Icon(
+                    Icons.location_on_rounded,
+                    size: 16,
+                    color: Colors.redAccent,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
@@ -919,7 +1104,11 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
                       children: [
                         Text(
                           'Alamat Tujuan ($buyerName):',
-                          style: _md(size: 10.5, weight: FontWeight.bold, color: Colors.black54),
+                          style: _md(
+                            size: 10.5,
+                            weight: FontWeight.bold,
+                            color: Colors.black54,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -946,7 +1135,10 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
           else
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Text(
                 headingToStore
                     ? 'Lokasi toko belum tersedia -- hubungi penjual manual buat alamatnya.'
@@ -956,37 +1148,39 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
             ),
           if (destination != null && myLoc != null) ...[
             const SizedBox(height: 10),
-            Builder(builder: (context) {
-              final trip = _estimateTrip(myLoc, destination);
-              if (trip == null) return const SizedBox.shrink();
-              return Row(
-                children: [
-                  Expanded(
-                    child: _tripStat(
-                      icon: Icons.route_rounded,
-                      value: '${trip.distanceKm.toStringAsFixed(1)} km',
-                      label: 'Jarak',
+            Builder(
+              builder: (context) {
+                final trip = _estimateTrip(myLoc, destination);
+                if (trip == null) return const SizedBox.shrink();
+                return Row(
+                  children: [
+                    Expanded(
+                      child: _tripStat(
+                        icon: Icons.route_rounded,
+                        value: '${trip.distanceKm.toStringAsFixed(1)} km',
+                        label: 'Jarak',
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _tripStat(
-                      icon: Icons.timer_outlined,
-                      value: '${trip.etaMinutes} mnt',
-                      label: 'Estimasi',
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _tripStat(
+                        icon: Icons.timer_outlined,
+                        value: '${trip.etaMinutes} mnt',
+                        label: 'Estimasi',
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _tripStat(
-                      icon: Icons.speed_rounded,
-                      value: '${_currentSpeedKmh.toStringAsFixed(0)} km/h',
-                      label: 'Kecepatan',
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _tripStat(
+                        icon: Icons.speed_rounded,
+                        value: '${_currentSpeedKmh.toStringAsFixed(0)} km/h',
+                        label: 'Kecepatan',
+                      ),
                     ),
-                  ),
-                ],
-              );
-            }),
+                  ],
+                );
+              },
+            ),
           ],
           const SizedBox(height: 14),
           Row(
@@ -996,11 +1190,16 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
                   child: OutlinedButton.icon(
                     onPressed: () => _openExternalNavigation(destination),
                     icon: const Icon(Icons.directions_rounded, size: 16),
-                    label: Text('Petunjuk Arah', style: _md(size: 12, weight: FontWeight.bold)),
+                    label: Text(
+                      'Petunjuk Arah',
+                      style: _md(size: 12, weight: FontWeight.bold),
+                    ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _drGreen,
                       side: const BorderSide(color: _drGreen),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
@@ -1015,16 +1214,32 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
                       ? const SizedBox(
                           width: 14,
                           height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
-                      : Icon(headingToStore ? Icons.inventory_2_rounded : Icons.check_circle_rounded, size: 16),
+                      : Icon(
+                          headingToStore
+                              ? Icons.inventory_2_rounded
+                              : Icons.check_circle_rounded,
+                          size: 16,
+                        ),
                   label: Text(
-                    headingToStore ? 'Sudah Ambil Barang' : 'Selesaikan Pesanan',
-                    style: _md(size: 12, weight: FontWeight.bold, color: Colors.white),
+                    headingToStore
+                        ? 'Sudah Ambil Barang'
+                        : 'Selesaikan Pesanan',
+                    style: _md(
+                      size: 12,
+                      weight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: headingToStore ? _drAmber : _drGreen,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     elevation: 0,
                   ),
@@ -1043,17 +1258,36 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
 
     return Row(
       children: [
-        Expanded(child: _statBox(icon: Icons.inventory_2_outlined, value: '$totalDelivered', label: 'Antaran Selesai')),
+        Expanded(
+          child: _statBox(
+            icon: Icons.inventory_2_outlined,
+            value: '$totalDelivered',
+            label: 'Antaran Selesai',
+          ),
+        ),
         const SizedBox(width: 10),
-        Expanded(child: _statBox(icon: Icons.star_rounded, value: rating != null ? rating.toStringAsFixed(1) : '-', label: 'Rating')),
+        Expanded(
+          child: _statBox(
+            icon: Icons.star_rounded,
+            value: rating != null ? rating.toStringAsFixed(1) : '-',
+            label: 'Rating',
+          ),
+        ),
       ],
     );
   }
 
-  Widget _tripStat({required IconData icon, required String value, required String label}) {
+  Widget _tripStat({
+    required IconData icon,
+    required String value,
+    required String label,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-      decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         children: [
           Icon(icon, size: 15, color: _drGreen),
@@ -1065,10 +1299,17 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
     );
   }
 
-  Widget _statBox({required IconData icon, required String value, required String label}) {
+  Widget _statBox({
+    required IconData icon,
+    required String value,
+    required String label,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Column(
         children: [
           Icon(icon, color: _drGreen, size: 20),
@@ -1084,7 +1325,9 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
   Widget _buildIncomingRequestsSection() {
     if (_activeOrderDoc != null) return const SizedBox.shrink();
 
-    final visible = _openRequests.where((d) => !_dismissedRequestIds.contains(d.id)).toList();
+    final visible = _openRequests
+        .where((d) => !_dismissedRequestIds.contains(d.id))
+        .toList();
 
     if (visible.isEmpty) {
       return Container(
@@ -1097,11 +1340,17 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
         ),
         child: Row(
           children: [
-            const Icon(Icons.notifications_none_rounded, color: Colors.black38, size: 22),
+            const Icon(
+              Icons.notifications_none_rounded,
+              color: Colors.black38,
+              size: 22,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                _isOnline ? 'Menunggu permintaan pengantaran baru...' : 'Nyalakan status Online untuk mulai menerima permintaan',
+                _isOnline
+                    ? 'Menunggu permintaan pengantaran baru...'
+                    : 'Nyalakan status Online untuk mulai menerima permintaan',
                 style: _md(size: 12, color: Colors.black54),
               ),
             ),
@@ -1115,7 +1364,14 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
       children: [
         Row(
           children: [
-            Text('Permintaan Masuk', style: _md(size: 13.5, weight: FontWeight.bold, color: Colors.white)),
+            Text(
+              'Permintaan Masuk',
+              style: _md(
+                size: 13.5,
+                weight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -1125,7 +1381,11 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
               ),
               child: Text(
                 '${visible.length}',
-                style: _md(size: 10, weight: FontWeight.bold, color: Colors.white),
+                style: _md(
+                  size: 10,
+                  weight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
           ],
@@ -1133,25 +1393,31 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
         const SizedBox(height: 10),
         ...visible.map((doc) {
           final data = doc.data();
-          final deliveryAddress = (data['deliveryAddress'] as String?) ??
+          final deliveryAddress =
+              (data['deliveryAddress'] as String?) ??
               (data['alamatPengiriman'] as String?) ??
               (data['address'] as String?) ??
               '';
-          final storeName = (data['storeName'] as String?) ??
+          final storeName =
+              (data['storeName'] as String?) ??
               (data['namaGerai'] as String?) ??
               (data['store_name'] as String?) ??
               'Toko';
-          final marketName = (data['marketName'] as String?) ??
+          final marketName =
+              (data['marketName'] as String?) ??
               (data['namaMarket'] as String?) ??
               (data['market_type'] as String?) ??
               '';
-          final buyerName = (data['buyerName'] as String?) ??
+          final buyerName =
+              (data['buyerName'] as String?) ??
               (data['buyer_name'] as String?) ??
               'Pembeli';
-          final items = (data['items'] as String?) ??
+          final items =
+              (data['items'] as String?) ??
               (data['itemsSummary'] as String?) ??
               '';
-          final totalPrice = (data['totalPrice'] as num?)?.toInt() ??
+          final totalPrice =
+              (data['totalPrice'] as num?)?.toInt() ??
               (data['totalHarga'] as num?)?.toInt() ??
               (data['total_price'] as num?)?.toInt() ??
               0;
@@ -1179,7 +1445,11 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
                     color: _drGreen.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.two_wheeler_rounded, color: _drGreen, size: 18),
+                  child: const Icon(
+                    Icons.two_wheeler_rounded,
+                    color: _drGreen,
+                    size: 18,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -1204,7 +1474,11 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.location_on_rounded, size: 12, color: Colors.redAccent),
+                            const Icon(
+                              Icons.location_on_rounded,
+                              size: 12,
+                              color: Colors.redAccent,
+                            ),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
@@ -1221,7 +1495,11 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
                         const SizedBox(height: 4),
                         Text(
                           'Rp$totalPrice',
-                          style: _md(size: 11.5, weight: FontWeight.bold, color: _drGreen),
+                          style: _md(
+                            size: 11.5,
+                            weight: FontWeight.bold,
+                            color: _drGreen,
+                          ),
                         ),
                       ],
                     ],
@@ -1234,12 +1512,24 @@ class _DriverDashboardBodyState extends State<DriverDashboardBody>
                     backgroundColor: _drGreen,
                     foregroundColor: Colors.white,
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  child: Text('Terima', style: _md(size: 11, weight: FontWeight.bold, color: Colors.white)),
+                  child: Text(
+                    'Terima',
+                    style: _md(
+                      size: 11,
+                      weight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -1269,13 +1559,19 @@ class _IncomingRequestDialog extends StatelessWidget {
     final data = doc.data();
     final storeName = (data['storeName'] as String?) ?? 'Toko';
     final marketName = (data['marketName'] as String?) ?? '';
-    final buyerName = (data['buyerName'] as String?) ?? (data['buyer_name'] as String?) ?? 'Pembeli';
-    final items = (data['items'] as String?) ?? (data['itemsSummary'] as String?) ?? '';
-    final totalPrice = (data['totalPrice'] as num?)?.toInt() ??
+    final buyerName =
+        (data['buyerName'] as String?) ??
+        (data['buyer_name'] as String?) ??
+        'Pembeli';
+    final items =
+        (data['items'] as String?) ?? (data['itemsSummary'] as String?) ?? '';
+    final totalPrice =
+        (data['totalPrice'] as num?)?.toInt() ??
         (data['totalHarga'] as num?)?.toInt() ??
         (data['total_price'] as num?)?.toInt() ??
         0;
-    final deliveryAddress = (data['deliveryAddress'] as String?) ??
+    final deliveryAddress =
+        (data['deliveryAddress'] as String?) ??
         (data['alamatPengiriman'] as String?) ??
         (data['address'] as String?) ??
         '';
@@ -1293,18 +1589,38 @@ class _IncomingRequestDialog extends StatelessWidget {
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: _drGreen.withOpacity(0.12), shape: BoxShape.circle),
-                  child: const Icon(Icons.local_shipping_rounded, color: _drGreen, size: 20),
+                  decoration: BoxDecoration(
+                    color: _drGreen.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.local_shipping_rounded,
+                    color: _drGreen,
+                    size: 20,
+                  ),
                 ),
                 const SizedBox(width: 10),
-                Expanded(child: Text('Permintaan Pengantaran Baru', style: _md(size: 14, weight: FontWeight.bold))),
+                Expanded(
+                  child: Text(
+                    'Permintaan Pengantaran Baru',
+                    style: _md(size: 14, weight: FontWeight.bold),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 14),
-            Text('$storeName${marketName.isNotEmpty ? ' • $marketName' : ''}', style: _md(size: 13, weight: FontWeight.w600)),
+            Text(
+              '$storeName${marketName.isNotEmpty ? ' • $marketName' : ''}',
+              style: _md(size: 13, weight: FontWeight.w600),
+            ),
             if (items.isNotEmpty) ...[
               const SizedBox(height: 4),
-              Text(items, style: _md(size: 11.5, color: Colors.black54), maxLines: 2, overflow: TextOverflow.ellipsis),
+              Text(
+                items,
+                style: _md(size: 11.5, color: Colors.black54),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
             if (deliveryAddress.isNotEmpty) ...[
               const SizedBox(height: 10),
@@ -1318,13 +1634,24 @@ class _IncomingRequestDialog extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.location_on_rounded, size: 16, color: Colors.redAccent),
+                    const Icon(
+                      Icons.location_on_rounded,
+                      size: 16,
+                      color: Colors.redAccent,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Alamat Pengantaran ($buyerName):', style: _md(size: 10.5, weight: FontWeight.bold, color: Colors.black54)),
+                          Text(
+                            'Alamat Pengantaran ($buyerName):',
+                            style: _md(
+                              size: 10.5,
+                              weight: FontWeight.bold,
+                              color: Colors.black54,
+                            ),
+                          ),
                           const SizedBox(height: 2),
                           Text(
                             deliveryAddress,
@@ -1340,7 +1667,10 @@ class _IncomingRequestDialog extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 10),
-            Text('Total: Rp$totalPrice', style: _md(size: 13, weight: FontWeight.bold, color: _drGreen)),
+            Text(
+              'Total: Rp$totalPrice',
+              style: _md(size: 13, weight: FontWeight.bold, color: _drGreen),
+            ),
             const SizedBox(height: 18),
             Row(
               children: [
@@ -1349,10 +1679,15 @@ class _IncomingRequestDialog extends StatelessWidget {
                     onPressed: onSkip,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.black45,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    child: Text('Lewati', style: _md(size: 12, weight: FontWeight.bold)),
+                    child: Text(
+                      'Lewati',
+                      style: _md(size: 12, weight: FontWeight.bold),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1362,11 +1697,20 @@ class _IncomingRequestDialog extends StatelessWidget {
                     onPressed: onAccept,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _drGreen,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       elevation: 0,
                     ),
-                    child: Text('Terima', style: _md(size: 12, weight: FontWeight.bold, color: Colors.white)),
+                    child: Text(
+                      'Terima',
+                      style: _md(
+                        size: 12,
+                        weight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -1438,14 +1782,23 @@ class _DriverAccessDenied extends StatelessWidget {
             children: [
               Icon(Icons.block_rounded, size: 56, color: Colors.red.shade300),
               const SizedBox(height: 16),
-              Text(message, textAlign: TextAlign.center, style: _md(size: 14, weight: FontWeight.w600)),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: _md(size: 14, weight: FontWeight.w600),
+              ),
               const SizedBox(height: 20),
               OutlinedButton(
                 onPressed: () => Navigator.maybePop(context),
                 style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                child: Text('Kembali', style: _md(size: 13, weight: FontWeight.w600)),
+                child: Text(
+                  'Kembali',
+                  style: _md(size: 13, weight: FontWeight.w600),
+                ),
               ),
             ],
           ),
